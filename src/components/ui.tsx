@@ -142,21 +142,36 @@ export function Modal({
   title,
   onClose,
   children,
+  size = 'sm',
 }: {
   open: boolean
   title: string
   onClose: () => void
   children: ReactNode
+  size?: 'sm' | 'lg'
 }) {
   if (!open) return null
+  const overlayCls =
+    size === 'lg'
+      ? 'fixed inset-0 z-50 flex items-stretch justify-center bg-black/40 p-0 sm:items-center sm:p-4'
+      : 'fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4'
+  const containerCls =
+    size === 'lg'
+      ? 'flex h-svh w-full max-w-2xl flex-col overflow-y-auto bg-white p-5 shadow-xl dark:bg-slate-900 sm:h-[92svh] sm:rounded-3xl'
+      : 'max-h-[90svh] w-full max-w-md overflow-y-auto rounded-t-3xl bg-white p-5 shadow-xl dark:bg-slate-900 sm:rounded-3xl'
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4"
-      onClick={onClose}
-    >
+    <div className={overlayCls} onClick={onClose}>
       <div
-        className="max-h-[90svh] w-full max-w-md overflow-y-auto rounded-t-3xl bg-white p-5 shadow-xl dark:bg-slate-900 sm:rounded-3xl"
+        className={containerCls}
         onClick={(e) => e.stopPropagation()}
+        style={
+          size === 'lg'
+            ? {
+                paddingTop: 'calc(env(safe-area-inset-top) + 1.25rem)',
+                paddingBottom: 'calc(env(safe-area-inset-bottom) + 1.25rem)',
+              }
+            : undefined
+        }
       >
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-xl font-semibold text-slate-900 dark:text-slate-100">

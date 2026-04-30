@@ -135,6 +135,30 @@ function Stat({ value, label }: { value: string | number; label: string }) {
   )
 }
 
+function DetailRow({
+  label,
+  value,
+  italic,
+}: {
+  label: string
+  value?: string
+  italic?: boolean
+}) {
+  if (!value) return null
+  return (
+    <div>
+      <dt className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+        {label}
+      </dt>
+      <dd
+        className={`text-sm text-slate-900 dark:text-slate-100 ${italic ? 'italic text-slate-600 dark:text-slate-300' : ''}`}
+      >
+        {value}
+      </dd>
+    </div>
+  )
+}
+
 function SiteDetail({
   site,
   onClose,
@@ -187,27 +211,24 @@ function SiteDetail({
 
   return (
     <>
-      <Modal open={!!site && !editing} title={site.name} onClose={onClose}>
+      <Modal
+        open={!!site && !editing}
+        title={site.name}
+        onClose={onClose}
+        size="lg"
+      >
         <div className="space-y-4">
           <Card className="!p-3">
-            <div>
-              {site.client && (
-                <div className="text-sm font-medium text-slate-700 dark:text-slate-200">
-                  {site.client}
-                </div>
-              )}
-              {site.address && (
-                <div className="text-sm text-slate-500">{site.address}</div>
-              )}
-              {site.notes && (
-                <div className="mt-1 text-xs italic text-slate-500">
-                  {site.notes}
-                </div>
-              )}
+            <dl className="space-y-2">
+              <DetailRow label="Client" value={site.client} />
+              <DetailRow label="Address" value={site.address} />
+              <DetailRow label="Notes" value={site.notes} italic />
               {!site.client && !site.address && !site.notes && (
-                <div className="text-sm text-slate-500">No details added.</div>
+                <div className="text-sm text-slate-500">
+                  No details added — tap Edit site to fill in client and address.
+                </div>
               )}
-            </div>
+            </dl>
             <div className="mt-3 flex flex-wrap gap-2">
               <Button variant="secondary" onClick={() => setEditing(true)}>
                 Edit site
