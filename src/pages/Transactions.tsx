@@ -123,13 +123,13 @@ export default function Transactions() {
                       </span>
                     </div>
                     <div className="mt-1 text-sm text-slate-700 dark:text-slate-300">
-                      🛢 {bottle?.bottleNumber ?? '(deleted)'}
-                      {site ? ` · 📍 ${site.name}` : ''}
+                      {bottle?.bottleNumber ?? '(deleted)'}
+                      {site ? ` · ${site.name}` : ''}
                     </div>
                     {(txUnit || t.equipment || t.reason) && (
                       <div className="text-xs text-slate-500">
-                        {txUnit && `🔧 ${txUnit.name}`}
-                        {!txUnit && t.equipment && `🔧 ${t.equipment}`}
+                        {txUnit && txUnit.name}
+                        {!txUnit && t.equipment && t.equipment}
                         {(txUnit || t.equipment) && t.reason && ' · '}
                         {t.reason && REASON_LABELS[t.reason]}
                       </div>
@@ -139,7 +139,7 @@ export default function Transactions() {
                       {t.technician && ` · ${t.technician}`}
                       {t.amount > 0 && (
                         <>
-                          {' · '}gross {kgToDisplay(t.weightBefore, unit).toFixed(2)} →{' '}
+                          {' · '}gross {kgToDisplay(t.weightBefore, unit).toFixed(2)} to{' '}
                           {formatWeight(t.weightAfter, unit)}
                         </>
                       )}
@@ -161,10 +161,10 @@ export default function Transactions() {
                         toast.show('Transaction deleted', 'info')
                       }
                     }}
-                    className="shrink-0 rounded-full p-2 text-slate-400 hover:bg-slate-100 hover:text-red-600 dark:hover:bg-slate-800"
-                    aria-label="Delete"
+                    className="shrink-0 rounded-lg px-2 py-1 text-xs font-medium text-slate-500 hover:bg-slate-100 hover:text-red-600 dark:hover:bg-slate-800"
+                    aria-label="Delete transaction"
                   >
-                    🗑
+                    Delete
                   </button>
                 </div>
               </Card>
@@ -283,8 +283,8 @@ function TransactionForm({
             value={kind}
             onChange={(e) => setKind(e.target.value as TransactionKind)}
           >
-            <option value="charge">Charge — into equipment (bottle ↓)</option>
-            <option value="recover">Recover — from equipment (bottle ↑)</option>
+            <option value="charge">Charge — into equipment (bottle weight decreases)</option>
+            <option value="recover">Recover — from equipment (bottle weight increases)</option>
             <option value="transfer">Transfer bottle to a site</option>
             <option value="return">Return bottle to stock/supplier</option>
             <option value="adjust">Manual adjust (signed)</option>

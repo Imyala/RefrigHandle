@@ -287,13 +287,13 @@ export default function Settings() {
         </p>
         <div className="flex flex-wrap gap-2">
           <Button variant="secondary" onClick={exportJson}>
-            ⬇ Export JSON
+            Export JSON
           </Button>
           <Button variant="secondary" onClick={exportCsv}>
-            ⬇ Export log CSV
+            Export log CSV
           </Button>
           <Button variant="secondary" onClick={() => fileRef.current?.click()}>
-            ⬆ Import JSON
+            Import JSON
           </Button>
           <input
             ref={fileRef}

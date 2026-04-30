@@ -210,7 +210,7 @@ function SiteDetail({
             </div>
             <div className="mt-3 flex flex-wrap gap-2">
               <Button variant="secondary" onClick={() => setEditing(true)}>
-                ✎ Edit site
+                Edit site
               </Button>
               <Button
                 variant="danger"
@@ -451,7 +451,7 @@ function DecommissionedUnitCard({
       </div>
       <div className="mt-3 flex flex-wrap gap-2">
         <Button variant="secondary" onClick={onReactivate}>
-          ↩ Reactivate
+          Reactivate
         </Button>
         <Button variant="danger" onClick={onDelete}>
           Delete record

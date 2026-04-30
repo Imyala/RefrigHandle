@@ -69,8 +69,7 @@ export default function Dashboard() {
       <div className="grid grid-cols-2 gap-3">
         <Link to="/bottles" className="block">
           <Card className="!p-4 transition active:scale-[0.98]">
-            <div className="text-xl">🛢️</div>
-            <div className="mt-1 font-semibold text-slate-900 dark:text-slate-100">
+            <div className="font-semibold text-slate-900 dark:text-slate-100">
               Bottles
             </div>
             <div className="text-xs text-slate-500">
@@ -80,8 +79,7 @@ export default function Dashboard() {
         </Link>
         <Link to="/transactions" className="block">
           <Card className="!p-4 transition active:scale-[0.98]">
-            <div className="text-xl">📝</div>
-            <div className="mt-1 font-semibold text-slate-900 dark:text-slate-100">
+            <div className="font-semibold text-slate-900 dark:text-slate-100">
               Log a charge
             </div>
             <div className="text-xs text-slate-500">
@@ -145,7 +143,7 @@ export default function Dashboard() {
               to="/transactions"
               className="text-sm font-medium text-brand-600 hover:underline"
             >
-              View all →
+              View all
             </Link>
           )}
         </div>

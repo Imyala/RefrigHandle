@@ -150,7 +150,7 @@ export default function Bottles() {
                     </div>
                     {site && (
                       <div className="mt-1 text-sm text-slate-500">
-                        📍 {site.name}
+                        {site.name}
                       </div>
                     )}
                     {initialNet > 0 && (
@@ -289,27 +289,27 @@ function BottleActionSheet({
             {statusLabel(bottle.status)}
           </div>
           {site && (
-            <div className="mt-1 text-sm text-brand-100">📍 {site.name}</div>
+            <div className="mt-1 text-sm text-brand-100">{site.name}</div>
           )}
         </div>
 
         <div className="grid grid-cols-2 gap-2">
           <Button onClick={() => onLog('charge')} variant="primary">
-            ↓ Charge
+            Charge
           </Button>
           <Button onClick={() => onLog('recover')} variant="primary">
-            ↑ Recover
+            Recover
           </Button>
           <Button onClick={() => onLog('transfer')} variant="secondary">
-            → Transfer to site
+            Transfer to site
           </Button>
           <Button onClick={() => onLog('return')} variant="secondary">
-            ⤴ Return bottle
+            Return bottle
           </Button>
         </div>
 
         <Button onClick={onEdit} variant="ghost" full>
-          ✎ Edit details
+          Edit details
         </Button>
 
         <div>
@@ -478,7 +478,7 @@ function QuickLogModal({
             New bottle net: <strong>{formatWeight(projectedNet, unit)}</strong>
             {projectedAfter < bottle.tareWeight && (
               <span className="ml-2 text-red-600 dark:text-red-300">
-                ⚠ goes below tare
+                goes below tare
               </span>
             )}
           </div>
