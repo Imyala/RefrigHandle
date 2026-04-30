@@ -64,6 +64,7 @@ export function loadState(): AppState {
       let kind = legacyKind
       if (legacyKind === 'multi_split') kind = 'multi_head_split'
       else if (legacyKind === 'rooftop') kind = 'other'
+      else if (legacyKind === 'air_handler') kind = 'air_handler_dx'
       return { ...u, kind } as AppState['units'][number]
     })
 

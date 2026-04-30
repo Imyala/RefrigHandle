@@ -47,7 +47,8 @@ export type UnitKind =
   | 'heat_pump'
   | 'package'
   | 'chiller'
-  | 'air_handler'
+  | 'air_handler_dx'
+  | 'air_handler_chw'
   | 'refrigeration'
   | 'chilled_water_pump'
   | 'cooling_tower'
@@ -62,7 +63,8 @@ export const UNIT_KIND_LABELS: Record<UnitKind, string> = {
   heat_pump: 'Heat pump',
   package: 'Packaged unit',
   chiller: 'Chiller',
-  air_handler: 'Air handler / AHU',
+  air_handler_dx: 'Air handler / AHU (DX)',
+  air_handler_chw: 'Air handler / AHU (chilled water)',
   refrigeration: 'Refrigeration',
   chilled_water_pump: 'Chilled water pump',
   cooling_tower: 'Cooling tower',
@@ -73,6 +75,7 @@ export const UNIT_KIND_LABELS: Record<UnitKind, string> = {
 // Equipment that doesn't contain refrigerant — charging/recovering
 // against it doesn't make physical sense. Used to soft-warn the user.
 export const NON_REFRIGERANT_UNIT_KINDS: ReadonlySet<UnitKind> = new Set<UnitKind>([
+  'air_handler_chw',
   'chilled_water_pump',
   'cooling_tower',
   'boiler',
