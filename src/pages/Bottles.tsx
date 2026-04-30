@@ -35,7 +35,7 @@ const statusTone: Record<BottleStatus, 'green' | 'amber' | 'slate' | 'red'> = {
 export default function Bottles() {
   const { state, addBottle, updateBottle, deleteBottle, addTransaction } =
     useStore()
-  const { bottles, jobs, customRefrigerants, unit } = state
+  const { bottles, sites, customRefrigerants, unit } = state
   const toast = useToast()
 
   const [editing, setEditing] = useState<Bottle | null>(null)
@@ -125,7 +125,7 @@ export default function Bottles() {
       ) : (
         <div className="space-y-2">
           {visible.map((b) => {
-            const job = jobs.find((j) => j.id === b.currentJobId)
+            const site = sites.find((j) => j.id === b.currentSiteId)
             const net = netWeight(b)
             const initialNet = b.initialNetWeight || 0
             const pct =
@@ -148,9 +148,9 @@ export default function Bottles() {
                         {statusLabel(b.status)}
                       </Pill>
                     </div>
-                    {job && (
+                    {site && (
                       <div className="mt-1 text-sm text-slate-500">
-                        📍 {job.name}
+                        📍 {site.name}
                       </div>
                     )}
                     {initialNet > 0 && (
@@ -264,7 +264,7 @@ function BottleActionSheet({
   const { state } = useStore()
   if (!bottle) return null
   const unit = state.unit
-  const job = state.jobs.find((j) => j.id === bottle.currentJobId)
+  const site = state.sites.find((j) => j.id === bottle.currentSiteId)
   const net = netWeight(bottle)
   const history = state.transactions
     .filter((t) => t.bottleId === bottle.id)
@@ -288,8 +288,8 @@ function BottleActionSheet({
             {formatWeight(bottle.tareWeight, unit)} ·{' '}
             {statusLabel(bottle.status)}
           </div>
-          {job && (
-            <div className="mt-1 text-sm text-brand-100">📍 {job.name}</div>
+          {site && (
+            <div className="mt-1 text-sm text-brand-100">📍 {site.name}</div>
           )}
         </div>
 
@@ -301,7 +301,7 @@ function BottleActionSheet({
             ↑ Recover
           </Button>
           <Button onClick={() => onLog('transfer')} variant="secondary">
-            → Transfer to job
+            → Transfer to site
           </Button>
           <Button onClick={() => onLog('return')} variant="secondary">
             ⤴ Return bottle
@@ -323,7 +323,7 @@ function BottleActionSheet({
           ) : (
             <ul className="space-y-1.5 text-sm">
               {history.map((t) => {
-                const j = state.jobs.find((x) => x.id === t.jobId)
+                const j = state.sites.find((x) => x.id === t.siteId)
                 return (
                   <li
                     key={t.id}
@@ -363,7 +363,8 @@ function QuickLogModal({
   onClose: () => void
   onSave: (data: {
     bottleId: string
-    jobId?: string
+    siteId?: string
+    unitId?: string
     kind: TransactionKind
     amount: number
     date: string
@@ -376,7 +377,8 @@ function QuickLogModal({
   const { state } = useStore()
   const unit = state.unit
   const [amount, setAmount] = useState('')
-  const [jobId, setJobId] = useState(bottle?.currentJobId ?? '')
+  const [siteId, setSiteId] = useState(bottle?.currentSiteId ?? '')
+  const [unitId, setUnitId] = useState('')
   const [equipment, setEquipment] = useState('')
   const [reason, setReason] = useState<TransactionReason | ''>('')
   const [notes, setNotes] = useState('')
@@ -387,7 +389,8 @@ function QuickLogModal({
   if (open && seenKey !== lastKey) {
     setSeenKey(lastKey)
     setAmount('')
-    setJobId(bottle?.currentJobId ?? '')
+    setSiteId(bottle?.currentSiteId ?? '')
+    setUnitId('')
     setEquipment('')
     setReason('')
     setNotes('')
@@ -397,7 +400,10 @@ function QuickLogModal({
   if (!open || !bottle || !kind) return null
 
   const showAmount = kind === 'charge' || kind === 'recover'
-  const showJob = kind !== 'return'
+  const showSite = kind !== 'return'
+  const siteUnits = state.units.filter(
+    (u) => u.siteId === siteId && u.status === 'active',
+  )
   const enteredAmountDisplay = parseFloat(amount) || 0
   const amountKg = displayToKg(enteredAmountDisplay, unit)
   const projectedAfter =
@@ -413,7 +419,8 @@ function QuickLogModal({
     if (!kind || !bottle) return
     onSave({
       bottleId: bottle.id,
-      jobId: showJob && jobId ? jobId : undefined,
+      siteId: showSite && siteId ? siteId : undefined,
+      unitId: showSite && unitId ? unitId : undefined,
       kind,
       amount: showAmount ? Math.abs(amountKg) : 0,
       date: new Date(date).toISOString(),
@@ -427,7 +434,7 @@ function QuickLogModal({
   const titleMap: Record<TransactionKind, string> = {
     charge: 'Charge into equipment',
     recover: 'Recover from equipment',
-    transfer: 'Transfer bottle to a job',
+    transfer: 'Transfer bottle to a site',
     return: 'Return bottle to stock',
     adjust: 'Manual adjustment',
   }
@@ -477,21 +484,42 @@ function QuickLogModal({
           </div>
         )}
 
-        {showJob && (
-          <Field label="Job">
-            <Select
-              value={jobId}
-              onChange={(e) => setJobId(e.target.value)}
-              required={kind === 'transfer'}
-            >
-              <option value="">— none —</option>
-              {state.jobs.map((j) => (
-                <option key={j.id} value={j.id}>
-                  {j.name}
-                </option>
-              ))}
-            </Select>
-          </Field>
+        {showSite && (
+          <>
+            <Field label="Site">
+              <Select
+                value={siteId}
+                onChange={(e) => {
+                  setSiteId(e.target.value)
+                  setUnitId('')
+                }}
+                required={kind === 'transfer'}
+              >
+                <option value="">— none —</option>
+                {state.sites.map((j) => (
+                  <option key={j.id} value={j.id}>
+                    {j.name}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+            {(kind === 'charge' || kind === 'recover') && siteUnits.length > 0 && (
+              <Field label="Unit (optional)" hint="Pick the equipment this charge applies to">
+                <Select
+                  value={unitId}
+                  onChange={(e) => setUnitId(e.target.value)}
+                >
+                  <option value="">— none —</option>
+                  {siteUnits.map((u) => (
+                    <option key={u.id} value={u.id}>
+                      {u.name}
+                      {u.refrigerantType ? ` (${u.refrigerantType})` : ''}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+            )}
+          </>
         )}
 
         {(kind === 'charge' || kind === 'recover') && (
@@ -573,7 +601,7 @@ function BottleForm({
     initialDisplay(bottle?.initialNetWeight ?? 0),
   )
   const [status, setStatus] = useState<BottleStatus>(bottle?.status ?? 'in_stock')
-  const [currentJobId, setCurrentJobId] = useState(bottle?.currentJobId ?? '')
+  const [currentSiteId, setCurrentSiteId] = useState(bottle?.currentSiteId ?? '')
   const [notes, setNotes] = useState(bottle?.notes ?? '')
 
   const key = bottle?.id ?? 'new'
@@ -586,7 +614,7 @@ function BottleForm({
     setGrossWeight(initialDisplay(bottle?.grossWeight ?? 0))
     setInitialNetWeight(initialDisplay(bottle?.initialNetWeight ?? 0))
     setStatus(bottle?.status ?? 'in_stock')
-    setCurrentJobId(bottle?.currentJobId ?? '')
+    setCurrentSiteId(bottle?.currentSiteId ?? '')
     setNotes(bottle?.notes ?? '')
   }
 
@@ -604,7 +632,7 @@ function BottleForm({
       grossWeight: gross,
       initialNetWeight: initialNet,
       status,
-      currentJobId: currentJobId || undefined,
+      currentSiteId: currentSiteId || undefined,
       notes: notes.trim() || undefined,
     })
   }
@@ -688,20 +716,20 @@ function BottleForm({
             onChange={(e) => setStatus(e.target.value as BottleStatus)}
           >
             <option value="in_stock">In stock</option>
-            <option value="on_site">On job</option>
+            <option value="on_site">On site</option>
             <option value="returned">Returned</option>
             <option value="empty">Empty</option>
           </Select>
         </Field>
 
         {status === 'on_site' && (
-          <Field label="Current job">
+          <Field label="Current site">
             <Select
-              value={currentJobId}
-              onChange={(e) => setCurrentJobId(e.target.value)}
+              value={currentSiteId}
+              onChange={(e) => setCurrentSiteId(e.target.value)}
             >
-              <option value="">— pick a job —</option>
-              {state.jobs.map((j) => (
+              <option value="">— pick a site —</option>
+              {state.sites.map((j) => (
                 <option key={j.id} value={j.id}>
                   {j.name}
                 </option>

@@ -4,7 +4,7 @@ import { StoreProvider } from './lib/store'
 import { ToastProvider } from './lib/toast'
 import Dashboard from './pages/Dashboard'
 import Bottles from './pages/Bottles'
-import Jobs from './pages/Jobs'
+import Sites from './pages/Sites'
 import Transactions from './pages/Transactions'
 import Settings from './pages/Settings'
 
@@ -17,8 +17,9 @@ export default function App() {
             <Route element={<Layout />}>
               <Route index element={<Dashboard />} />
               <Route path="/bottles" element={<Bottles />} />
-              <Route path="/jobs" element={<Jobs />} />
-              <Route path="/locations" element={<Navigate to="/jobs" replace />} />
+              <Route path="/sites" element={<Sites />} />
+              <Route path="/jobs" element={<Navigate to="/sites" replace />} />
+              <Route path="/locations" element={<Navigate to="/sites" replace />} />
               <Route path="/transactions" element={<Transactions />} />
               <Route path="/settings" element={<Settings />} />
               <Route path="*" element={<Navigate to="/" replace />} />

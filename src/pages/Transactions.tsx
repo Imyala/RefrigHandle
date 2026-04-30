@@ -33,7 +33,7 @@ const kindTone: Record<
 
 export default function Transactions() {
   const { state, addTransaction, deleteTransaction } = useStore()
-  const { bottles, jobs, transactions, unit } = state
+  const { bottles, sites, transactions, unit } = state
   const toast = useToast()
 
   const [adding, setAdding] = useState(false)
@@ -105,7 +105,8 @@ export default function Transactions() {
         <div className="space-y-2">
           {sorted.map((t) => {
             const bottle = bottles.find((b) => b.id === t.bottleId)
-            const job = jobs.find((j) => j.id === t.jobId)
+            const site = sites.find((j) => j.id === t.siteId)
+            const txUnit = state.units.find((u) => u.id === t.unitId)
             return (
               <Card key={t.id} className="!p-3">
                 <div className="flex items-start justify-between gap-3">
@@ -123,12 +124,13 @@ export default function Transactions() {
                     </div>
                     <div className="mt-1 text-sm text-slate-700 dark:text-slate-300">
                       🛢 {bottle?.bottleNumber ?? '(deleted)'}
-                      {job ? ` · 📍 ${job.name}` : ''}
+                      {site ? ` · 📍 ${site.name}` : ''}
                     </div>
-                    {(t.equipment || t.reason) && (
+                    {(txUnit || t.equipment || t.reason) && (
                       <div className="text-xs text-slate-500">
-                        {t.equipment && `🔧 ${t.equipment}`}
-                        {t.equipment && t.reason && ' · '}
+                        {txUnit && `🔧 ${txUnit.name}`}
+                        {!txUnit && t.equipment && `🔧 ${t.equipment}`}
+                        {(txUnit || t.equipment) && t.reason && ' · '}
                         {t.reason && REASON_LABELS[t.reason]}
                       </div>
                     )}
@@ -195,7 +197,8 @@ function TransactionForm({
   onClose: () => void
   onSave: (data: {
     bottleId: string
-    jobId?: string
+    siteId?: string
+    unitId?: string
     kind: TransactionKind
     amount: number
     date: string
@@ -206,10 +209,11 @@ function TransactionForm({
   }) => void
 }) {
   const { state } = useStore()
-  const { bottles, jobs, technician, unit } = state
+  const { bottles, sites, technician, unit } = state
 
   const [bottleId, setBottleId] = useState(bottles[0]?.id ?? '')
-  const [jobId, setJobId] = useState('')
+  const [siteId, setSiteId] = useState('')
+  const [unitId, setUnitId] = useState('')
   const [kind, setKind] = useState<TransactionKind>('charge')
   const [amount, setAmount] = useState('')
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 16))
@@ -218,11 +222,16 @@ function TransactionForm({
   const [reason, setReason] = useState<TransactionReason | ''>('')
   const [notes, setNotes] = useState('')
 
+  const siteUnits = state.units.filter(
+    (u) => u.siteId === siteId && u.status === 'active',
+  )
+
   const [lastOpen, setLastOpen] = useState(open)
   if (open && !lastOpen) {
     setLastOpen(true)
     setBottleId(bottles[0]?.id ?? '')
-    setJobId('')
+    setSiteId('')
+    setUnitId('')
     setKind('charge')
     setAmount('')
     setDate(new Date().toISOString().slice(0, 16))
@@ -245,7 +254,7 @@ function TransactionForm({
   }
 
   const showAmount = kind !== 'transfer' && kind !== 'return'
-  const showJob = kind !== 'adjust'
+  const showSite = kind !== 'adjust'
   const showCompliance = kind === 'charge' || kind === 'recover'
 
   function submit(e: React.FormEvent) {
@@ -254,7 +263,8 @@ function TransactionForm({
     const signedAmountKg = kind === 'adjust' ? amountKg : Math.abs(amountKg)
     onSave({
       bottleId,
-      jobId: jobId || undefined,
+      siteId: siteId || undefined,
+      unitId: unitId || undefined,
       kind,
       amount: showAmount ? signedAmountKg : 0,
       date: new Date(date).toISOString(),
@@ -275,7 +285,7 @@ function TransactionForm({
           >
             <option value="charge">Charge — into equipment (bottle ↓)</option>
             <option value="recover">Recover — from equipment (bottle ↑)</option>
-            <option value="transfer">Transfer bottle to a job</option>
+            <option value="transfer">Transfer bottle to a site</option>
             <option value="return">Return bottle to stock/supplier</option>
             <option value="adjust">Manual adjust (signed)</option>
           </Select>
@@ -297,21 +307,42 @@ function TransactionForm({
           </Select>
         </Field>
 
-        {showJob && (
-          <Field label="Job">
-            <Select
-              value={jobId}
-              onChange={(e) => setJobId(e.target.value)}
-              required={kind === 'transfer'}
-            >
-              <option value="">— none —</option>
-              {jobs.map((j) => (
-                <option key={j.id} value={j.id}>
-                  {j.name}
-                </option>
-              ))}
-            </Select>
-          </Field>
+        {showSite && (
+          <>
+            <Field label="Site">
+              <Select
+                value={siteId}
+                onChange={(e) => {
+                  setSiteId(e.target.value)
+                  setUnitId('')
+                }}
+                required={kind === 'transfer'}
+              >
+                <option value="">— none —</option>
+                {sites.map((j) => (
+                  <option key={j.id} value={j.id}>
+                    {j.name}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+            {(kind === 'charge' || kind === 'recover') && siteUnits.length > 0 && (
+              <Field
+                label="Unit (optional)"
+                hint="Pick the equipment this charge applies to"
+              >
+                <Select value={unitId} onChange={(e) => setUnitId(e.target.value)}>
+                  <option value="">— none —</option>
+                  {siteUnits.map((u) => (
+                    <option key={u.id} value={u.id}>
+                      {u.name}
+                      {u.refrigerantType ? ` (${u.refrigerantType})` : ''}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+            )}
+          </>
         )}
 
         {showAmount && (

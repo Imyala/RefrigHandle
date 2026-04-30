@@ -6,7 +6,7 @@ import { formatWeight, kgToDisplay } from '../lib/units'
 
 export default function Dashboard() {
   const { state } = useStore()
-  const { bottles, jobs, transactions, unit } = state
+  const { bottles, sites, transactions, unit } = state
 
   const totalsByType = new Map<string, { count: number; net: number }>()
   for (const b of bottles) {
@@ -21,7 +21,7 @@ export default function Dashboard() {
 
   const totalNet = bottles.reduce((sum, b) => sum + netWeight(b), 0)
   const inStock = bottles.filter((b) => b.status === 'in_stock').length
-  const onJob = bottles.filter((b) => b.status === 'on_site').length
+  const onSite = bottles.filter((b) => b.status === 'on_site').length
   const returned = bottles.filter((b) => b.status === 'returned').length
   const empty = bottles.filter((b) => b.status === 'empty').length
 
@@ -48,9 +48,9 @@ export default function Dashboard() {
               {inStock} in stock
             </span>
           )}
-          {onJob > 0 && (
+          {onSite > 0 && (
             <span className="inline-flex items-center rounded-full bg-amber-400/25 px-2.5 py-0.5 text-xs font-medium text-amber-50">
-              {onJob} on job
+              {onSite} on site
             </span>
           )}
           {returned > 0 && (
@@ -157,7 +157,7 @@ export default function Dashboard() {
           <div className="space-y-2">
             {recent.map((t) => {
               const bottle = bottles.find((b) => b.id === t.bottleId)
-              const job = jobs.find((j) => j.id === t.jobId)
+              const site = sites.find((j) => j.id === t.siteId)
               return (
                 <Card key={t.id} className="!p-3">
                   <div className="flex items-center justify-between gap-2">
@@ -169,7 +169,7 @@ export default function Dashboard() {
                       <div className="truncate text-sm text-slate-500">
                         {bottle?.bottleNumber ?? '?'} ·{' '}
                         {bottle?.refrigerantType ?? '?'}
-                        {job ? ` · ${job.name}` : ''}
+                        {site ? ` · ${site.name}` : ''}
                       </div>
                     </div>
                     <div className="shrink-0 text-xs text-slate-500">
@@ -183,18 +183,19 @@ export default function Dashboard() {
         )}
       </section>
 
-      {bottles.length > 0 && jobs.length === 0 && (
+      {bottles.length > 0 && sites.length === 0 && (
         <Card className="!border-amber-300 !bg-amber-50 dark:!border-amber-900/50 dark:!bg-amber-900/20">
           <div className="text-sm font-semibold text-amber-900 dark:text-amber-200">
             Tip
           </div>
           <p className="mt-1 text-sm text-amber-900/80 dark:text-amber-100/80">
-            Add the jobs (sites/clients) where bottles get used so you can track
-            charges per job.
+            Add the sites (homes, businesses, facilities) where bottles get
+            used so you can track charges per site and add the units installed
+            there.
           </p>
           <div className="mt-3">
-            <Link to="/jobs">
-              <Button variant="secondary">+ Add job</Button>
+            <Link to="/sites">
+              <Button variant="secondary">+ Add site</Button>
             </Link>
           </div>
         </Card>

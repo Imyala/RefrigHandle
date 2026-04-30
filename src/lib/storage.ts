@@ -1,19 +1,36 @@
-import { EMPTY_STATE, type AppState, type Bottle, type Transaction } from './types'
+import {
+  EMPTY_STATE,
+  type AppState,
+  type Bottle,
+  type Site,
+  type Transaction,
+} from './types'
 
 const KEY = 'refrighandle.v1'
 
-interface LegacyBottle extends Omit<Bottle, 'currentJobId'> {
+interface LegacyBottle
+  extends Omit<Bottle, 'currentSiteId'> {
+  currentSiteId?: string
+  currentJobId?: string
   currentLocationId?: string
 }
-interface LegacyTransaction extends Omit<Transaction, 'jobId'> {
+interface LegacyTransaction
+  extends Omit<Transaction, 'siteId'> {
+  siteId?: string
+  jobId?: string
   locationId?: string
 }
 interface LegacyState
-  extends Omit<AppState, 'bottles' | 'transactions' | 'jobs' | 'unit' | 'sync'> {
+  extends Omit<
+    AppState,
+    'bottles' | 'transactions' | 'sites' | 'units' | 'unit' | 'sync'
+  > {
   bottles?: LegacyBottle[]
   transactions?: LegacyTransaction[]
-  jobs?: AppState['jobs']
-  locations?: AppState['jobs']
+  sites?: Site[]
+  jobs?: Site[]
+  locations?: Site[]
+  units?: AppState['units']
   unit?: string
   sync?: Partial<AppState['sync']>
 }
@@ -25,20 +42,20 @@ export function loadState(): AppState {
     const parsed = JSON.parse(raw) as LegacyState
 
     const bottles: Bottle[] = (parsed.bottles ?? []).map((b) => {
-      const { currentLocationId, ...rest } = b
+      const { currentJobId, currentLocationId, ...rest } = b
       const next = rest as unknown as Bottle
       return {
         ...next,
-        currentJobId: next.currentJobId ?? currentLocationId,
+        currentSiteId: next.currentSiteId ?? currentJobId ?? currentLocationId,
       }
     })
 
     const transactions: Transaction[] = (parsed.transactions ?? []).map((t) => {
-      const { locationId, ...rest } = t
+      const { jobId, locationId, ...rest } = t
       const next = rest as unknown as Transaction
       return {
         ...next,
-        jobId: next.jobId ?? locationId,
+        siteId: next.siteId ?? jobId ?? locationId,
       }
     })
 
@@ -46,7 +63,8 @@ export function loadState(): AppState {
       ...EMPTY_STATE,
       ...parsed,
       bottles,
-      jobs: parsed.jobs ?? parsed.locations ?? [],
+      sites: parsed.sites ?? parsed.jobs ?? parsed.locations ?? [],
+      units: parsed.units ?? [],
       transactions,
       customRefrigerants: parsed.customRefrigerants ?? [],
       technician: parsed.technician ?? '',

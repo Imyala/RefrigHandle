@@ -54,8 +54,9 @@ export default function Settings() {
         'amount_kg',
         'weightBefore_kg',
         'weightAfter_kg',
-        'job',
+        'site',
         'client',
+        'unit',
         'equipment',
         'reason',
         'technician',
@@ -63,7 +64,8 @@ export default function Settings() {
       ],
       ...state.transactions.map((t) => {
         const b = state.bottles.find((x) => x.id === t.bottleId)
-        const j = state.jobs.find((x) => x.id === t.jobId)
+        const s = state.sites.find((x) => x.id === t.siteId)
+        const u = state.units.find((x) => x.id === t.unitId)
         return [
           t.date,
           t.kind,
@@ -72,8 +74,9 @@ export default function Settings() {
           t.amount.toFixed(3),
           t.weightBefore.toFixed(3),
           t.weightAfter.toFixed(3),
-          j?.name ?? '',
-          j?.client ?? '',
+          s?.name ?? '',
+          s?.client ?? '',
+          u?.name ?? '',
           t.equipment ?? '',
           t.reason ?? '',
           t.technician ?? '',
@@ -311,7 +314,7 @@ export default function Settings() {
           Danger zone
         </div>
         <p className="mb-3 text-sm text-slate-600 dark:text-slate-400">
-          Erase every bottle, job, and transaction stored on this device. Export first if you want a backup.
+          Erase every bottle, site, unit, and transaction stored on this device. Export first if you want a backup.
         </p>
         <Button variant="danger" onClick={resetAll}>
           Erase all data

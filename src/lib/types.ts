@@ -24,17 +24,86 @@ export interface Bottle {
   grossWeight: number // current total mass (tare + refrigerant), kg
   initialNetWeight: number // refrigerant mass when first received, kg
   status: BottleStatus
-  currentJobId?: string
+  currentSiteId?: string
   notes?: string
   createdAt: string
   updatedAt: string
 }
 
-export interface Job {
+export type SiteKind =
+  | 'residential'
+  | 'commercial'
+  | 'facility'
+  | 'industrial'
+  | 'other'
+
+export const SITE_KIND_LABELS: Record<SiteKind, string> = {
+  residential: 'Residential',
+  commercial: 'Commercial',
+  facility: 'Facility',
+  industrial: 'Industrial',
+  other: 'Other',
+}
+
+export const SITE_KIND_ICONS: Record<SiteKind, string> = {
+  residential: '🏠',
+  commercial: '🏢',
+  facility: '🏭',
+  industrial: '⚙️',
+  other: '📍',
+}
+
+export interface Site {
   id: string
   name: string
-  address?: string
+  kind?: SiteKind
   client?: string
+  address?: string
+  notes?: string
+  createdAt: string
+}
+
+export type UnitKind =
+  | 'split'
+  | 'multi_split'
+  | 'vrf_vrv'
+  | 'chiller'
+  | 'package'
+  | 'air_handler'
+  | 'rooftop'
+  | 'heat_pump'
+  | 'refrigeration'
+  | 'other'
+
+export const UNIT_KIND_LABELS: Record<UnitKind, string> = {
+  split: 'Split system',
+  multi_split: 'Multi-split',
+  vrf_vrv: 'VRF / VRV',
+  chiller: 'Chiller',
+  package: 'Packaged unit',
+  air_handler: 'Air handler / AHU',
+  rooftop: 'Rooftop unit',
+  heat_pump: 'Heat pump',
+  refrigeration: 'Refrigeration',
+  other: 'Other',
+}
+
+export type UnitStatus = 'active' | 'decommissioned'
+
+export interface Unit {
+  id: string
+  siteId: string
+  name: string
+  kind?: UnitKind
+  refrigerantType?: RefrigerantType
+  refrigerantCharge?: number // kg installed in this unit
+  manufacturer?: string
+  model?: string
+  serial?: string
+  installDate?: string // ISO date (YYYY-MM-DD)
+  status: UnitStatus
+  decommissionedAt?: string // ISO timestamp
+  decommissionedReason?: string
   notes?: string
   createdAt: string
 }
@@ -42,7 +111,7 @@ export interface Job {
 export type TransactionKind =
   | 'charge' // refrigerant put INTO equipment, removed from bottle
   | 'recover' // refrigerant pulled OUT of equipment, added to bottle
-  | 'transfer' // bottle moved to a job (no weight change)
+  | 'transfer' // bottle moved to a site (no weight change)
   | 'return' // bottle returned to stock / supplier
   | 'adjust' // manual correction
 
@@ -66,14 +135,15 @@ export const REASON_LABELS: Record<TransactionReason, string> = {
 export interface Transaction {
   id: string
   bottleId: string
-  jobId?: string
+  siteId?: string
+  unitId?: string
   kind: TransactionKind
   amount: number // kg of refrigerant moved (always positive)
   weightBefore: number // bottle gross weight before
   weightAfter: number // bottle gross weight after
   date: string // ISO date
   technician?: string
-  equipment?: string // e.g. "Daikin VRV unit #3" — F-Gas log
+  equipment?: string // free-text fallback if no Unit is picked
   reason?: TransactionReason
   notes?: string
 }
@@ -87,7 +157,8 @@ export interface SyncSettings {
 
 export interface AppState {
   bottles: Bottle[]
-  jobs: Job[]
+  sites: Site[]
+  units: Unit[]
   transactions: Transaction[]
   customRefrigerants: string[]
   technician: string
@@ -97,7 +168,8 @@ export interface AppState {
 
 export const EMPTY_STATE: AppState = {
   bottles: [],
-  jobs: [],
+  sites: [],
+  units: [],
   transactions: [],
   customRefrigerants: [],
   technician: '',
@@ -114,7 +186,7 @@ export function statusLabel(s: BottleStatus): string {
     case 'in_stock':
       return 'In stock'
     case 'on_site':
-      return 'On job'
+      return 'On site'
     case 'returned':
       return 'Returned'
     case 'empty':

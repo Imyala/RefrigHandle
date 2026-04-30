@@ -11,9 +11,10 @@ import {
 import {
   type AppState,
   type Bottle,
-  type Job,
+  type Site,
   type SyncSettings,
   type Transaction,
+  type Unit,
   type WeightUnit,
 } from './types'
 import { loadState, saveState, uid } from './storage'
@@ -30,10 +31,16 @@ interface StoreApi {
   addBottle: (b: Omit<Bottle, 'id' | 'createdAt' | 'updatedAt'>) => Bottle
   updateBottle: (id: string, patch: Partial<Bottle>) => void
   deleteBottle: (id: string) => void
-  // jobs
-  addJob: (l: Omit<Job, 'id' | 'createdAt'>) => Job
-  updateJob: (id: string, patch: Partial<Job>) => void
-  deleteJob: (id: string) => void
+  // sites
+  addSite: (s: Omit<Site, 'id' | 'createdAt'>) => Site
+  updateSite: (id: string, patch: Partial<Site>) => void
+  deleteSite: (id: string) => void
+  // units
+  addUnit: (u: Omit<Unit, 'id' | 'createdAt' | 'status'>) => Unit
+  updateUnit: (id: string, patch: Partial<Unit>) => void
+  deleteUnit: (id: string) => void
+  decommissionUnit: (id: string, reason?: string) => void
+  reactivateUnit: (id: string) => void
   // transactions
   addTransaction: (
     t: Omit<Transaction, 'id' | 'weightBefore' | 'weightAfter'>,
@@ -59,8 +66,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     saveState(state)
   }, [state])
 
-  // Optional cloud sync. No-ops unless the user has configured a team ID
-  // AND build-time Supabase env vars are present. Last-write-wins.
   const lastPushedRef = useRef<string>('')
   const remoteApplyRef = useRef(false)
 
@@ -124,32 +129,96 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     }))
   }, [])
 
-  const addJob: StoreApi['addJob'] = useCallback((l) => {
-    const job: Job = {
-      ...l,
+  const addSite: StoreApi['addSite'] = useCallback((s) => {
+    const site: Site = {
+      ...s,
       id: uid(),
       createdAt: new Date().toISOString(),
     }
-    setState((s) => ({ ...s, jobs: [...s.jobs, job] }))
-    return job
+    setState((cur) => ({ ...cur, sites: [...cur.sites, site] }))
+    return site
   }, [])
 
-  const updateJob: StoreApi['updateJob'] = useCallback((id, patch) => {
+  const updateSite: StoreApi['updateSite'] = useCallback((id, patch) => {
     setState((s) => ({
       ...s,
-      jobs: s.jobs.map((j) => (j.id === id ? { ...j, ...patch } : j)),
+      sites: s.sites.map((x) => (x.id === id ? { ...x, ...patch } : x)),
     }))
   }, [])
 
-  const deleteJob: StoreApi['deleteJob'] = useCallback((id) => {
+  const deleteSite: StoreApi['deleteSite'] = useCallback((id) => {
     setState((s) => ({
       ...s,
-      jobs: s.jobs.filter((j) => j.id !== id),
+      sites: s.sites.filter((x) => x.id !== id),
+      units: s.units.filter((u) => u.siteId !== id),
       bottles: s.bottles.map((b) =>
-        b.currentJobId === id ? { ...b, currentJobId: undefined } : b,
+        b.currentSiteId === id ? { ...b, currentSiteId: undefined } : b,
       ),
       transactions: s.transactions.map((t) =>
-        t.jobId === id ? { ...t, jobId: undefined } : t,
+        t.siteId === id ? { ...t, siteId: undefined } : t,
+      ),
+    }))
+  }, [])
+
+  const addUnit: StoreApi['addUnit'] = useCallback((u) => {
+    const unit: Unit = {
+      ...u,
+      id: uid(),
+      status: 'active',
+      createdAt: new Date().toISOString(),
+    }
+    setState((cur) => ({ ...cur, units: [...cur.units, unit] }))
+    return unit
+  }, [])
+
+  const updateUnit: StoreApi['updateUnit'] = useCallback((id, patch) => {
+    setState((s) => ({
+      ...s,
+      units: s.units.map((u) => (u.id === id ? { ...u, ...patch } : u)),
+    }))
+  }, [])
+
+  const deleteUnit: StoreApi['deleteUnit'] = useCallback((id) => {
+    setState((s) => ({
+      ...s,
+      units: s.units.filter((u) => u.id !== id),
+      transactions: s.transactions.map((t) =>
+        t.unitId === id ? { ...t, unitId: undefined } : t,
+      ),
+    }))
+  }, [])
+
+  const decommissionUnit: StoreApi['decommissionUnit'] = useCallback(
+    (id, reason) => {
+      setState((s) => ({
+        ...s,
+        units: s.units.map((u) =>
+          u.id === id
+            ? {
+                ...u,
+                status: 'decommissioned',
+                decommissionedAt: new Date().toISOString(),
+                decommissionedReason: reason?.trim() || u.decommissionedReason,
+              }
+            : u,
+        ),
+      }))
+    },
+    [],
+  )
+
+  const reactivateUnit: StoreApi['reactivateUnit'] = useCallback((id) => {
+    setState((s) => ({
+      ...s,
+      units: s.units.map((u) =>
+        u.id === id
+          ? {
+              ...u,
+              status: 'active',
+              decommissionedAt: undefined,
+              decommissionedReason: undefined,
+            }
+          : u,
       ),
     }))
   }, [])
@@ -181,11 +250,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         updatedAt: new Date().toISOString(),
       }
       // status side-effects
-      if (t.kind === 'transfer' && t.jobId) {
-        updatedBottle.currentJobId = t.jobId
+      if (t.kind === 'transfer' && t.siteId) {
+        updatedBottle.currentSiteId = t.siteId
         updatedBottle.status = 'on_site'
       } else if (t.kind === 'return') {
-        updatedBottle.currentJobId = undefined
+        updatedBottle.currentSiteId = undefined
         updatedBottle.status = 'returned'
       }
       const net = Math.max(0, updatedBottle.grossWeight - updatedBottle.tareWeight)
@@ -242,10 +311,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const resetAll = useCallback(() => {
-    if (confirm('Erase ALL bottles, jobs, and transactions? This cannot be undone.')) {
+    if (
+      confirm(
+        'Erase ALL bottles, sites, units, and transactions? This cannot be undone.',
+      )
+    ) {
       setState((s) => ({
         bottles: [],
-        jobs: [],
+        sites: [],
+        units: [],
         transactions: [],
         customRefrigerants: [],
         technician: '',
@@ -263,9 +337,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       addBottle,
       updateBottle,
       deleteBottle,
-      addJob,
-      updateJob,
-      deleteJob,
+      addSite,
+      updateSite,
+      deleteSite,
+      addUnit,
+      updateUnit,
+      deleteUnit,
+      decommissionUnit,
+      reactivateUnit,
       addTransaction,
       deleteTransaction,
       setTechnician,
@@ -281,9 +360,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       addBottle,
       updateBottle,
       deleteBottle,
-      addJob,
-      updateJob,
-      deleteJob,
+      addSite,
+      updateSite,
+      deleteSite,
+      addUnit,
+      updateUnit,
+      deleteUnit,
+      decommissionUnit,
+      reactivateUnit,
       addTransaction,
       deleteTransaction,
       setTechnician,
