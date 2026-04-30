@@ -13,15 +13,13 @@ import {
 import { useStore } from '../lib/store'
 import {
   NON_REFRIGERANT_UNIT_KINDS,
-  REFRIGERANT_TYPES,
   UNIT_KIND_LABELS,
   netWeight,
-  refrigerantLabel,
-  sortRefrigerants,
   type Site,
   type Unit,
   type UnitKind,
 } from '../lib/types'
+import { RefrigerantSelect } from '../components/RefrigerantSelect'
 import { useToast } from '../lib/toast'
 import { displayToKg, formatWeight, kgToDisplay } from '../lib/units'
 
@@ -581,15 +579,6 @@ function UnitForm({
 }) {
   const { state } = useStore()
   const displayUnit = state.unit
-  const favorites = state.favoriteRefrigerants
-  const allTypes = useMemo(
-    () =>
-      sortRefrigerants(
-        [...REFRIGERANT_TYPES, ...state.customRefrigerants],
-        state.favoriteRefrigerants,
-      ),
-    [state.customRefrigerants, state.favoriteRefrigerants],
-  )
 
   const [name, setName] = useState(unit?.name ?? '')
   const [kind, setKind] = useState<UnitKind | ''>(unit?.kind ?? '')
@@ -683,17 +672,11 @@ function UnitForm({
 
         <div className="grid grid-cols-2 gap-3">
           <Field label="Refrigerant">
-            <Select
+            <RefrigerantSelect
+              allowEmpty
               value={refrigerantType}
-              onChange={(e) => setRefrigerantType(e.target.value)}
-            >
-              <option value="">—</option>
-              {allTypes.map((t) => (
-                <option key={t} value={t}>
-                  {refrigerantLabel(t, favorites)}
-                </option>
-              ))}
-            </Select>
+              onChange={setRefrigerantType}
+            />
           </Field>
           <Field label={`Factory charge (${displayUnit})`}>
             <TextInput

@@ -20,11 +20,11 @@ import {
   REFRIGERANT_TYPES,
   REASON_LABELS,
   netWeight,
-  refrigerantLabel,
   sortRefrigerants,
   statusLabel,
   transactionLabel,
 } from '../lib/types'
+import { RefrigerantSelect } from '../components/RefrigerantSelect'
 import { useToast } from '../lib/toast'
 import { displayToKg, formatWeight, kgToDisplay } from '../lib/units'
 
@@ -795,7 +795,6 @@ function QuickLogModal({
       <UnitQuickAdd
         open={quickAddUnitOpen}
         siteId={siteId}
-        types={allRefrigerantTypes}
         onClose={() => setQuickAddUnitOpen(false)}
         onCreate={(data) => {
           const created = addUnit({ ...data, siteId })
@@ -823,7 +822,6 @@ function BottleQuickAdd({
 }) {
   const { state } = useStore()
   const displayUnit = state.unit
-  const favorites = state.favoriteRefrigerants
   const [bottleNumber, setBottleNumber] = useState('')
   const [refrigerantType, setRefrigerantType] = useState(types[0] ?? 'R410A')
   const [tare, setTare] = useState('')
@@ -867,16 +865,11 @@ function BottleQuickAdd({
           />
         </Field>
         <Field label="Refrigerant type">
-          <Select
+          <RefrigerantSelect
+            required
             value={refrigerantType}
-            onChange={(e) => setRefrigerantType(e.target.value)}
-          >
-            {types.map((t) => (
-              <option key={t} value={t}>
-                {refrigerantLabel(t, favorites)}
-              </option>
-            ))}
-          </Select>
+            onChange={setRefrigerantType}
+          />
         </Field>
         <div className="grid grid-cols-2 gap-3">
           <Field label={`Tare ${displayUnit}`}>
@@ -913,20 +906,16 @@ function BottleQuickAdd({
 function UnitQuickAdd({
   open,
   siteId,
-  types,
   onClose,
   onCreate,
 }: {
   open: boolean
   siteId: string
-  types: string[]
   onClose: () => void
   onCreate: (
     data: Omit<Unit, 'id' | 'createdAt' | 'status' | 'siteId'>,
   ) => void
 }) {
-  const { state } = useStore()
-  const favorites = state.favoriteRefrigerants
   const [name, setName] = useState('')
   const [refrigerantType, setRefrigerantType] = useState('')
 
@@ -962,17 +951,11 @@ function UnitQuickAdd({
           />
         </Field>
         <Field label="Refrigerant (optional)">
-          <Select
+          <RefrigerantSelect
+            allowEmpty
             value={refrigerantType}
-            onChange={(e) => setRefrigerantType(e.target.value)}
-          >
-            <option value="">—</option>
-            {types.map((t) => (
-              <option key={t} value={t}>
-                {refrigerantLabel(t, favorites)}
-              </option>
-            ))}
-          </Select>
+            onChange={setRefrigerantType}
+          />
         </Field>
         <p className="text-xs text-slate-500">
           For equipment type, model, serial etc. edit the unit from the Sites tab after saving.
@@ -1004,7 +987,6 @@ function BottleForm({
 }) {
   const { state } = useStore()
   const unit = state.unit
-  const favorites = state.favoriteRefrigerants
   const initialDisplay = (kg: number) =>
     kg ? kgToDisplay(kg, unit).toFixed(2) : ''
 
@@ -1073,16 +1055,11 @@ function BottleForm({
           />
         </Field>
         <Field label="Refrigerant type">
-          <Select
+          <RefrigerantSelect
+            required
             value={refrigerantType}
-            onChange={(e) => setRefrigerantType(e.target.value)}
-          >
-            {types.map((t) => (
-              <option key={t} value={t}>
-                {refrigerantLabel(t, favorites)}
-              </option>
-            ))}
-          </Select>
+            onChange={setRefrigerantType}
+          />
         </Field>
 
         <div className="grid grid-cols-2 gap-3">
