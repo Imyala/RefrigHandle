@@ -50,35 +50,46 @@ export default function Settings() {
         'date',
         'kind',
         'bottleNumber',
+        'sourceBottleNumber',
         'refrigerantType',
         'amount_kg',
         'weightBefore_kg',
         'weightAfter_kg',
+        'sourceWeightBefore_kg',
+        'sourceWeightAfter_kg',
         'site',
         'client',
         'unit',
         'equipment',
         'reason',
+        'returnDestination',
         'technician',
         'notes',
       ],
       ...state.transactions.map((t) => {
         const b = state.bottles.find((x) => x.id === t.bottleId)
+        const sb = t.sourceBottleId
+          ? state.bottles.find((x) => x.id === t.sourceBottleId)
+          : null
         const s = state.sites.find((x) => x.id === t.siteId)
         const u = state.units.find((x) => x.id === t.unitId)
         return [
           t.date,
           t.kind,
           b?.bottleNumber ?? '',
+          sb?.bottleNumber ?? '',
           b?.refrigerantType ?? '',
           t.amount.toFixed(3),
           t.weightBefore.toFixed(3),
           t.weightAfter.toFixed(3),
+          t.sourceWeightBefore?.toFixed(3) ?? '',
+          t.sourceWeightAfter?.toFixed(3) ?? '',
           s?.name ?? '',
           s?.client ?? '',
           u?.name ?? '',
           t.equipment ?? '',
           t.reason ?? '',
+          t.returnDestination ?? '',
           t.technician ?? '',
           (t.notes ?? '').replace(/[\r\n]+/g, ' '),
         ]

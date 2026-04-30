@@ -128,6 +128,13 @@ export const REASON_LABELS: Record<TransactionReason, string> = {
 export interface Transaction {
   id: string
   bottleId: string
+  // For 'recover' from another bottle: the SOURCE bottle (loses weight).
+  // The main bottleId is always the bottle this transaction belongs to
+  // (gains weight on recover, loses on charge).
+  sourceBottleId?: string
+  // Source-bottle weight tracking (only set when sourceBottleId is set)
+  sourceWeightBefore?: number
+  sourceWeightAfter?: number
   siteId?: string
   unitId?: string
   kind: TransactionKind
@@ -139,6 +146,8 @@ export interface Transaction {
   equipment?: string // free-text fallback if no Unit is picked
   reason?: TransactionReason
   notes?: string
+  // Where the bottle was returned (store / supplier) — only for 'return' kind
+  returnDestination?: string
 }
 
 export type WeightUnit = 'kg' | 'lb'

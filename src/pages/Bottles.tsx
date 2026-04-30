@@ -16,6 +16,7 @@ import {
   type BottleStatus,
   type TransactionKind,
   type TransactionReason,
+  type Unit,
   REFRIGERANT_TYPES,
   REASON_LABELS,
   netWeight,
@@ -267,7 +268,7 @@ function BottleActionSheet({
   const site = state.sites.find((j) => j.id === bottle.currentSiteId)
   const net = netWeight(bottle)
   const history = state.transactions
-    .filter((t) => t.bottleId === bottle.id)
+    .filter((t) => t.bottleId === bottle.id || t.sourceBottleId === bottle.id)
     .slice(0, 5)
 
   return (
@@ -363,6 +364,7 @@ function QuickLogModal({
   onClose: () => void
   onSave: (data: {
     bottleId: string
+    sourceBottleId?: string
     siteId?: string
     unitId?: string
     kind: TransactionKind
@@ -372,10 +374,18 @@ function QuickLogModal({
     equipment?: string
     reason?: TransactionReason
     notes?: string
+    returnDestination?: string
   }) => void
 }) {
-  const { state } = useStore()
+  const { state, addBottle, addUnit, addCustomRefrigerant } = useStore()
   const unit = state.unit
+  const allRefrigerantTypes = useMemo(
+    () => [...REFRIGERANT_TYPES, ...state.customRefrigerants],
+    [state.customRefrigerants],
+  )
+
+  type RecoverSource = 'equipment' | 'bottle'
+
   const [amount, setAmount] = useState('')
   const [siteId, setSiteId] = useState(bottle?.currentSiteId ?? '')
   const [unitId, setUnitId] = useState('')
@@ -383,6 +393,13 @@ function QuickLogModal({
   const [reason, setReason] = useState<TransactionReason | ''>('')
   const [notes, setNotes] = useState('')
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 16))
+  const [recoverSource, setRecoverSource] = useState<RecoverSource>('equipment')
+  const [sourceBottleId, setSourceBottleId] = useState('')
+  const [returnDestination, setReturnDestination] = useState('')
+
+  // Quick-add modals
+  const [quickAddBottleOpen, setQuickAddBottleOpen] = useState(false)
+  const [quickAddUnitOpen, setQuickAddUnitOpen] = useState(false)
 
   const lastKey = `${bottle?.id}-${kind}-${open}`
   const [seenKey, setSeenKey] = useState('')
@@ -395,15 +412,29 @@ function QuickLogModal({
     setReason('')
     setNotes('')
     setDate(new Date().toISOString().slice(0, 16))
+    setRecoverSource('equipment')
+    setSourceBottleId('')
+    setReturnDestination('')
   }
 
   if (!open || !bottle || !kind) return null
 
   const showAmount = kind === 'charge' || kind === 'recover'
-  const showSite = kind !== 'return'
+  const isBottleToBottleRecover =
+    kind === 'recover' && recoverSource === 'bottle'
+  const showSite = kind !== 'return' && !isBottleToBottleRecover
+  const showCompliance =
+    (kind === 'charge' || kind === 'recover') && !isBottleToBottleRecover
+
   const siteUnits = state.units.filter(
     (u) => u.siteId === siteId && u.status === 'active',
   )
+  const otherBottles = state.bottles.filter((b) => b.id !== bottle.id)
+  const sourceBottle =
+    isBottleToBottleRecover && sourceBottleId
+      ? state.bottles.find((b) => b.id === sourceBottleId)
+      : null
+
   const enteredAmountDisplay = parseFloat(amount) || 0
   const amountKg = displayToKg(enteredAmountDisplay, unit)
   const projectedAfter =
@@ -413,12 +444,35 @@ function QuickLogModal({
         ? bottle.grossWeight + amountKg
         : bottle.grossWeight
   const projectedNet = Math.max(0, projectedAfter - bottle.tareWeight)
+  const projectedSourceAfter = sourceBottle
+    ? Math.max(0, sourceBottle.grossWeight - amountKg)
+    : 0
+  const projectedSourceNet = sourceBottle
+    ? Math.max(0, projectedSourceAfter - sourceBottle.tareWeight)
+    : 0
+
+  function handleSourceBottleChange(value: string) {
+    if (value === '__new__') {
+      setQuickAddBottleOpen(true)
+      return
+    }
+    setSourceBottleId(value)
+  }
+
+  function handleUnitChange(value: string) {
+    if (value === '__new__') {
+      setQuickAddUnitOpen(true)
+      return
+    }
+    setUnitId(value)
+  }
 
   function submit(e: React.FormEvent) {
     e.preventDefault()
     if (!kind || !bottle) return
     onSave({
       bottleId: bottle.id,
+      sourceBottleId: isBottleToBottleRecover && sourceBottleId ? sourceBottleId : undefined,
       siteId: showSite && siteId ? siteId : undefined,
       unitId: showSite && unitId ? unitId : undefined,
       kind,
@@ -428,139 +482,424 @@ function QuickLogModal({
       equipment: equipment.trim() || undefined,
       reason: reason || undefined,
       notes: notes.trim() || undefined,
+      returnDestination:
+        kind === 'return' && returnDestination.trim()
+          ? returnDestination.trim()
+          : undefined,
     })
   }
 
   const titleMap: Record<TransactionKind, string> = {
     charge: 'Charge into equipment',
-    recover: 'Recover from equipment',
+    recover: 'Recover refrigerant',
     transfer: 'Transfer bottle to a site',
-    return: 'Return bottle to stock',
+    return: 'Return bottle to store',
     adjust: 'Manual adjustment',
   }
 
   return (
-    <Modal open={open} title={titleMap[kind]} onClose={onClose}>
-      <form onSubmit={submit} className="space-y-3">
-        <div className="rounded-xl bg-slate-100 p-3 text-sm dark:bg-slate-800">
-          <div className="font-semibold text-slate-900 dark:text-slate-100">
-            {bottle.bottleNumber} · {bottle.refrigerantType}
+    <>
+      <Modal open={open} title={titleMap[kind]} onClose={onClose}>
+        <form onSubmit={submit} className="space-y-3">
+          <div className="rounded-xl bg-slate-100 p-3 text-sm dark:bg-slate-800">
+            <div className="font-semibold text-slate-900 dark:text-slate-100">
+              {bottle.bottleNumber} · {bottle.refrigerantType}
+            </div>
+            <div className="text-slate-600 dark:text-slate-300">
+              Currently {formatWeight(netWeight(bottle), unit)} net (
+              {formatWeight(bottle.grossWeight, unit)} gross)
+            </div>
           </div>
-          <div className="text-slate-600 dark:text-slate-300">
-            Currently {formatWeight(netWeight(bottle), unit)} net (
-            {formatWeight(bottle.grossWeight, unit)} gross)
-          </div>
-        </div>
 
-        {showAmount && (
-          <Field
-            label={
-              kind === 'charge'
-                ? `How much charged in? (${unit})`
-                : `How much recovered? (${unit})`
-            }
+          {kind === 'recover' && (
+            <Field label="Recover from">
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setRecoverSource('equipment')}
+                  className={`rounded-xl px-3 py-3 text-sm font-medium transition ${
+                    recoverSource === 'equipment'
+                      ? 'bg-brand-600 text-white'
+                      : 'bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-200'
+                  }`}
+                >
+                  Equipment
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setRecoverSource('bottle')}
+                  className={`rounded-xl px-3 py-3 text-sm font-medium transition ${
+                    recoverSource === 'bottle'
+                      ? 'bg-brand-600 text-white'
+                      : 'bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-200'
+                  }`}
+                >
+                  Another bottle
+                </button>
+              </div>
+            </Field>
+          )}
+
+          {showAmount && (
+            <Field
+              label={
+                kind === 'charge'
+                  ? `How much charged in? (${unit})`
+                  : `How much recovered? (${unit})`
+              }
+            >
+              <TextInput
+                type="number"
+                inputMode="decimal"
+                step="0.01"
+                required
+                autoFocus
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                placeholder="e.g. 1.25"
+              />
+            </Field>
+          )}
+
+          {showAmount && enteredAmountDisplay > 0 && (
+            <div className="rounded-xl bg-brand-50 p-3 text-sm text-brand-900 dark:bg-brand-900/20 dark:text-brand-100">
+              New bottle net: <strong>{formatWeight(projectedNet, unit)}</strong>
+              {projectedAfter < bottle.tareWeight && (
+                <span className="ml-2 text-red-600 dark:text-red-300">
+                  goes below tare
+                </span>
+              )}
+              {sourceBottle && (
+                <div>
+                  Source bottle net after:{' '}
+                  <strong>{formatWeight(projectedSourceNet, unit)}</strong>
+                  {projectedSourceAfter < sourceBottle.tareWeight && (
+                    <span className="ml-2 text-red-600 dark:text-red-300">
+                      source goes below tare
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {isBottleToBottleRecover && (
+            <Field label="Source bottle" hint="Refrigerant will be removed from this bottle">
+              <Select
+                value={sourceBottleId}
+                onChange={(e) => handleSourceBottleChange(e.target.value)}
+                required
+              >
+                <option value="">— pick a bottle —</option>
+                {otherBottles.map((b) => (
+                  <option key={b.id} value={b.id}>
+                    {b.bottleNumber} · {b.refrigerantType} ·{' '}
+                    {formatWeight(netWeight(b), unit)} net
+                  </option>
+                ))}
+                <option value="__new__">+ Add new bottle…</option>
+              </Select>
+            </Field>
+          )}
+
+          {showSite && (
+            <>
+              <Field label="Site">
+                <Select
+                  value={siteId}
+                  onChange={(e) => {
+                    setSiteId(e.target.value)
+                    setUnitId('')
+                  }}
+                  required={kind === 'transfer'}
+                >
+                  <option value="">— none —</option>
+                  {state.sites.map((j) => (
+                    <option key={j.id} value={j.id}>
+                      {j.name}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+              {(kind === 'charge' || kind === 'recover') && siteId && (
+                <Field
+                  label="Unit (optional)"
+                  hint="Pick the equipment this charge applies to"
+                >
+                  <Select
+                    value={unitId}
+                    onChange={(e) => handleUnitChange(e.target.value)}
+                  >
+                    <option value="">— none —</option>
+                    {siteUnits.map((u) => (
+                      <option key={u.id} value={u.id}>
+                        {u.name}
+                        {u.refrigerantType ? ` (${u.refrigerantType})` : ''}
+                      </option>
+                    ))}
+                    <option value="__new__">+ Add new unit at this site…</option>
+                  </Select>
+                </Field>
+              )}
+            </>
+          )}
+
+          {showCompliance && (
+            <>
+              <Field
+                label="Equipment (free text)"
+                hint="Optional — only if no Unit picked above. e.g. 'Chiller AHU-2'"
+              >
+                <TextInput
+                  value={equipment}
+                  onChange={(e) => setEquipment(e.target.value)}
+                />
+              </Field>
+              <Field label="Reason">
+                <Select
+                  value={reason}
+                  onChange={(e) =>
+                    setReason(e.target.value as TransactionReason | '')
+                  }
+                >
+                  <option value="">— pick reason —</option>
+                  {(Object.keys(REASON_LABELS) as TransactionReason[]).map((r) => (
+                    <option key={r} value={r}>
+                      {REASON_LABELS[r]}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+            </>
+          )}
+
+          {kind === 'return' && (
+            <Field
+              label="Store / supplier"
+              hint="Where is the bottle being returned? Optional."
+            >
+              <TextInput
+                value={returnDestination}
+                onChange={(e) => setReturnDestination(e.target.value)}
+                placeholder="e.g. BOC, Refco depot, Beijer Ref"
+              />
+            </Field>
+          )}
+
+          <Field label="Date / time">
+            <TextInput
+              type="datetime-local"
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+            />
+          </Field>
+
+          <Field label="Notes">
+            <TextArea value={notes} onChange={(e) => setNotes(e.target.value)} />
+          </Field>
+
+          <Button type="submit" full>
+            Save
+          </Button>
+        </form>
+      </Modal>
+
+      <BottleQuickAdd
+        open={quickAddBottleOpen}
+        types={allRefrigerantTypes}
+        onClose={() => setQuickAddBottleOpen(false)}
+        onCreate={(data, customType) => {
+          if (customType) addCustomRefrigerant(customType)
+          const created = addBottle(data)
+          setSourceBottleId(created.id)
+          setQuickAddBottleOpen(false)
+        }}
+      />
+
+      <UnitQuickAdd
+        open={quickAddUnitOpen}
+        siteId={siteId}
+        types={allRefrigerantTypes}
+        onClose={() => setQuickAddUnitOpen(false)}
+        onCreate={(data) => {
+          const created = addUnit({ ...data, siteId })
+          setUnitId(created.id)
+          setQuickAddUnitOpen(false)
+        }}
+      />
+    </>
+  )
+}
+
+function BottleQuickAdd({
+  open,
+  types,
+  onClose,
+  onCreate,
+}: {
+  open: boolean
+  types: string[]
+  onClose: () => void
+  onCreate: (
+    data: Omit<Bottle, 'id' | 'createdAt' | 'updatedAt'>,
+    customType?: string,
+  ) => void
+}) {
+  const { state } = useStore()
+  const displayUnit = state.unit
+  const [bottleNumber, setBottleNumber] = useState('')
+  const [refrigerantType, setRefrigerantType] = useState(types[0] ?? 'R410A')
+  const [tare, setTare] = useState('')
+  const [gross, setGross] = useState('')
+
+  const [lastOpen, setLastOpen] = useState(open)
+  if (open && !lastOpen) {
+    setLastOpen(true)
+    setBottleNumber('')
+    setRefrigerantType(types[0] ?? 'R410A')
+    setTare('')
+    setGross('')
+  } else if (!open && lastOpen) {
+    setLastOpen(false)
+  }
+
+  function submit(e: React.FormEvent) {
+    e.preventDefault()
+    const tareKg = displayToKg(parseFloat(tare) || 0, displayUnit)
+    const grossKg = displayToKg(parseFloat(gross) || 0, displayUnit)
+    onCreate({
+      bottleNumber: bottleNumber.trim(),
+      refrigerantType,
+      tareWeight: tareKg,
+      grossWeight: grossKg,
+      initialNetWeight: Math.max(0, grossKg - tareKg),
+      status: 'in_stock',
+    })
+  }
+
+  return (
+    <Modal open={open} title="Quick add bottle" onClose={onClose}>
+      <form onSubmit={submit} className="space-y-3">
+        <Field label="Bottle ID / number">
+          <TextInput
+            required
+            autoFocus
+            value={bottleNumber}
+            onChange={(e) => setBottleNumber(e.target.value)}
+            placeholder="e.g. B-205"
+          />
+        </Field>
+        <Field label="Refrigerant type">
+          <Select
+            value={refrigerantType}
+            onChange={(e) => setRefrigerantType(e.target.value)}
           >
+            {types.map((t) => (
+              <option key={t} value={t}>
+                {t}
+              </option>
+            ))}
+          </Select>
+        </Field>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label={`Tare ${displayUnit}`}>
+            <TextInput
+              type="number"
+              inputMode="decimal"
+              step="0.01"
+              value={tare}
+              onChange={(e) => setTare(e.target.value)}
+            />
+          </Field>
+          <Field label={`Gross ${displayUnit}`}>
             <TextInput
               type="number"
               inputMode="decimal"
               step="0.01"
               required
-              autoFocus
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-              placeholder="e.g. 1.25"
+              value={gross}
+              onChange={(e) => setGross(e.target.value)}
             />
           </Field>
-        )}
+        </div>
+        <p className="text-xs text-slate-500">
+          For full details (notes, status, current site) edit the bottle from the Bottles tab after saving.
+        </p>
+        <Button type="submit" full>
+          Add bottle
+        </Button>
+      </form>
+    </Modal>
+  )
+}
 
-        {showAmount && enteredAmountDisplay > 0 && (
-          <div className="rounded-xl bg-brand-50 p-3 text-sm text-brand-900 dark:bg-brand-900/20 dark:text-brand-100">
-            New bottle net: <strong>{formatWeight(projectedNet, unit)}</strong>
-            {projectedAfter < bottle.tareWeight && (
-              <span className="ml-2 text-red-600 dark:text-red-300">
-                goes below tare
-              </span>
-            )}
-          </div>
-        )}
+function UnitQuickAdd({
+  open,
+  siteId,
+  types,
+  onClose,
+  onCreate,
+}: {
+  open: boolean
+  siteId: string
+  types: string[]
+  onClose: () => void
+  onCreate: (
+    data: Omit<Unit, 'id' | 'createdAt' | 'status' | 'siteId'>,
+  ) => void
+}) {
+  const [name, setName] = useState('')
+  const [refrigerantType, setRefrigerantType] = useState('')
 
-        {showSite && (
-          <>
-            <Field label="Site">
-              <Select
-                value={siteId}
-                onChange={(e) => {
-                  setSiteId(e.target.value)
-                  setUnitId('')
-                }}
-                required={kind === 'transfer'}
-              >
-                <option value="">— none —</option>
-                {state.sites.map((j) => (
-                  <option key={j.id} value={j.id}>
-                    {j.name}
-                  </option>
-                ))}
-              </Select>
-            </Field>
-            {(kind === 'charge' || kind === 'recover') && siteUnits.length > 0 && (
-              <Field label="Unit (optional)" hint="Pick the equipment this charge applies to">
-                <Select
-                  value={unitId}
-                  onChange={(e) => setUnitId(e.target.value)}
-                >
-                  <option value="">— none —</option>
-                  {siteUnits.map((u) => (
-                    <option key={u.id} value={u.id}>
-                      {u.name}
-                      {u.refrigerantType ? ` (${u.refrigerantType})` : ''}
-                    </option>
-                  ))}
-                </Select>
-              </Field>
-            )}
-          </>
-        )}
+  const [lastOpen, setLastOpen] = useState(open)
+  if (open && !lastOpen) {
+    setLastOpen(true)
+    setName('')
+    setRefrigerantType('')
+  } else if (!open && lastOpen) {
+    setLastOpen(false)
+  }
 
-        {(kind === 'charge' || kind === 'recover') && (
-          <>
-            <Field label="Equipment" hint="Helps with F-Gas log e.g. 'Daikin VRV unit #3'">
-              <TextInput
-                value={equipment}
-                onChange={(e) => setEquipment(e.target.value)}
-                placeholder="e.g. Chiller AHU-2"
-              />
-            </Field>
-            <Field label="Reason">
-              <Select
-                value={reason}
-                onChange={(e) => setReason(e.target.value as TransactionReason | '')}
-              >
-                <option value="">— pick reason —</option>
-                {(Object.keys(REASON_LABELS) as TransactionReason[]).map((r) => (
-                  <option key={r} value={r}>
-                    {REASON_LABELS[r]}
-                  </option>
-                ))}
-              </Select>
-            </Field>
-          </>
-        )}
+  function submit(e: React.FormEvent) {
+    e.preventDefault()
+    onCreate({
+      name: name.trim(),
+      refrigerantType: refrigerantType || undefined,
+    })
+  }
 
-        <Field label="Date / time">
+  if (!siteId) return null
+
+  return (
+    <Modal open={open} title="Quick add unit" onClose={onClose}>
+      <form onSubmit={submit} className="space-y-3">
+        <Field label="Unit name / label">
           <TextInput
-            type="datetime-local"
-            value={date}
-            onChange={(e) => setDate(e.target.value)}
+            required
+            autoFocus
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="e.g. Living room split, AHU-2"
           />
         </Field>
-
-        <Field label="Notes">
-          <TextArea value={notes} onChange={(e) => setNotes(e.target.value)} />
+        <Field label="Refrigerant (optional)">
+          <Select
+            value={refrigerantType}
+            onChange={(e) => setRefrigerantType(e.target.value)}
+          >
+            <option value="">—</option>
+            {types.map((t) => (
+              <option key={t} value={t}>
+                {t}
+              </option>
+            ))}
+          </Select>
         </Field>
-
+        <p className="text-xs text-slate-500">
+          For equipment type, model, serial etc. edit the unit from the Sites tab after saving.
+        </p>
         <Button type="submit" full>
-          Save
+          Add unit
         </Button>
       </form>
     </Modal>

@@ -105,6 +105,9 @@ export default function Transactions() {
         <div className="space-y-2">
           {sorted.map((t) => {
             const bottle = bottles.find((b) => b.id === t.bottleId)
+            const sourceBottle = t.sourceBottleId
+              ? bottles.find((b) => b.id === t.sourceBottleId)
+              : null
             const site = sites.find((j) => j.id === t.siteId)
             const txUnit = state.units.find((u) => u.id === t.unitId)
             return (
@@ -124,6 +127,7 @@ export default function Transactions() {
                     </div>
                     <div className="mt-1 text-sm text-slate-700 dark:text-slate-300">
                       {bottle?.bottleNumber ?? '(deleted)'}
+                      {sourceBottle && ` ← ${sourceBottle.bottleNumber}`}
                       {site ? ` · ${site.name}` : ''}
                     </div>
                     {(txUnit || t.equipment || t.reason) && (
@@ -132,6 +136,11 @@ export default function Transactions() {
                         {!txUnit && t.equipment && t.equipment}
                         {(txUnit || t.equipment) && t.reason && ' · '}
                         {t.reason && REASON_LABELS[t.reason]}
+                      </div>
+                    )}
+                    {t.kind === 'return' && t.returnDestination && (
+                      <div className="text-xs text-slate-500">
+                        Returned to: {t.returnDestination}
                       </div>
                     )}
                     <div className="text-xs text-slate-500">

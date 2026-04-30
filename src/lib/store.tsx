@@ -236,11 +236,24 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       // transfer / return don't change weight
       after = Math.max(0, Math.round(after * 1000) / 1000)
 
+      // Bottle-to-bottle recover: also decrement the source bottle
+      const sourceBottle =
+        t.kind === 'recover' && t.sourceBottleId
+          ? s.bottles.find((b) => b.id === t.sourceBottleId)
+          : null
+      const sourceBefore = sourceBottle?.grossWeight
+      const sourceAfter =
+        sourceBottle != null
+          ? Math.max(0, Math.round((sourceBottle.grossWeight - t.amount) * 1000) / 1000)
+          : undefined
+
       const tx: Transaction = {
         ...t,
         id: uid(),
         weightBefore: before,
         weightAfter: after,
+        sourceWeightBefore: sourceBefore,
+        sourceWeightAfter: sourceAfter,
       }
       result = tx
 
@@ -262,9 +275,28 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         updatedBottle.status = 'empty'
       }
 
+      let nextBottles = s.bottles.map((b) =>
+        b.id === bottle.id ? updatedBottle : b,
+      )
+
+      if (sourceBottle && sourceAfter !== undefined) {
+        const sourceUpdated: Bottle = {
+          ...sourceBottle,
+          grossWeight: sourceAfter,
+          updatedAt: new Date().toISOString(),
+        }
+        const srcNet = Math.max(0, sourceUpdated.grossWeight - sourceUpdated.tareWeight)
+        if (srcNet <= 0.01 && sourceUpdated.status !== 'returned') {
+          sourceUpdated.status = 'empty'
+        }
+        nextBottles = nextBottles.map((b) =>
+          b.id === sourceBottle.id ? sourceUpdated : b,
+        )
+      }
+
       return {
         ...s,
-        bottles: s.bottles.map((b) => (b.id === bottle.id ? updatedBottle : b)),
+        bottles: nextBottles,
         transactions: [tx, ...s.transactions],
       }
     })
