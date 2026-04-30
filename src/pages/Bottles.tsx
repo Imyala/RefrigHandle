@@ -25,6 +25,7 @@ import {
   transactionLabel,
 } from '../lib/types'
 import { RefrigerantSelect } from '../components/RefrigerantSelect'
+import { BottleSelect } from '../components/BottleSelect'
 import { useToast } from '../lib/toast'
 import { displayToKg, formatWeight, kgToDisplay } from '../lib/units'
 
@@ -442,7 +443,6 @@ function QuickLogModal({
   const siteUnits = state.units.filter(
     (u) => u.siteId === siteId && u.status === 'active',
   )
-  const otherBottles = state.bottles.filter((b) => b.id !== bottle.id)
   const sourceBottle =
     isBottleToBottleRecover && sourceBottleId
       ? state.bottles.find((b) => b.id === sourceBottleId)
@@ -475,14 +475,6 @@ function QuickLogModal({
   const projectedSourceNet = sourceBottle
     ? Math.max(0, projectedSourceAfter - sourceBottle.tareWeight)
     : 0
-
-  function handleSourceBottleChange(value: string) {
-    if (value === '__new__') {
-      setQuickAddBottleOpen(true)
-      return
-    }
-    setSourceBottleId(value)
-  }
 
   function handleUnitChange(value: string) {
     if (value === '__new__') {
@@ -569,19 +561,41 @@ function QuickLogModal({
             </Field>
           )}
 
+          {isBottleToBottleRecover && (
+            <Field
+              label="Source bottle"
+              hint="Refrigerant will be removed from this bottle and added to the one above"
+            >
+              <BottleSelect
+                required
+                value={sourceBottleId}
+                onChange={setSourceBottleId}
+                excludeId={bottle.id}
+                allowAddNew
+                onAddNew={() => setQuickAddBottleOpen(true)}
+                placeholder="Tap to pick a source bottle"
+                modalTitle="Pick source bottle"
+              />
+            </Field>
+          )}
+
           {showAmount && (
             <Field
               label={
                 kind === 'charge'
                   ? `How much went into unit? (${unit})`
-                  : `How much came out of equipment? (${unit})`
+                  : isBottleToBottleRecover
+                    ? `How much to transfer? (${unit})`
+                    : `How much came out of equipment? (${unit})`
               }
               hint={
                 kind === 'charge'
                   ? 'The amount that ended up in the equipment'
-                  : kind === 'recover'
-                    ? 'The amount pulled out of the equipment'
-                    : undefined
+                  : isBottleToBottleRecover
+                    ? 'How much refrigerant moves from the source bottle to this one'
+                    : kind === 'recover'
+                      ? 'The amount pulled out of the equipment'
+                      : undefined
               }
             >
               <TextInput
@@ -657,25 +671,6 @@ function QuickLogModal({
                 </div>
               )}
             </div>
-          )}
-
-          {isBottleToBottleRecover && (
-            <Field label="Source bottle" hint="Refrigerant will be removed from this bottle">
-              <Select
-                value={sourceBottleId}
-                onChange={(e) => handleSourceBottleChange(e.target.value)}
-                required
-              >
-                <option value="">— pick a bottle —</option>
-                {otherBottles.map((b) => (
-                  <option key={b.id} value={b.id}>
-                    {b.bottleNumber} · {b.refrigerantType} ·{' '}
-                    {formatWeight(netWeight(b), unit)} net
-                  </option>
-                ))}
-                <option value="__new__">+ Add new bottle…</option>
-              </Select>
-            </Field>
           )}
 
           {showSite && (
