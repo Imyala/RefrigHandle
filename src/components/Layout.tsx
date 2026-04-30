@@ -1,9 +1,9 @@
 import { NavLink, Outlet } from 'react-router-dom'
 
 const tabs = [
-  { to: '/', label: 'Dashboard', icon: '📊', end: true },
+  { to: '/', label: 'Home', icon: '🏠', end: true },
   { to: '/bottles', label: 'Bottles', icon: '🛢️' },
-  { to: '/locations', label: 'Sites', icon: '📍' },
+  { to: '/jobs', label: 'Jobs', icon: '📍' },
   { to: '/transactions', label: 'Log', icon: '📝' },
   { to: '/settings', label: 'Settings', icon: '⚙️' },
 ]
@@ -11,10 +11,15 @@ const tabs = [
 export function Layout() {
   return (
     <div className="flex min-h-svh flex-col bg-slate-50 dark:bg-slate-950">
-      <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/90 px-4 py-3 backdrop-blur dark:border-slate-800 dark:bg-slate-950/90">
+      <header
+        className="sticky top-0 z-30 border-b border-slate-200 bg-white/90 px-4 py-3 backdrop-blur dark:border-slate-800 dark:bg-slate-950/90"
+        style={{ paddingTop: 'calc(env(safe-area-inset-top) + 0.75rem)' }}
+      >
         <div className="mx-auto flex max-w-3xl items-center justify-between">
           <div className="flex items-center gap-2">
-            <span className="text-2xl">🛢️</span>
+            <span className="text-2xl" aria-hidden>
+              🛢️
+            </span>
             <h1 className="text-lg font-bold tracking-tight text-slate-900 dark:text-slate-100">
               RefrigHandle
             </h1>

@@ -10,7 +10,7 @@ import {
 import {
   type AppState,
   type Bottle,
-  type Location,
+  type Job,
   type Transaction,
 } from './types'
 import { loadState, saveState, uid } from './storage'
@@ -21,10 +21,10 @@ interface StoreApi {
   addBottle: (b: Omit<Bottle, 'id' | 'createdAt' | 'updatedAt'>) => Bottle
   updateBottle: (id: string, patch: Partial<Bottle>) => void
   deleteBottle: (id: string) => void
-  // locations
-  addLocation: (l: Omit<Location, 'id' | 'createdAt'>) => Location
-  updateLocation: (id: string, patch: Partial<Location>) => void
-  deleteLocation: (id: string) => void
+  // jobs
+  addJob: (l: Omit<Job, 'id' | 'createdAt'>) => Job
+  updateJob: (id: string, patch: Partial<Job>) => void
+  deleteJob: (id: string) => void
   // transactions
   addTransaction: (
     t: Omit<Transaction, 'id' | 'weightBefore' | 'weightAfter'>,
@@ -72,37 +72,32 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     }))
   }, [])
 
-  const addLocation: StoreApi['addLocation'] = useCallback((l) => {
-    const loc: Location = {
+  const addJob: StoreApi['addJob'] = useCallback((l) => {
+    const job: Job = {
       ...l,
       id: uid(),
       createdAt: new Date().toISOString(),
     }
-    setState((s) => ({ ...s, locations: [...s.locations, loc] }))
-    return loc
+    setState((s) => ({ ...s, jobs: [...s.jobs, job] }))
+    return job
   }, [])
 
-  const updateLocation: StoreApi['updateLocation'] = useCallback(
-    (id, patch) => {
-      setState((s) => ({
-        ...s,
-        locations: s.locations.map((l) =>
-          l.id === id ? { ...l, ...patch } : l,
-        ),
-      }))
-    },
-    [],
-  )
-
-  const deleteLocation: StoreApi['deleteLocation'] = useCallback((id) => {
+  const updateJob: StoreApi['updateJob'] = useCallback((id, patch) => {
     setState((s) => ({
       ...s,
-      locations: s.locations.filter((l) => l.id !== id),
+      jobs: s.jobs.map((j) => (j.id === id ? { ...j, ...patch } : j)),
+    }))
+  }, [])
+
+  const deleteJob: StoreApi['deleteJob'] = useCallback((id) => {
+    setState((s) => ({
+      ...s,
+      jobs: s.jobs.filter((j) => j.id !== id),
       bottles: s.bottles.map((b) =>
-        b.currentLocationId === id ? { ...b, currentLocationId: undefined } : b,
+        b.currentJobId === id ? { ...b, currentJobId: undefined } : b,
       ),
       transactions: s.transactions.map((t) =>
-        t.locationId === id ? { ...t, locationId: undefined } : t,
+        t.jobId === id ? { ...t, jobId: undefined } : t,
       ),
     }))
   }, [])
@@ -134,11 +129,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         updatedAt: new Date().toISOString(),
       }
       // status side-effects
-      if (t.kind === 'transfer' && t.locationId) {
-        updatedBottle.currentLocationId = t.locationId
+      if (t.kind === 'transfer' && t.jobId) {
+        updatedBottle.currentJobId = t.jobId
         updatedBottle.status = 'on_site'
       } else if (t.kind === 'return') {
-        updatedBottle.currentLocationId = undefined
+        updatedBottle.currentJobId = undefined
         updatedBottle.status = 'returned'
       }
       const net = Math.max(0, updatedBottle.grossWeight - updatedBottle.tareWeight)
@@ -185,10 +180,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const resetAll = useCallback(() => {
-    if (confirm('Erase ALL bottles, locations, and transactions? This cannot be undone.')) {
+    if (confirm('Erase ALL bottles, jobs, and transactions? This cannot be undone.')) {
       setState({
         bottles: [],
-        locations: [],
+        jobs: [],
         transactions: [],
         customRefrigerants: [],
         technician: '',
@@ -204,9 +199,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       addBottle,
       updateBottle,
       deleteBottle,
-      addLocation,
-      updateLocation,
-      deleteLocation,
+      addJob,
+      updateJob,
+      deleteJob,
       addTransaction,
       deleteTransaction,
       setTechnician,
@@ -220,9 +215,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       addBottle,
       updateBottle,
       deleteBottle,
-      addLocation,
-      updateLocation,
-      deleteLocation,
+      addJob,
+      updateJob,
+      deleteJob,
       addTransaction,
       deleteTransaction,
       setTechnician,

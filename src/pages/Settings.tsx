@@ -44,13 +44,16 @@ export default function Settings() {
         'amount_kg',
         'weightBefore_kg',
         'weightAfter_kg',
-        'site',
+        'job',
+        'client',
+        'equipment',
+        'reason',
         'technician',
         'notes',
       ],
       ...state.transactions.map((t) => {
         const b = state.bottles.find((x) => x.id === t.bottleId)
-        const l = state.locations.find((x) => x.id === t.locationId)
+        const j = state.jobs.find((x) => x.id === t.jobId)
         return [
           t.date,
           t.kind,
@@ -59,7 +62,10 @@ export default function Settings() {
           t.amount.toFixed(3),
           t.weightBefore.toFixed(3),
           t.weightAfter.toFixed(3),
-          l?.name ?? '',
+          j?.name ?? '',
+          j?.client ?? '',
+          t.equipment ?? '',
+          t.reason ?? '',
           t.technician ?? '',
           (t.notes ?? '').replace(/[\r\n]+/g, ' '),
         ]

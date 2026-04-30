@@ -24,13 +24,13 @@ export interface Bottle {
   grossWeight: number // current total mass (tare + refrigerant), kg
   initialNetWeight: number // refrigerant mass when first received, kg
   status: BottleStatus
-  currentLocationId?: string
+  currentJobId?: string
   notes?: string
   createdAt: string
   updatedAt: string
 }
 
-export interface Location {
+export interface Job {
   id: string
   name: string
   address?: string
@@ -42,26 +42,45 @@ export interface Location {
 export type TransactionKind =
   | 'charge' // refrigerant put INTO equipment, removed from bottle
   | 'recover' // refrigerant pulled OUT of equipment, added to bottle
-  | 'transfer' // bottle moved to a location (no weight change)
+  | 'transfer' // bottle moved to a job (no weight change)
   | 'return' // bottle returned to stock / supplier
   | 'adjust' // manual correction
+
+export type TransactionReason =
+  | 'install'
+  | 'service'
+  | 'leak_repair'
+  | 'top_up'
+  | 'decommission'
+  | 'other'
+
+export const REASON_LABELS: Record<TransactionReason, string> = {
+  install: 'Install / commissioning',
+  service: 'Service',
+  leak_repair: 'Leak repair',
+  top_up: 'Top up',
+  decommission: 'Decommission',
+  other: 'Other',
+}
 
 export interface Transaction {
   id: string
   bottleId: string
-  locationId?: string
+  jobId?: string
   kind: TransactionKind
   amount: number // kg of refrigerant moved (always positive)
   weightBefore: number // bottle gross weight before
   weightAfter: number // bottle gross weight after
   date: string // ISO date
   technician?: string
+  equipment?: string // e.g. "Daikin VRV unit #3" — F-Gas log
+  reason?: TransactionReason
   notes?: string
 }
 
 export interface AppState {
   bottles: Bottle[]
-  locations: Location[]
+  jobs: Job[]
   transactions: Transaction[]
   customRefrigerants: string[]
   technician: string
@@ -69,7 +88,7 @@ export interface AppState {
 
 export const EMPTY_STATE: AppState = {
   bottles: [],
-  locations: [],
+  jobs: [],
   transactions: [],
   customRefrigerants: [],
   technician: '',
@@ -84,7 +103,7 @@ export function statusLabel(s: BottleStatus): string {
     case 'in_stock':
       return 'In stock'
     case 'on_site':
-      return 'On site'
+      return 'On job'
     case 'returned':
       return 'Returned'
     case 'empty':
@@ -105,4 +124,8 @@ export function transactionLabel(k: TransactionKind): string {
     case 'adjust':
       return 'Adjust'
   }
+}
+
+export function pluralize(n: number, singular: string, plural?: string): string {
+  return n === 1 ? `${n} ${singular}` : `${n} ${plural ?? singular + 's'}`
 }

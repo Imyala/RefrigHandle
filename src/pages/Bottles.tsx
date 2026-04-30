@@ -14,10 +14,15 @@ import { useStore } from '../lib/store'
 import {
   type Bottle,
   type BottleStatus,
+  type TransactionKind,
+  type TransactionReason,
   REFRIGERANT_TYPES,
+  REASON_LABELS,
   netWeight,
   statusLabel,
+  transactionLabel,
 } from '../lib/types'
+import { useToast } from '../lib/toast'
 
 const statusTone: Record<BottleStatus, 'green' | 'amber' | 'slate' | 'red'> = {
   in_stock: 'green',
@@ -27,28 +32,42 @@ const statusTone: Record<BottleStatus, 'green' | 'amber' | 'slate' | 'red'> = {
 }
 
 export default function Bottles() {
-  const { state, addBottle, updateBottle, deleteBottle } = useStore()
-  const { bottles, locations, customRefrigerants } = state
+  const { state, addBottle, updateBottle, deleteBottle, addTransaction } =
+    useStore()
+  const { bottles, jobs, customRefrigerants } = state
+  const toast = useToast()
 
   const [editing, setEditing] = useState<Bottle | null>(null)
   const [adding, setAdding] = useState(false)
   const [filter, setFilter] = useState<'all' | BottleStatus>('all')
+  const [query, setQuery] = useState('')
+
+  // Action sheet — primary tap target
+  const [sheetBottle, setSheetBottle] = useState<Bottle | null>(null)
+  const [logKind, setLogKind] = useState<TransactionKind | null>(null)
 
   const allTypes = useMemo(
     () => [...REFRIGERANT_TYPES, ...customRefrigerants],
     [customRefrigerants],
   )
 
-  const visible = useMemo(
-    () =>
-      bottles
-        .filter((b) => filter === 'all' || b.status === filter)
-        .sort((a, b) => a.bottleNumber.localeCompare(b.bottleNumber)),
-    [bottles, filter],
-  )
+  const visible = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    return bottles
+      .filter((b) => filter === 'all' || b.status === filter)
+      .filter((b) => {
+        if (!q) return true
+        return (
+          b.bottleNumber.toLowerCase().includes(q) ||
+          b.refrigerantType.toLowerCase().includes(q) ||
+          (b.notes ?? '').toLowerCase().includes(q)
+        )
+      })
+      .sort((a, b) => a.bottleNumber.localeCompare(b.bottleNumber))
+  }, [bottles, filter, query])
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       <div className="flex items-center justify-between gap-2">
         <h2 className="text-xl font-semibold text-slate-900 dark:text-slate-100">
           Bottles
@@ -56,20 +75,36 @@ export default function Bottles() {
         <Button onClick={() => setAdding(true)}>+ Add</Button>
       </div>
 
-      <div className="flex flex-wrap gap-2">
-        {(['all', 'in_stock', 'on_site', 'returned', 'empty'] as const).map((f) => (
-          <button
-            key={f}
-            onClick={() => setFilter(f)}
-            className={`rounded-full px-3 py-1.5 text-sm font-medium transition ${
-              filter === f
-                ? 'bg-brand-600 text-white'
-                : 'bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-200'
-            }`}
-          >
-            {f === 'all' ? 'All' : statusLabel(f)}
-          </button>
-        ))}
+      {bottles.length > 0 && (
+        <TextInput
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Search by number, type, or notes…"
+        />
+      )}
+
+      <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
+        {(['all', 'in_stock', 'on_site', 'returned', 'empty'] as const).map(
+          (f) => {
+            const count =
+              f === 'all'
+                ? bottles.length
+                : bottles.filter((b) => b.status === f).length
+            return (
+              <button
+                key={f}
+                onClick={() => setFilter(f)}
+                className={`shrink-0 rounded-full px-3 py-1.5 text-sm font-medium transition ${
+                  filter === f
+                    ? 'bg-brand-600 text-white'
+                    : 'bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-200'
+                }`}
+              >
+                {f === 'all' ? 'All' : statusLabel(f)} · {count}
+              </button>
+            )
+          },
+        )}
       </div>
 
       {visible.length === 0 ? (
@@ -78,43 +113,66 @@ export default function Bottles() {
           body={
             bottles.length === 0
               ? 'Add your first bottle to start tracking refrigerant.'
-              : 'Try a different filter.'
+              : 'Try a different filter or search.'
           }
           action={
-            bottles.length === 0 && (
+            bottles.length === 0 ? (
               <Button onClick={() => setAdding(true)}>+ Add bottle</Button>
-            )
+            ) : undefined
           }
         />
       ) : (
         <div className="space-y-2">
           {visible.map((b) => {
-            const loc = locations.find((l) => l.id === b.currentLocationId)
+            const job = jobs.find((j) => j.id === b.currentJobId)
+            const net = netWeight(b)
+            const initialNet = b.initialNetWeight || 0
+            const pct =
+              initialNet > 0 ? Math.min(100, Math.max(0, (net / initialNet) * 100)) : 0
             return (
               <Card key={b.id} className="!p-3">
                 <button
                   className="flex w-full items-start justify-between gap-3 text-left"
-                  onClick={() => setEditing(b)}
+                  onClick={() => setSheetBottle(b)}
                 >
                   <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       <span className="font-semibold text-slate-900 dark:text-slate-100">
                         {b.bottleNumber}
                       </span>
-                      <Pill tone={statusTone[b.status]}>{statusLabel(b.status)}</Pill>
+                      <span className="rounded-full bg-brand-100 px-2 py-0.5 text-xs font-semibold text-brand-700 dark:bg-brand-900/40 dark:text-brand-300">
+                        {b.refrigerantType}
+                      </span>
+                      <Pill tone={statusTone[b.status]}>
+                        {statusLabel(b.status)}
+                      </Pill>
                     </div>
-                    <div className="mt-0.5 text-sm text-slate-600 dark:text-slate-300">
-                      {b.refrigerantType}
-                      {loc ? ` · ${loc.name}` : ''}
-                    </div>
+                    {job && (
+                      <div className="mt-1 text-sm text-slate-500">
+                        📍 {job.name}
+                      </div>
+                    )}
+                    {initialNet > 0 && (
+                      <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800">
+                        <div
+                          className="h-full rounded-full bg-brand-500"
+                          style={{ width: `${pct}%` }}
+                        />
+                      </div>
+                    )}
                   </div>
                   <div className="shrink-0 text-right">
-                    <div className="font-semibold text-slate-900 dark:text-slate-100">
-                      {netWeight(b).toFixed(2)} kg
+                    <div className="text-lg font-bold tabular-nums text-slate-900 dark:text-slate-100">
+                      {net.toFixed(2)}
+                      <span className="ml-1 text-xs font-medium text-slate-500">
+                        kg
+                      </span>
                     </div>
-                    <div className="text-xs text-slate-500">
-                      gross {b.grossWeight.toFixed(2)}
-                    </div>
+                    {initialNet > 0 && (
+                      <div className="text-xs text-slate-500">
+                        of {initialNet.toFixed(1)} kg
+                      </div>
+                    )}
                   </div>
                 </button>
               </Card>
@@ -122,6 +180,35 @@ export default function Bottles() {
           })}
         </div>
       )}
+
+      <BottleActionSheet
+        bottle={sheetBottle}
+        onClose={() => setSheetBottle(null)}
+        onLog={(kind) => setLogKind(kind)}
+        onEdit={() => {
+          if (sheetBottle) {
+            setEditing(sheetBottle)
+            setSheetBottle(null)
+          }
+        }}
+      />
+
+      <QuickLogModal
+        open={!!sheetBottle && !!logKind}
+        bottle={sheetBottle}
+        kind={logKind}
+        onClose={() => setLogKind(null)}
+        onSave={(data) => {
+          const result = addTransaction(data)
+          if (result) {
+            toast.show(
+              `${transactionLabel(data.kind)} logged: ${data.amount > 0 ? `${data.amount.toFixed(2)} kg` : 'OK'}`,
+            )
+            setLogKind(null)
+            setSheetBottle(null)
+          }
+        }}
+      />
 
       <BottleForm
         open={adding}
@@ -131,6 +218,7 @@ export default function Bottles() {
         onSave={(data) => {
           addBottle(data)
           setAdding(false)
+          toast.show('Bottle added')
         }}
       />
 
@@ -143,6 +231,7 @@ export default function Bottles() {
         onSave={(data) => {
           if (editing) updateBottle(editing.id, data)
           setEditing(null)
+          toast.show('Bottle updated')
         }}
         onDelete={
           editing
@@ -150,12 +239,296 @@ export default function Bottles() {
                 if (confirm('Delete this bottle and all its transactions?')) {
                   deleteBottle(editing.id)
                   setEditing(null)
+                  toast.show('Bottle deleted', 'info')
                 }
               }
             : undefined
         }
       />
     </div>
+  )
+}
+
+function BottleActionSheet({
+  bottle,
+  onClose,
+  onLog,
+  onEdit,
+}: {
+  bottle: Bottle | null
+  onClose: () => void
+  onLog: (kind: TransactionKind) => void
+  onEdit: () => void
+}) {
+  const { state } = useStore()
+  if (!bottle) return null
+  const job = state.jobs.find((j) => j.id === bottle.currentJobId)
+  const net = netWeight(bottle)
+  const history = state.transactions
+    .filter((t) => t.bottleId === bottle.id)
+    .slice(0, 5)
+
+  return (
+    <Modal open={!!bottle} title={bottle.bottleNumber} onClose={onClose}>
+      <div className="space-y-4">
+        <div className="rounded-2xl bg-gradient-to-br from-brand-600 to-brand-900 p-4 text-white">
+          <div className="flex items-baseline gap-2">
+            <div className="text-3xl font-bold tabular-nums">
+              {net.toFixed(2)}
+            </div>
+            <div className="text-base font-medium text-brand-100">kg</div>
+            <div className="ml-auto rounded-full bg-white/15 px-2.5 py-0.5 text-xs font-semibold">
+              {bottle.refrigerantType}
+            </div>
+          </div>
+          <div className="mt-1 text-sm text-brand-100">
+            Gross {bottle.grossWeight.toFixed(2)} kg · Tare{' '}
+            {bottle.tareWeight.toFixed(2)} kg · {statusLabel(bottle.status)}
+          </div>
+          {job && (
+            <div className="mt-1 text-sm text-brand-100">📍 {job.name}</div>
+          )}
+        </div>
+
+        <div className="grid grid-cols-2 gap-2">
+          <Button onClick={() => onLog('charge')} variant="primary">
+            ↓ Charge
+          </Button>
+          <Button onClick={() => onLog('recover')} variant="primary">
+            ↑ Recover
+          </Button>
+          <Button onClick={() => onLog('transfer')} variant="secondary">
+            → Transfer to job
+          </Button>
+          <Button onClick={() => onLog('return')} variant="secondary">
+            ⤴ Return bottle
+          </Button>
+        </div>
+
+        <Button onClick={onEdit} variant="ghost" full>
+          ✎ Edit details
+        </Button>
+
+        <div>
+          <div className="mb-2 px-1 text-xs font-semibold uppercase tracking-wider text-slate-500">
+            Recent activity
+          </div>
+          {history.length === 0 ? (
+            <div className="rounded-xl bg-slate-100 p-3 text-sm text-slate-500 dark:bg-slate-800">
+              No transactions for this bottle yet.
+            </div>
+          ) : (
+            <ul className="space-y-1.5 text-sm">
+              {history.map((t) => {
+                const j = state.jobs.find((x) => x.id === t.jobId)
+                return (
+                  <li
+                    key={t.id}
+                    className="flex items-center justify-between gap-2 rounded-xl bg-slate-100 px-3 py-2 dark:bg-slate-800"
+                  >
+                    <div className="min-w-0">
+                      <div className="font-medium text-slate-900 dark:text-slate-100">
+                        {transactionLabel(t.kind)}
+                        {t.amount > 0 && ` · ${t.amount.toFixed(2)} kg`}
+                      </div>
+                      <div className="truncate text-xs text-slate-500">
+                        {new Date(t.date).toLocaleString()}
+                        {j ? ` · ${j.name}` : ''}
+                      </div>
+                    </div>
+                  </li>
+                )
+              })}
+            </ul>
+          )}
+        </div>
+      </div>
+    </Modal>
+  )
+}
+
+function QuickLogModal({
+  open,
+  bottle,
+  kind,
+  onClose,
+  onSave,
+}: {
+  open: boolean
+  bottle: Bottle | null
+  kind: TransactionKind | null
+  onClose: () => void
+  onSave: (data: {
+    bottleId: string
+    jobId?: string
+    kind: TransactionKind
+    amount: number
+    date: string
+    technician?: string
+    equipment?: string
+    reason?: TransactionReason
+    notes?: string
+  }) => void
+}) {
+  const { state } = useStore()
+  const [amount, setAmount] = useState('')
+  const [jobId, setJobId] = useState(bottle?.currentJobId ?? '')
+  const [equipment, setEquipment] = useState('')
+  const [reason, setReason] = useState<TransactionReason | ''>('')
+  const [notes, setNotes] = useState('')
+  const [date, setDate] = useState(() => new Date().toISOString().slice(0, 16))
+
+  const lastKey = `${bottle?.id}-${kind}-${open}`
+  const [seenKey, setSeenKey] = useState('')
+  if (open && seenKey !== lastKey) {
+    setSeenKey(lastKey)
+    setAmount('')
+    setJobId(bottle?.currentJobId ?? '')
+    setEquipment('')
+    setReason('')
+    setNotes('')
+    setDate(new Date().toISOString().slice(0, 16))
+  }
+
+  if (!open || !bottle || !kind) return null
+
+  const showAmount = kind === 'charge' || kind === 'recover'
+  const showJob = kind !== 'return'
+  const amountNum = parseFloat(amount) || 0
+  const projectedAfter =
+    kind === 'charge'
+      ? bottle.grossWeight - amountNum
+      : kind === 'recover'
+        ? bottle.grossWeight + amountNum
+        : bottle.grossWeight
+  const projectedNet = Math.max(0, projectedAfter - bottle.tareWeight)
+
+  function submit(e: React.FormEvent) {
+    e.preventDefault()
+    if (!kind || !bottle) return
+    onSave({
+      bottleId: bottle.id,
+      jobId: showJob && jobId ? jobId : undefined,
+      kind,
+      amount: showAmount ? Math.abs(amountNum) : 0,
+      date: new Date(date).toISOString(),
+      technician: state.technician || undefined,
+      equipment: equipment.trim() || undefined,
+      reason: reason || undefined,
+      notes: notes.trim() || undefined,
+    })
+  }
+
+  const titleMap: Record<TransactionKind, string> = {
+    charge: 'Charge into equipment',
+    recover: 'Recover from equipment',
+    transfer: 'Transfer bottle to a job',
+    return: 'Return bottle to stock',
+    adjust: 'Manual adjustment',
+  }
+
+  return (
+    <Modal open={open} title={titleMap[kind]} onClose={onClose}>
+      <form onSubmit={submit} className="space-y-3">
+        <div className="rounded-xl bg-slate-100 p-3 text-sm dark:bg-slate-800">
+          <div className="font-semibold text-slate-900 dark:text-slate-100">
+            {bottle.bottleNumber} · {bottle.refrigerantType}
+          </div>
+          <div className="text-slate-600 dark:text-slate-300">
+            Currently {netWeight(bottle).toFixed(2)} kg net (
+            {bottle.grossWeight.toFixed(2)} kg gross)
+          </div>
+        </div>
+
+        {showAmount && (
+          <Field
+            label={
+              kind === 'charge' ? 'How much charged in? (kg)' : 'How much recovered? (kg)'
+            }
+          >
+            <TextInput
+              type="number"
+              inputMode="decimal"
+              step="0.01"
+              required
+              autoFocus
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              placeholder="e.g. 1.25"
+            />
+          </Field>
+        )}
+
+        {showAmount && amountNum > 0 && (
+          <div className="rounded-xl bg-brand-50 p-3 text-sm text-brand-900 dark:bg-brand-900/20 dark:text-brand-100">
+            New bottle net: <strong>{projectedNet.toFixed(2)} kg</strong>
+            {projectedAfter < bottle.tareWeight && (
+              <span className="ml-2 text-red-600 dark:text-red-300">
+                ⚠ goes below tare
+              </span>
+            )}
+          </div>
+        )}
+
+        {showJob && (
+          <Field label="Job">
+            <Select
+              value={jobId}
+              onChange={(e) => setJobId(e.target.value)}
+              required={kind === 'transfer'}
+            >
+              <option value="">— none —</option>
+              {state.jobs.map((j) => (
+                <option key={j.id} value={j.id}>
+                  {j.name}
+                </option>
+              ))}
+            </Select>
+          </Field>
+        )}
+
+        {(kind === 'charge' || kind === 'recover') && (
+          <>
+            <Field label="Equipment" hint="Helps with F-Gas log e.g. 'Daikin VRV unit #3'">
+              <TextInput
+                value={equipment}
+                onChange={(e) => setEquipment(e.target.value)}
+                placeholder="e.g. Chiller AHU-2"
+              />
+            </Field>
+            <Field label="Reason">
+              <Select
+                value={reason}
+                onChange={(e) => setReason(e.target.value as TransactionReason | '')}
+              >
+                <option value="">— pick reason —</option>
+                {(Object.keys(REASON_LABELS) as TransactionReason[]).map((r) => (
+                  <option key={r} value={r}>
+                    {REASON_LABELS[r]}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+          </>
+        )}
+
+        <Field label="Date / time">
+          <TextInput
+            type="datetime-local"
+            value={date}
+            onChange={(e) => setDate(e.target.value)}
+          />
+        </Field>
+
+        <Field label="Notes">
+          <TextArea value={notes} onChange={(e) => setNotes(e.target.value)} />
+        </Field>
+
+        <Button type="submit" full>
+          Save
+        </Button>
+      </form>
+    </Modal>
   )
 }
 
@@ -187,12 +560,9 @@ function BottleForm({
     String(bottle?.initialNetWeight ?? ''),
   )
   const [status, setStatus] = useState<BottleStatus>(bottle?.status ?? 'in_stock')
-  const [currentLocationId, setCurrentLocationId] = useState(
-    bottle?.currentLocationId ?? '',
-  )
+  const [currentJobId, setCurrentJobId] = useState(bottle?.currentJobId ?? '')
   const [notes, setNotes] = useState(bottle?.notes ?? '')
 
-  // Reset on open
   const key = bottle?.id ?? 'new'
   const [lastKey, setLastKey] = useState(key)
   if (open && lastKey !== key) {
@@ -203,7 +573,7 @@ function BottleForm({
     setGrossWeight(String(bottle?.grossWeight ?? ''))
     setInitialNetWeight(String(bottle?.initialNetWeight ?? ''))
     setStatus(bottle?.status ?? 'in_stock')
-    setCurrentLocationId(bottle?.currentLocationId ?? '')
+    setCurrentJobId(bottle?.currentJobId ?? '')
     setNotes(bottle?.notes ?? '')
   }
 
@@ -219,10 +589,15 @@ function BottleForm({
       grossWeight: gross,
       initialNetWeight: initialNet,
       status,
-      currentLocationId: currentLocationId || undefined,
+      currentJobId: currentJobId || undefined,
       notes: notes.trim() || undefined,
     })
   }
+
+  const liveNet = Math.max(
+    0,
+    (parseFloat(grossWeight) || 0) - (parseFloat(tareWeight) || 0),
+  )
 
   return (
     <Modal open={open} title={title} onClose={onClose}>
@@ -272,7 +647,16 @@ function BottleForm({
           </Field>
         </div>
 
-        <Field label="Initial net (when received) kg" hint="Optional — defaults to gross − tare">
+        {liveNet > 0 && (
+          <div className="rounded-xl bg-brand-50 p-3 text-sm text-brand-900 dark:bg-brand-900/20 dark:text-brand-100">
+            Net refrigerant in bottle: <strong>{liveNet.toFixed(2)} kg</strong>
+          </div>
+        )}
+
+        <Field
+          label="Initial net (when received) kg"
+          hint="Optional — used for the fill-level bar. Defaults to gross − tare."
+        >
           <TextInput
             type="number"
             inputMode="decimal"
@@ -289,22 +673,22 @@ function BottleForm({
             onChange={(e) => setStatus(e.target.value as BottleStatus)}
           >
             <option value="in_stock">In stock</option>
-            <option value="on_site">On site</option>
+            <option value="on_site">On job</option>
             <option value="returned">Returned</option>
             <option value="empty">Empty</option>
           </Select>
         </Field>
 
         {status === 'on_site' && (
-          <Field label="Current site">
+          <Field label="Current job">
             <Select
-              value={currentLocationId}
-              onChange={(e) => setCurrentLocationId(e.target.value)}
+              value={currentJobId}
+              onChange={(e) => setCurrentJobId(e.target.value)}
             >
-              <option value="">— pick a site —</option>
-              {state.locations.map((l) => (
-                <option key={l.id} value={l.id}>
-                  {l.name}
+              <option value="">— pick a job —</option>
+              {state.jobs.map((j) => (
+                <option key={j.id} value={j.id}>
+                  {j.name}
                 </option>
               ))}
             </Select>
