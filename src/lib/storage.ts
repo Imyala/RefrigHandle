@@ -59,12 +59,20 @@ export function loadState(): AppState {
       }
     })
 
+    const units = (parsed.units ?? []).map((u) => {
+      const legacyKind = (u as { kind?: string }).kind
+      let kind = legacyKind
+      if (legacyKind === 'multi_split') kind = 'multi_head_split'
+      else if (legacyKind === 'rooftop') kind = 'other'
+      return { ...u, kind } as AppState['units'][number]
+    })
+
     return {
       ...EMPTY_STATE,
       ...parsed,
       bottles,
       sites: parsed.sites ?? parsed.jobs ?? parsed.locations ?? [],
-      units: parsed.units ?? [],
+      units,
       transactions,
       customRefrigerants: parsed.customRefrigerants ?? [],
       technician: parsed.technician ?? '',

@@ -12,6 +12,7 @@ import {
 } from '../components/ui'
 import { useStore } from '../lib/store'
 import {
+  NON_REFRIGERANT_UNIT_KINDS,
   REFRIGERANT_TYPES,
   UNIT_KIND_LABELS,
   netWeight,
@@ -664,6 +665,14 @@ function UnitForm({
             ))}
           </Select>
         </Field>
+
+        {kind && NON_REFRIGERANT_UNIT_KINDS.has(kind) && (
+          <div className="rounded-xl bg-amber-50 p-3 text-xs text-amber-900 dark:bg-amber-900/20 dark:text-amber-100">
+            This type does not contain refrigerant — you'll be able to record
+            it as installed equipment but cannot log charges or recoveries
+            against it.
+          </div>
+        )}
 
         <div className="grid grid-cols-2 gap-3">
           <Field label="Refrigerant">

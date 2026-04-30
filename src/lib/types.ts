@@ -41,28 +41,42 @@ export interface Site {
 
 export type UnitKind =
   | 'split'
-  | 'multi_split'
+  | 'split_ducted'
+  | 'multi_head_split'
   | 'vrf_vrv'
-  | 'chiller'
-  | 'package'
-  | 'air_handler'
-  | 'rooftop'
   | 'heat_pump'
+  | 'package'
+  | 'chiller'
+  | 'air_handler'
   | 'refrigeration'
+  | 'chilled_water_pump'
+  | 'cooling_tower'
+  | 'boiler'
   | 'other'
 
 export const UNIT_KIND_LABELS: Record<UnitKind, string> = {
   split: 'Split system',
-  multi_split: 'Multi-split',
+  split_ducted: 'Split ducted',
+  multi_head_split: 'Multihead split',
   vrf_vrv: 'VRF / VRV',
-  chiller: 'Chiller',
-  package: 'Packaged unit',
-  air_handler: 'Air handler / AHU',
-  rooftop: 'Rooftop unit',
   heat_pump: 'Heat pump',
+  package: 'Packaged unit',
+  chiller: 'Chiller',
+  air_handler: 'Air handler / AHU',
   refrigeration: 'Refrigeration',
+  chilled_water_pump: 'Chilled water pump',
+  cooling_tower: 'Cooling tower',
+  boiler: 'Boiler',
   other: 'Other',
 }
+
+// Equipment that doesn't contain refrigerant — charging/recovering
+// against it doesn't make physical sense. Used to soft-warn the user.
+export const NON_REFRIGERANT_UNIT_KINDS: ReadonlySet<UnitKind> = new Set<UnitKind>([
+  'chilled_water_pump',
+  'cooling_tower',
+  'boiler',
+])
 
 export type UnitStatus = 'active' | 'decommissioned'
 
