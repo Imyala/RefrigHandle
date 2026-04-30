@@ -30,33 +30,9 @@ export interface Bottle {
   updatedAt: string
 }
 
-export type SiteKind =
-  | 'residential'
-  | 'commercial'
-  | 'facility'
-  | 'industrial'
-  | 'other'
-
-export const SITE_KIND_LABELS: Record<SiteKind, string> = {
-  residential: 'Residential',
-  commercial: 'Commercial',
-  facility: 'Facility',
-  industrial: 'Industrial',
-  other: 'Other',
-}
-
-export const SITE_KIND_ICONS: Record<SiteKind, string> = {
-  residential: '🏠',
-  commercial: '🏢',
-  facility: '🏭',
-  industrial: '⚙️',
-  other: '📍',
-}
-
 export interface Site {
   id: string
   name: string
-  kind?: SiteKind
   client?: string
   address?: string
   notes?: string

@@ -13,12 +13,9 @@ import {
 import { useStore } from '../lib/store'
 import {
   REFRIGERANT_TYPES,
-  SITE_KIND_ICONS,
-  SITE_KIND_LABELS,
   UNIT_KIND_LABELS,
   netWeight,
   type Site,
-  type SiteKind,
   type Unit,
   type UnitKind,
 } from '../lib/types'
@@ -44,7 +41,7 @@ export default function Sites() {
       {sites.length === 0 ? (
         <EmptyState
           title="No sites yet"
-          body="A site is anywhere with HVAC/R equipment — a residential home, commercial unit, factory, or shop. Each site can hold multiple units."
+          body="A site is anywhere with HVAC/R equipment — a home, business, factory, or shop. Each site can hold multiple units."
           action={<Button onClick={() => setAdding(true)}>+ Add site</Button>}
         />
       ) : (
@@ -91,23 +88,13 @@ function SiteCard({ site, onOpen }: { site: Site; onOpen: () => void }) {
     .filter((t) => t.siteId === site.id && t.kind === 'charge')
     .reduce((s, t) => s + t.amount, 0)
 
-  const icon = site.kind ? SITE_KIND_ICONS[site.kind] : '📍'
-
   return (
     <Card className="!p-3">
       <button className="w-full text-left" onClick={onOpen}>
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2">
-              <span className="text-xl" aria-hidden>
-                {icon}
-              </span>
-              <span className="font-semibold text-slate-900 dark:text-slate-100">
-                {site.name}
-              </span>
-              {site.kind && (
-                <Pill tone="slate">{SITE_KIND_LABELS[site.kind]}</Pill>
-              )}
+            <div className="font-semibold text-slate-900 dark:text-slate-100">
+              {site.name}
             </div>
             {site.client && (
               <div className="mt-0.5 text-sm text-slate-500">{site.client}</div>
@@ -197,35 +184,29 @@ function SiteDetail({
   )
 
   if (!site) return null
-  const icon = site.kind ? SITE_KIND_ICONS[site.kind] : '📍'
 
   return (
     <>
       <Modal open={!!site && !editing} title={site.name} onClose={onClose}>
         <div className="space-y-4">
           <Card className="!p-3">
-            <div className="flex items-start gap-3">
-              <span className="text-2xl" aria-hidden>
-                {icon}
-              </span>
-              <div className="min-w-0 flex-1">
-                {site.client && (
-                  <div className="text-sm font-medium text-slate-700 dark:text-slate-200">
-                    {site.client}
-                  </div>
-                )}
-                {site.address && (
-                  <div className="text-sm text-slate-500">{site.address}</div>
-                )}
-                {site.notes && (
-                  <div className="mt-1 text-xs italic text-slate-500">
-                    {site.notes}
-                  </div>
-                )}
-                {!site.client && !site.address && !site.notes && (
-                  <div className="text-sm text-slate-500">No details added.</div>
-                )}
-              </div>
+            <div>
+              {site.client && (
+                <div className="text-sm font-medium text-slate-700 dark:text-slate-200">
+                  {site.client}
+                </div>
+              )}
+              {site.address && (
+                <div className="text-sm text-slate-500">{site.address}</div>
+              )}
+              {site.notes && (
+                <div className="mt-1 text-xs italic text-slate-500">
+                  {site.notes}
+                </div>
+              )}
+              {!site.client && !site.address && !site.notes && (
+                <div className="text-sm text-slate-500">No details added.</div>
+              )}
             </div>
             <div className="mt-3 flex flex-wrap gap-2">
               <Button variant="secondary" onClick={() => setEditing(true)}>
@@ -494,7 +475,6 @@ function SiteForm({
   onSave: (data: Omit<Site, 'id' | 'createdAt'>) => void
 }) {
   const [name, setName] = useState(site?.name ?? '')
-  const [kind, setKind] = useState<SiteKind | ''>(site?.kind ?? '')
   const [client, setClient] = useState(site?.client ?? '')
   const [address, setAddress] = useState(site?.address ?? '')
   const [notes, setNotes] = useState(site?.notes ?? '')
@@ -504,7 +484,6 @@ function SiteForm({
   if (open && lastKey !== key) {
     setLastKey(key)
     setName(site?.name ?? '')
-    setKind(site?.kind ?? '')
     setClient(site?.client ?? '')
     setAddress(site?.address ?? '')
     setNotes(site?.notes ?? '')
@@ -514,7 +493,6 @@ function SiteForm({
     e.preventDefault()
     onSave({
       name: name.trim(),
-      kind: kind || undefined,
       client: client.trim() || undefined,
       address: address.trim() || undefined,
       notes: notes.trim() || undefined,
@@ -531,19 +509,6 @@ function SiteForm({
             onChange={(e) => setName(e.target.value)}
             placeholder="e.g. 12 High St, Westfield Mall, Acme Cold Store"
           />
-        </Field>
-        <Field label="Type">
-          <Select
-            value={kind}
-            onChange={(e) => setKind(e.target.value as SiteKind | '')}
-          >
-            <option value="">— pick a type —</option>
-            {(Object.keys(SITE_KIND_LABELS) as SiteKind[]).map((k) => (
-              <option key={k} value={k}>
-                {SITE_KIND_ICONS[k]} {SITE_KIND_LABELS[k]}
-              </option>
-            ))}
-          </Select>
         </Field>
         <Field label="Client / owner">
           <TextInput
