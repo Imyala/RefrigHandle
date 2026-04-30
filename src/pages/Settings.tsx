@@ -20,6 +20,7 @@ export default function Settings() {
     setSyncSettings,
     addCustomRefrigerant,
     removeCustomRefrigerant,
+    toggleFavoriteRefrigerant,
     resetAll,
     importState,
   } = useStore()
@@ -28,6 +29,7 @@ export default function Settings() {
   const [newType, setNewType] = useState('')
   const [teamIdInput, setTeamIdInput] = useState(state.sync.teamId)
   const fileRef = useRef<HTMLInputElement>(null)
+  const favorites = state.favoriteRefrigerants
 
   useEffect(() => setTechName(state.technician), [state.technician])
   useEffect(() => setTeamIdInput(state.sync.teamId), [state.sync.teamId])
@@ -177,32 +179,48 @@ export default function Settings() {
       </Card>
 
       <Card>
-        <div className="mb-2 text-sm font-semibold text-slate-700 dark:text-slate-200">
-          Built-in refrigerants
+        <div className="mb-1 text-sm font-semibold text-slate-700 dark:text-slate-200">
+          Refrigerants
+        </div>
+        <p className="mb-3 text-xs text-slate-500">
+          Tap the star to favourite the ones you use most — they'll appear at the
+          top of every refrigerant dropdown.
+        </p>
+
+        <div className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+          Built-in
         </div>
         <div className="flex flex-wrap gap-2">
           {REFRIGERANT_TYPES.map((t) => (
-            <Pill key={t}>{t}</Pill>
+            <RefrigerantChip
+              key={t}
+              name={t}
+              starred={favorites.includes(t)}
+              onToggleStar={() => toggleFavoriteRefrigerant(t)}
+            />
           ))}
         </div>
+
         <div className="my-3 h-px bg-slate-200 dark:bg-slate-800" />
-        <div className="mb-2 text-sm font-semibold text-slate-700 dark:text-slate-200">
-          Custom refrigerants
+
+        <div className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+          Custom
         </div>
         {state.customRefrigerants.length === 0 ? (
           <div className="text-sm text-slate-500">None added.</div>
         ) : (
           <div className="flex flex-wrap gap-2">
             {state.customRefrigerants.map((t) => (
-              <button
+              <RefrigerantChip
                 key={t}
-                onClick={() => {
-                  if (confirm(`Remove ${t} from the list?`)) removeCustomRefrigerant(t)
+                name={t}
+                starred={favorites.includes(t)}
+                onToggleStar={() => toggleFavoriteRefrigerant(t)}
+                onRemove={() => {
+                  if (confirm(`Remove ${t} from the list?`))
+                    removeCustomRefrigerant(t)
                 }}
-                className="inline-flex items-center gap-1 rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-800 hover:bg-red-100 hover:text-red-800 dark:bg-blue-900/40 dark:text-blue-200"
-              >
-                {t} <span aria-hidden>✕</span>
-              </button>
+              />
             ))}
           </div>
         )}
@@ -210,7 +228,7 @@ export default function Settings() {
           <TextInput
             value={newType}
             onChange={(e) => setNewType(e.target.value)}
-            placeholder="e.g. R448A"
+            placeholder="e.g. R12B1"
           />
           <Button
             onClick={() => {
@@ -340,6 +358,52 @@ export default function Settings() {
       <p className="px-1 text-center text-xs text-slate-400">
         RefrigHandle · data stored locally on this device
       </p>
+    </div>
+  )
+}
+
+function RefrigerantChip({
+  name,
+  starred,
+  onToggleStar,
+  onRemove,
+}: {
+  name: string
+  starred: boolean
+  onToggleStar: () => void
+  onRemove?: () => void
+}) {
+  const baseChip = onRemove
+    ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-200'
+    : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300'
+  return (
+    <div
+      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${baseChip}`}
+    >
+      <button
+        type="button"
+        onClick={onToggleStar}
+        className={`inline-flex h-5 w-5 items-center justify-center rounded-full text-sm leading-none ${
+          starred
+            ? 'text-amber-500'
+            : 'text-slate-400 hover:text-amber-500 dark:text-slate-500'
+        }`}
+        aria-label={starred ? `Unfavourite ${name}` : `Favourite ${name}`}
+        title={starred ? 'Unfavourite' : 'Favourite'}
+      >
+        {starred ? '★' : '☆'}
+      </button>
+      <span>{name}</span>
+      {onRemove && (
+        <button
+          type="button"
+          onClick={onRemove}
+          className="ml-0.5 rounded-full px-1 text-slate-500 hover:bg-red-100 hover:text-red-700 dark:text-slate-400 dark:hover:bg-red-900/40"
+          aria-label={`Remove ${name}`}
+        >
+          ✕
+        </button>
+      )}
     </div>
   )
 }

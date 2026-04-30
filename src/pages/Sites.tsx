@@ -16,6 +16,8 @@ import {
   REFRIGERANT_TYPES,
   UNIT_KIND_LABELS,
   netWeight,
+  refrigerantLabel,
+  sortRefrigerants,
   type Site,
   type Unit,
   type UnitKind,
@@ -579,9 +581,14 @@ function UnitForm({
 }) {
   const { state } = useStore()
   const displayUnit = state.unit
+  const favorites = state.favoriteRefrigerants
   const allTypes = useMemo(
-    () => [...REFRIGERANT_TYPES, ...state.customRefrigerants],
-    [state.customRefrigerants],
+    () =>
+      sortRefrigerants(
+        [...REFRIGERANT_TYPES, ...state.customRefrigerants],
+        state.favoriteRefrigerants,
+      ),
+    [state.customRefrigerants, state.favoriteRefrigerants],
   )
 
   const [name, setName] = useState(unit?.name ?? '')
@@ -683,7 +690,7 @@ function UnitForm({
               <option value="">—</option>
               {allTypes.map((t) => (
                 <option key={t} value={t}>
-                  {t}
+                  {refrigerantLabel(t, favorites)}
                 </option>
               ))}
             </Select>

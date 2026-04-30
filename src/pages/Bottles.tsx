@@ -20,6 +20,8 @@ import {
   REFRIGERANT_TYPES,
   REASON_LABELS,
   netWeight,
+  refrigerantLabel,
+  sortRefrigerants,
   statusLabel,
   transactionLabel,
 } from '../lib/types'
@@ -49,8 +51,12 @@ export default function Bottles() {
   const [logKind, setLogKind] = useState<TransactionKind | null>(null)
 
   const allTypes = useMemo(
-    () => [...REFRIGERANT_TYPES, ...customRefrigerants],
-    [customRefrigerants],
+    () =>
+      sortRefrigerants(
+        [...REFRIGERANT_TYPES, ...customRefrigerants],
+        state.favoriteRefrigerants,
+      ),
+    [customRefrigerants, state.favoriteRefrigerants],
   )
 
   const visible = useMemo(() => {
@@ -379,8 +385,12 @@ function QuickLogModal({
   const { state, addBottle, addUnit, addCustomRefrigerant } = useStore()
   const unit = state.unit
   const allRefrigerantTypes = useMemo(
-    () => [...REFRIGERANT_TYPES, ...state.customRefrigerants],
-    [state.customRefrigerants],
+    () =>
+      sortRefrigerants(
+        [...REFRIGERANT_TYPES, ...state.customRefrigerants],
+        state.favoriteRefrigerants,
+      ),
+    [state.customRefrigerants, state.favoriteRefrigerants],
   )
 
   type RecoverSource = 'equipment' | 'bottle'
@@ -813,6 +823,7 @@ function BottleQuickAdd({
 }) {
   const { state } = useStore()
   const displayUnit = state.unit
+  const favorites = state.favoriteRefrigerants
   const [bottleNumber, setBottleNumber] = useState('')
   const [refrigerantType, setRefrigerantType] = useState(types[0] ?? 'R410A')
   const [tare, setTare] = useState('')
@@ -862,7 +873,7 @@ function BottleQuickAdd({
           >
             {types.map((t) => (
               <option key={t} value={t}>
-                {t}
+                {refrigerantLabel(t, favorites)}
               </option>
             ))}
           </Select>
@@ -914,6 +925,8 @@ function UnitQuickAdd({
     data: Omit<Unit, 'id' | 'createdAt' | 'status' | 'siteId'>,
   ) => void
 }) {
+  const { state } = useStore()
+  const favorites = state.favoriteRefrigerants
   const [name, setName] = useState('')
   const [refrigerantType, setRefrigerantType] = useState('')
 
@@ -956,7 +969,7 @@ function UnitQuickAdd({
             <option value="">—</option>
             {types.map((t) => (
               <option key={t} value={t}>
-                {t}
+                {refrigerantLabel(t, favorites)}
               </option>
             ))}
           </Select>
@@ -991,6 +1004,7 @@ function BottleForm({
 }) {
   const { state } = useStore()
   const unit = state.unit
+  const favorites = state.favoriteRefrigerants
   const initialDisplay = (kg: number) =>
     kg ? kgToDisplay(kg, unit).toFixed(2) : ''
 
@@ -1065,7 +1079,7 @@ function BottleForm({
           >
             {types.map((t) => (
               <option key={t} value={t}>
-                {t}
+                {refrigerantLabel(t, favorites)}
               </option>
             ))}
           </Select>

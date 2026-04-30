@@ -76,6 +76,7 @@ export function loadState(): AppState {
       units,
       transactions,
       customRefrigerants: parsed.customRefrigerants ?? [],
+      favoriteRefrigerants: parsed.favoriteRefrigerants ?? [],
       technician: parsed.technician ?? '',
       unit: parsed.unit === 'lb' ? 'lb' : 'kg',
       sync: {

@@ -52,6 +52,7 @@ interface StoreApi {
   setSyncSettings: (s: SyncSettings) => void
   addCustomRefrigerant: (name: string) => void
   removeCustomRefrigerant: (name: string) => void
+  toggleFavoriteRefrigerant: (name: string) => void
   // bulk
   resetAll: () => void
   importState: (s: AppState) => void
@@ -343,6 +344,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setState((s) => ({
       ...s,
       customRefrigerants: s.customRefrigerants.filter((r) => r !== name),
+      favoriteRefrigerants: s.favoriteRefrigerants.filter((r) => r !== name),
+    }))
+  }, [])
+
+  const toggleFavoriteRefrigerant = useCallback((name: string) => {
+    setState((s) => ({
+      ...s,
+      favoriteRefrigerants: s.favoriteRefrigerants.includes(name)
+        ? s.favoriteRefrigerants.filter((r) => r !== name)
+        : [...s.favoriteRefrigerants, name],
     }))
   }, [])
 
@@ -358,6 +369,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         units: [],
         transactions: [],
         customRefrigerants: [],
+        favoriteRefrigerants: [],
         technician: '',
         unit: s.unit,
         sync: s.sync,
@@ -388,6 +400,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setSyncSettings,
       addCustomRefrigerant,
       removeCustomRefrigerant,
+      toggleFavoriteRefrigerant,
       resetAll,
       importState,
     }),
@@ -411,6 +424,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setSyncSettings,
       addCustomRefrigerant,
       removeCustomRefrigerant,
+      toggleFavoriteRefrigerant,
       resetAll,
       importState,
     ],

@@ -1,15 +1,45 @@
 export const REFRIGERANT_TYPES = [
-  'R410A',
+  // Legacy CFC / HCFC
+  'R12',
   'R22',
+  'R23',
+  'R401A',
+  'R402A',
+  'R408A',
+  'R409A',
+  'R502',
+  // Common HVAC HFC
   'R32',
   'R134A',
-  'R407C',
   'R404A',
-  'R290',
-  'R600A',
-  'R1234YF',
+  'R407A',
+  'R407C',
+  'R407F',
+  'R410A',
+  // R404A / R134a replacements (lower GWP HFC blends)
+  'R448A',
+  'R449A',
+  'R450A',
+  'R452A',
+  'R452B',
   'R454B',
-  'R513A',
+  'R455A',
+  'R466A',
+  // Refrigeration / low-temp
+  'R507A',
+  'R508B',
+  // Hydrocarbons
+  'R290',
+  'R600',
+  'R600A',
+  'R1270',
+  // HFO
+  'R1234YF',
+  'R1234ZE',
+  'R1233ZD',
+  // Naturals
+  'R717',
+  'R744',
 ] as const
 
 export type RefrigerantType = (typeof REFRIGERANT_TYPES)[number] | string
@@ -170,6 +200,7 @@ export interface AppState {
   units: Unit[]
   transactions: Transaction[]
   customRefrigerants: string[]
+  favoriteRefrigerants: string[]
   technician: string
   unit: WeightUnit
   sync: SyncSettings
@@ -181,9 +212,26 @@ export const EMPTY_STATE: AppState = {
   units: [],
   transactions: [],
   customRefrigerants: [],
+  favoriteRefrigerants: [],
   technician: '',
   unit: 'kg',
   sync: { enabled: false, teamId: '' },
+}
+
+// Returns the refrigerant list with favourites first (alphabetical),
+// then the rest (in their original order).
+export function sortRefrigerants(
+  types: readonly string[],
+  favorites: readonly string[],
+): string[] {
+  const fav = new Set(favorites)
+  const favs = types.filter((t) => fav.has(t)).sort()
+  const rest = types.filter((t) => !fav.has(t))
+  return [...favs, ...rest]
+}
+
+export function refrigerantLabel(name: string, favorites: readonly string[]): string {
+  return favorites.includes(name) ? `★ ${name}` : name
 }
 
 export function netWeight(b: Bottle): number {
