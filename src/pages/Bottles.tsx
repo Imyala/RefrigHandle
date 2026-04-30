@@ -301,13 +301,11 @@ function BottleActionSheet({
           <Button onClick={() => onLog('recover')} variant="primary">
             Recover
           </Button>
-          <Button onClick={() => onLog('transfer')} variant="secondary">
-            Transfer to site
-          </Button>
-          <Button onClick={() => onLog('return')} variant="secondary">
-            Return bottle
-          </Button>
         </div>
+
+        <Button onClick={() => onLog('return')} variant="secondary" full>
+          Return bottle
+        </Button>
 
         <Button onClick={onEdit} variant="ghost" full>
           Edit details
