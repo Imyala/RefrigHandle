@@ -59,7 +59,6 @@ export default function Settings() {
         'equipment',
         'reason',
         'technician',
-        'photos',
         'notes',
       ],
       ...state.transactions.map((t) => {
@@ -78,7 +77,6 @@ export default function Settings() {
           t.equipment ?? '',
           t.reason ?? '',
           t.technician ?? '',
-          (t.photoIds ?? []).length,
           (t.notes ?? '').replace(/[\r\n]+/g, ' '),
         ]
       }),
@@ -281,8 +279,8 @@ export default function Settings() {
           Backup &amp; export
         </div>
         <p className="mb-3 text-xs text-slate-500">
-          CSV is the F-Gas-friendly log. JSON is a full backup but does not
-          include photos.
+          CSV is the F-Gas-friendly log. JSON is a full backup of all data
+          on this device.
         </p>
         <div className="flex flex-wrap gap-2">
           <Button variant="secondary" onClick={exportJson}>

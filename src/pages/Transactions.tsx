@@ -19,8 +19,6 @@ import {
 } from '../lib/types'
 import { useToast } from '../lib/toast'
 import { displayToKg, formatWeight, kgToDisplay } from '../lib/units'
-import { ScaleButton } from '../components/ScaleButton'
-import { PhotoPicker, Thumbnail } from '../components/PhotoPicker'
 
 const kindTone: Record<
   TransactionKind,
@@ -149,13 +147,6 @@ export default function Transactions() {
                         “{t.notes}”
                       </div>
                     )}
-                    {t.photoIds && t.photoIds.length > 0 && (
-                      <div className="mt-2 flex flex-wrap gap-2">
-                        {t.photoIds.map((p) => (
-                          <Thumbnail key={p} id={p} />
-                        ))}
-                      </div>
-                    )}
                   </div>
                   <button
                     onClick={() => {
@@ -212,7 +203,6 @@ function TransactionForm({
     equipment?: string
     reason?: TransactionReason
     notes?: string
-    photoIds?: string[]
   }) => void
 }) {
   const { state } = useStore()
@@ -227,7 +217,6 @@ function TransactionForm({
   const [equipment, setEquipment] = useState('')
   const [reason, setReason] = useState<TransactionReason | ''>('')
   const [notes, setNotes] = useState('')
-  const [photoIds, setPhotoIds] = useState<string[]>([])
 
   const [lastOpen, setLastOpen] = useState(open)
   if (open && !lastOpen) {
@@ -241,7 +230,6 @@ function TransactionForm({
     setEquipment('')
     setReason('')
     setNotes('')
-    setPhotoIds([])
   } else if (!open && lastOpen) {
     setLastOpen(false)
   }
@@ -274,7 +262,6 @@ function TransactionForm({
       equipment: equipment.trim() || undefined,
       reason: reason || undefined,
       notes: notes.trim() || undefined,
-      photoIds: photoIds.length > 0 ? photoIds : undefined,
     })
   }
 
@@ -335,25 +322,15 @@ function TransactionForm({
                 : `Amount ${unit}`
             }
           >
-            <div className="flex gap-2">
-              <TextInput
-                type="number"
-                inputMode="decimal"
-                step="0.01"
-                required
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-                placeholder="e.g. 1.25"
-              />
-              {bottle && (kind === 'charge' || kind === 'recover') && (
-                <ScaleButton
-                  onWeightKg={(kg) => {
-                    const delta = Math.abs(kg - bottle.grossWeight)
-                    setAmount(kgToDisplay(delta, unit).toFixed(2))
-                  }}
-                />
-              )}
-            </div>
+            <TextInput
+              type="number"
+              inputMode="decimal"
+              step="0.01"
+              required
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              placeholder="e.g. 1.25"
+            />
           </Field>
         )}
 
@@ -416,10 +393,6 @@ function TransactionForm({
 
         <Field label="Notes">
           <TextArea value={notes} onChange={(e) => setNotes(e.target.value)} />
-        </Field>
-
-        <Field label="Photos" hint="Optional — gauges, equipment plate, leak check">
-          <PhotoPicker photoIds={photoIds} onChange={setPhotoIds} />
         </Field>
 
         <Button type="submit" full>

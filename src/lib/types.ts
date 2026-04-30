@@ -76,7 +76,6 @@ export interface Transaction {
   equipment?: string // e.g. "Daikin VRV unit #3" — F-Gas log
   reason?: TransactionReason
   notes?: string
-  photoIds?: string[] // IndexedDB photo references
 }
 
 export type WeightUnit = 'kg' | 'lb'

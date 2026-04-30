@@ -16,8 +16,6 @@ as before until you turn it on.
   overwrite anything else that changed in the previous ~1s. This is fine
   for one-or-two-tech teams; for larger teams you'd want a proper
   per-record sync (separate project).
-- Photos are **not synced** in this version — they stay on the device that
-  took them. We can wire those up later via Supabase Storage.
 
 ## One-time setup (~10 minutes)
 

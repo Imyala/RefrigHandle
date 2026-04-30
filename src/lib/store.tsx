@@ -17,7 +17,6 @@ import {
   type WeightUnit,
 } from './types'
 import { loadState, saveState, uid } from './storage'
-import { deletePhotos } from './photos'
 import {
   isSyncConfigured,
   pullState,
@@ -118,17 +117,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const deleteBottle: StoreApi['deleteBottle'] = useCallback((id) => {
-    setState((s) => {
-      const orphanedPhotoIds = s.transactions
-        .filter((t) => t.bottleId === id)
-        .flatMap((t) => t.photoIds ?? [])
-      if (orphanedPhotoIds.length > 0) void deletePhotos(orphanedPhotoIds)
-      return {
-        ...s,
-        bottles: s.bottles.filter((b) => b.id !== id),
-        transactions: s.transactions.filter((t) => t.bottleId !== id),
-      }
-    })
+    setState((s) => ({
+      ...s,
+      bottles: s.bottles.filter((b) => b.id !== id),
+      transactions: s.transactions.filter((t) => t.bottleId !== id),
+    }))
   }, [])
 
   const addJob: StoreApi['addJob'] = useCallback((l) => {
@@ -210,14 +203,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const deleteTransaction: StoreApi['deleteTransaction'] = useCallback((id) => {
-    setState((s) => {
-      const tx = s.transactions.find((t) => t.id === id)
-      if (tx?.photoIds?.length) void deletePhotos(tx.photoIds)
-      return {
-        ...s,
-        transactions: s.transactions.filter((t) => t.id !== id),
-      }
-    })
+    setState((s) => ({
+      ...s,
+      transactions: s.transactions.filter((t) => t.id !== id),
+    }))
   }, [])
 
   const setTechnician = useCallback(
@@ -254,19 +243,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const resetAll = useCallback(() => {
     if (confirm('Erase ALL bottles, jobs, and transactions? This cannot be undone.')) {
-      setState((s) => {
-        const allPhotos = s.transactions.flatMap((t) => t.photoIds ?? [])
-        if (allPhotos.length > 0) void deletePhotos(allPhotos)
-        return {
-          bottles: [],
-          jobs: [],
-          transactions: [],
-          customRefrigerants: [],
-          technician: '',
-          unit: s.unit,
-          sync: s.sync,
-        }
-      })
+      setState((s) => ({
+        bottles: [],
+        jobs: [],
+        transactions: [],
+        customRefrigerants: [],
+        technician: '',
+        unit: s.unit,
+        sync: s.sync,
+      }))
     }
   }, [])
 

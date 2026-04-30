@@ -51,8 +51,6 @@ Pages, S3, even a USB stick served via `npx serve dist`).
 
 ## Roadmap (later)
 
-- Multi-device sync (Supabase / Firebase / your own API)
-- Camera barcode/QR scan on bottles
-- Bluetooth scale integration for live weights
+- Multi-device sync (Supabase scaffolding is already in — see SYNC.md)
 - Wrap as a native iOS/Android app via Capacitor for stricter store presence
 - Wrap as a desktop app via Tauri
