@@ -138,7 +138,14 @@ export interface Transaction {
   siteId?: string
   unitId?: string
   kind: TransactionKind
-  amount: number // kg of refrigerant moved (always positive)
+  amount: number // kg of refrigerant moved (always positive). For charge: into equipment. For recover: out of equipment.
+  // Optional bottle-side amount when it differs from `amount` due to
+  // hose/decant losses. If unset, bottle change == amount.
+  // For charge: bottleAmount > amount means some refrigerant left the
+  // bottle but didn't reach the equipment (vented / left in hoses).
+  // For recover: bottleAmount < amount means some refrigerant came out
+  // of the equipment but didn't make it into the bottle.
+  bottleAmount?: number
   weightBefore: number // bottle gross weight before
   weightAfter: number // bottle gross weight after
   date: string // ISO date
@@ -213,4 +220,11 @@ export function transactionLabel(k: TransactionKind): string {
 
 export function pluralize(n: number, singular: string, plural?: string): string {
   return n === 1 ? `${n} ${singular}` : `${n} ${plural ?? singular + 's'}`
+}
+
+export function transactionLoss(t: Transaction): number {
+  if (t.bottleAmount === undefined || t.bottleAmount === null) return 0
+  if (t.kind === 'charge') return Math.max(0, t.bottleAmount - t.amount)
+  if (t.kind === 'recover') return Math.max(0, t.amount - t.bottleAmount)
+  return 0
 }

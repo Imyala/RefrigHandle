@@ -8,7 +8,7 @@ import {
   TextInput,
 } from '../components/ui'
 import { useStore } from '../lib/store'
-import { REFRIGERANT_TYPES, type WeightUnit } from '../lib/types'
+import { REFRIGERANT_TYPES, transactionLoss, type WeightUnit } from '../lib/types'
 import { useToast } from '../lib/toast'
 import { isSyncConfigured } from '../lib/sync'
 
@@ -52,7 +52,9 @@ export default function Settings() {
         'bottleNumber',
         'sourceBottleNumber',
         'refrigerantType',
-        'amount_kg',
+        'amount_into_equipment_kg',
+        'amount_from_bottle_kg',
+        'loss_kg',
         'weightBefore_kg',
         'weightAfter_kg',
         'sourceWeightBefore_kg',
@@ -73,6 +75,7 @@ export default function Settings() {
           : null
         const s = state.sites.find((x) => x.id === t.siteId)
         const u = state.units.find((x) => x.id === t.unitId)
+        const loss = transactionLoss(t)
         return [
           t.date,
           t.kind,
@@ -80,6 +83,8 @@ export default function Settings() {
           sb?.bottleNumber ?? '',
           b?.refrigerantType ?? '',
           t.amount.toFixed(3),
+          (t.bottleAmount ?? t.amount).toFixed(3),
+          loss.toFixed(3),
           t.weightBefore.toFixed(3),
           t.weightAfter.toFixed(3),
           t.sourceWeightBefore?.toFixed(3) ?? '',

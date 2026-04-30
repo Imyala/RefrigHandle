@@ -16,6 +16,7 @@ import {
   type TransactionReason,
   REASON_LABELS,
   transactionLabel,
+  transactionLoss,
 } from '../lib/types'
 import { useToast } from '../lib/toast'
 import { displayToKg, formatWeight, kgToDisplay } from '../lib/units'
@@ -153,6 +154,11 @@ export default function Transactions() {
                         </>
                       )}
                     </div>
+                    {transactionLoss(t) > 0 && (
+                      <div className="text-xs font-medium text-amber-600 dark:text-amber-400">
+                        Loss: {formatWeight(transactionLoss(t), unit)}
+                      </div>
+                    )}
                     {t.notes && (
                       <div className="mt-1 text-xs italic text-slate-500">
                         “{t.notes}”
@@ -210,6 +216,7 @@ function TransactionForm({
     unitId?: string
     kind: TransactionKind
     amount: number
+    bottleAmount?: number
     date: string
     technician?: string
     equipment?: string
@@ -225,6 +232,8 @@ function TransactionForm({
   const [unitId, setUnitId] = useState('')
   const [kind, setKind] = useState<TransactionKind>('charge')
   const [amount, setAmount] = useState('')
+  const [bottleAmount, setBottleAmount] = useState('')
+  const [showLoss, setShowLoss] = useState(false)
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 16))
   const [tech, setTech] = useState(technician)
   const [equipment, setEquipment] = useState('')
@@ -243,6 +252,8 @@ function TransactionForm({
     setUnitId('')
     setKind('charge')
     setAmount('')
+    setBottleAmount('')
+    setShowLoss(false)
     setDate(new Date().toISOString().slice(0, 16))
     setTech(technician)
     setEquipment('')
@@ -255,16 +266,27 @@ function TransactionForm({
   const bottle = bottles.find((b) => b.id === bottleId)
   const enteredAmount = parseFloat(amount) || 0
   const amountKg = displayToKg(enteredAmount, unit)
+  const enteredBottle = parseFloat(bottleAmount) || 0
+  const bottleAmountKg =
+    showLoss && enteredBottle > 0 ? displayToKg(enteredBottle, unit) : amountKg
+  const lossKg = showLoss
+    ? kind === 'charge'
+      ? Math.max(0, bottleAmountKg - amountKg)
+      : kind === 'recover'
+        ? Math.max(0, amountKg - bottleAmountKg)
+        : 0
+    : 0
   let projectedAfter = bottle?.grossWeight ?? 0
   if (bottle) {
-    if (kind === 'charge') projectedAfter = bottle.grossWeight - amountKg
-    else if (kind === 'recover') projectedAfter = bottle.grossWeight + amountKg
+    if (kind === 'charge') projectedAfter = bottle.grossWeight - bottleAmountKg
+    else if (kind === 'recover') projectedAfter = bottle.grossWeight + bottleAmountKg
     else if (kind === 'adjust') projectedAfter = bottle.grossWeight + amountKg
   }
 
   const showAmount = kind !== 'transfer' && kind !== 'return'
   const showSite = kind !== 'adjust'
   const showCompliance = kind === 'charge' || kind === 'recover'
+  const supportsLoss = kind === 'charge' || kind === 'recover'
 
   function submit(e: React.FormEvent) {
     e.preventDefault()
@@ -276,6 +298,10 @@ function TransactionForm({
       unitId: unitId || undefined,
       kind,
       amount: showAmount ? signedAmountKg : 0,
+      bottleAmount:
+        supportsLoss && showLoss && enteredBottle > 0
+          ? Math.abs(bottleAmountKg)
+          : undefined,
       date: new Date(date).toISOString(),
       technician: tech.trim() || undefined,
       equipment: equipment.trim() || undefined,
@@ -359,7 +385,11 @@ function TransactionForm({
             label={
               kind === 'adjust'
                 ? `Adjustment ${unit} (use − for removal)`
-                : `Amount ${unit}`
+                : kind === 'charge'
+                  ? `How much went into unit? (${unit})`
+                  : kind === 'recover'
+                    ? `How much came out of equipment? (${unit})`
+                    : `Amount ${unit}`
             }
           >
             <TextInput
@@ -369,7 +399,41 @@ function TransactionForm({
               required
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
-              placeholder="e.g. 1.25"
+              placeholder="e.g. 3.00"
+            />
+          </Field>
+        )}
+
+        {supportsLoss && (
+          <button
+            type="button"
+            onClick={() => setShowLoss((v) => !v)}
+            className="text-left text-xs font-medium text-brand-600 hover:underline"
+          >
+            {showLoss
+              ? 'Hide hose / decant loss field'
+              : kind === 'charge'
+                ? 'Bottle dropped by more than that? (decant / hose loss)'
+                : 'Bottle gained less than that? (hose residual)'}
+          </button>
+        )}
+
+        {supportsLoss && showLoss && (
+          <Field
+            label={
+              kind === 'charge'
+                ? `Actually removed from bottle (${unit})`
+                : `Actually added to bottle (${unit})`
+            }
+            hint={`Defaults to the amount above. Difference is recorded as a loss.`}
+          >
+            <TextInput
+              type="number"
+              inputMode="decimal"
+              step="0.01"
+              value={bottleAmount}
+              onChange={(e) => setBottleAmount(e.target.value)}
+              placeholder={enteredAmount > 0 ? enteredAmount.toFixed(2) : 'e.g. 3.50'}
             />
           </Field>
         )}
@@ -386,6 +450,12 @@ function TransactionForm({
                 unit,
               )}
             </strong>
+            {lossKg > 0 && (
+              <div>
+                Loss: <strong>{formatWeight(lossKg, unit)}</strong>{' '}
+                <span className="text-xs">(in hoses / vented)</span>
+              </div>
+            )}
           </div>
         )}
 

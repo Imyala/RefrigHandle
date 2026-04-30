@@ -369,6 +369,7 @@ function QuickLogModal({
     unitId?: string
     kind: TransactionKind
     amount: number
+    bottleAmount?: number
     date: string
     technician?: string
     equipment?: string
@@ -387,6 +388,8 @@ function QuickLogModal({
   type RecoverSource = 'equipment' | 'bottle'
 
   const [amount, setAmount] = useState('')
+  const [bottleAmount, setBottleAmount] = useState('')
+  const [showLoss, setShowLoss] = useState(false)
   const [siteId, setSiteId] = useState(bottle?.currentSiteId ?? '')
   const [unitId, setUnitId] = useState('')
   const [equipment, setEquipment] = useState('')
@@ -406,6 +409,8 @@ function QuickLogModal({
   if (open && seenKey !== lastKey) {
     setSeenKey(lastKey)
     setAmount('')
+    setBottleAmount('')
+    setShowLoss(false)
     setSiteId(bottle?.currentSiteId ?? '')
     setUnitId('')
     setEquipment('')
@@ -437,11 +442,23 @@ function QuickLogModal({
 
   const enteredAmountDisplay = parseFloat(amount) || 0
   const amountKg = displayToKg(enteredAmountDisplay, unit)
+  const enteredBottleDisplay = parseFloat(bottleAmount) || 0
+  const bottleAmountKg =
+    showLoss && enteredBottleDisplay > 0
+      ? displayToKg(enteredBottleDisplay, unit)
+      : amountKg
+  const lossKg = showLoss
+    ? kind === 'charge'
+      ? Math.max(0, bottleAmountKg - amountKg)
+      : kind === 'recover'
+        ? Math.max(0, amountKg - bottleAmountKg)
+        : 0
+    : 0
   const projectedAfter =
     kind === 'charge'
-      ? bottle.grossWeight - amountKg
+      ? bottle.grossWeight - bottleAmountKg
       : kind === 'recover'
-        ? bottle.grossWeight + amountKg
+        ? bottle.grossWeight + bottleAmountKg
         : bottle.grossWeight
   const projectedNet = Math.max(0, projectedAfter - bottle.tareWeight)
   const projectedSourceAfter = sourceBottle
@@ -477,6 +494,10 @@ function QuickLogModal({
       unitId: showSite && unitId ? unitId : undefined,
       kind,
       amount: showAmount ? Math.abs(amountKg) : 0,
+      bottleAmount:
+        showAmount && showLoss && enteredBottleDisplay > 0
+          ? Math.abs(bottleAmountKg)
+          : undefined,
       date: new Date(date).toISOString(),
       technician: state.technician || undefined,
       equipment: equipment.trim() || undefined,
@@ -544,8 +565,15 @@ function QuickLogModal({
             <Field
               label={
                 kind === 'charge'
-                  ? `How much charged in? (${unit})`
-                  : `How much recovered? (${unit})`
+                  ? `How much went into unit? (${unit})`
+                  : `How much came out of equipment? (${unit})`
+              }
+              hint={
+                kind === 'charge'
+                  ? 'The amount that ended up in the equipment'
+                  : kind === 'recover'
+                    ? 'The amount pulled out of the equipment'
+                    : undefined
               }
             >
               <TextInput
@@ -556,7 +584,41 @@ function QuickLogModal({
                 autoFocus
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
-                placeholder="e.g. 1.25"
+                placeholder="e.g. 3.00"
+              />
+            </Field>
+          )}
+
+          {showAmount && !isBottleToBottleRecover && (
+            <button
+              type="button"
+              onClick={() => setShowLoss((v) => !v)}
+              className="text-left text-xs font-medium text-brand-600 hover:underline"
+            >
+              {showLoss
+                ? 'Hide hose / decant loss field'
+                : kind === 'charge'
+                  ? 'Bottle dropped by more than that? (decant / hose loss)'
+                  : 'Bottle gained less than that? (hose residual)'}
+            </button>
+          )}
+
+          {showAmount && showLoss && !isBottleToBottleRecover && (
+            <Field
+              label={
+                kind === 'charge'
+                  ? `Actually removed from bottle (${unit})`
+                  : `Actually added to bottle (${unit})`
+              }
+              hint={`Defaults to ${enteredAmountDisplay.toFixed(2)} ${unit}. Difference is recorded as a loss.`}
+            >
+              <TextInput
+                type="number"
+                inputMode="decimal"
+                step="0.01"
+                value={bottleAmount}
+                onChange={(e) => setBottleAmount(e.target.value)}
+                placeholder={enteredAmountDisplay > 0 ? enteredAmountDisplay.toFixed(2) : 'e.g. 3.50'}
               />
             </Field>
           )}
@@ -568,6 +630,12 @@ function QuickLogModal({
                 <span className="ml-2 text-red-600 dark:text-red-300">
                   goes below tare
                 </span>
+              )}
+              {lossKg > 0 && (
+                <div>
+                  Loss: <strong>{formatWeight(lossKg, unit)}</strong>{' '}
+                  <span className="text-xs">(in hoses / vented)</span>
+                </div>
               )}
               {sourceBottle && (
                 <div>

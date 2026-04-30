@@ -229,10 +229,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const bottle = s.bottles.find((b) => b.id === t.bottleId)
       if (!bottle) return s
       const before = bottle.grossWeight
+      // Bottle side may differ from equipment side (hose/decant losses).
+      // For 'adjust', bottleAmount is ignored — adjust is the bottle delta directly.
+      const bottleDelta =
+        t.kind === 'adjust' ? t.amount : (t.bottleAmount ?? t.amount)
       let after = before
-      if (t.kind === 'charge') after = before - t.amount
-      else if (t.kind === 'recover') after = before + t.amount
-      else if (t.kind === 'adjust') after = before + t.amount // signed
+      if (t.kind === 'charge') after = before - bottleDelta
+      else if (t.kind === 'recover') after = before + bottleDelta
+      else if (t.kind === 'adjust') after = before + bottleDelta // signed
       // transfer / return don't change weight
       after = Math.max(0, Math.round(after * 1000) / 1000)
 
