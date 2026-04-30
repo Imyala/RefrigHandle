@@ -12,10 +12,11 @@ import { useStore } from '../lib/store'
 import type { Job } from '../lib/types'
 import { netWeight } from '../lib/types'
 import { useToast } from '../lib/toast'
+import { formatWeight, kgToDisplay } from '../lib/units'
 
 export default function Jobs() {
   const { state, addJob, updateJob, deleteJob } = useStore()
-  const { jobs, bottles, transactions } = state
+  const { jobs, bottles, transactions, unit } = state
   const toast = useToast()
 
   const [editing, setEditing] = useState<Job | null>(null)
@@ -75,12 +76,9 @@ export default function Jobs() {
                     </div>
                     <div className="mt-2 grid grid-cols-3 gap-2 text-center text-xs">
                       <Stat value={onJob.length} label="on job" />
+                      <Stat value={formatWeight(charged, unit)} label="charged" />
                       <Stat
-                        value={`${charged.toFixed(2)} kg`}
-                        label="charged"
-                      />
-                      <Stat
-                        value={`${recovered.toFixed(2)} kg`}
+                        value={formatWeight(recovered, unit)}
                         label="recovered"
                       />
                     </div>
@@ -90,7 +88,7 @@ export default function Jobs() {
                         {onJob
                           .map(
                             (b) =>
-                              `${b.bottleNumber} (${netWeight(b).toFixed(1)} kg ${b.refrigerantType})`,
+                              `${b.bottleNumber} (${kgToDisplay(netWeight(b), unit).toFixed(1)} ${unit} ${b.refrigerantType})`,
                           )
                           .join(', ')}
                       </div>

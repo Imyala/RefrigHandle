@@ -4,6 +4,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from 'react'
@@ -11,9 +12,18 @@ import {
   type AppState,
   type Bottle,
   type Job,
+  type SyncSettings,
   type Transaction,
+  type WeightUnit,
 } from './types'
 import { loadState, saveState, uid } from './storage'
+import { deletePhotos } from './photos'
+import {
+  isSyncConfigured,
+  pullState,
+  pushState,
+  subscribeToState,
+} from './sync'
 
 interface StoreApi {
   state: AppState
@@ -32,6 +42,8 @@ interface StoreApi {
   deleteTransaction: (id: string) => void
   // settings
   setTechnician: (name: string) => void
+  setUnit: (u: WeightUnit) => void
+  setSyncSettings: (s: SyncSettings) => void
   addCustomRefrigerant: (name: string) => void
   removeCustomRefrigerant: (name: string) => void
   // bulk
@@ -46,6 +58,47 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     saveState(state)
+  }, [state])
+
+  // Optional cloud sync. No-ops unless the user has configured a team ID
+  // AND build-time Supabase env vars are present. Last-write-wins.
+  const lastPushedRef = useRef<string>('')
+  const remoteApplyRef = useRef(false)
+
+  useEffect(() => {
+    if (!isSyncConfigured()) return
+    if (!state.sync.enabled || !state.sync.teamId) return
+    let cancelled = false
+    pullState(state.sync.teamId).then((remote) => {
+      if (!cancelled && remote) {
+        remoteApplyRef.current = true
+        setState(remote)
+      }
+    })
+    const unsub = subscribeToState(state.sync.teamId, (remote) => {
+      remoteApplyRef.current = true
+      setState(remote)
+    })
+    return () => {
+      cancelled = true
+      unsub()
+    }
+  }, [state.sync.enabled, state.sync.teamId])
+
+  useEffect(() => {
+    if (!isSyncConfigured()) return
+    if (!state.sync.enabled || !state.sync.teamId) return
+    if (remoteApplyRef.current) {
+      remoteApplyRef.current = false
+      return
+    }
+    const serialized = JSON.stringify(state)
+    if (serialized === lastPushedRef.current) return
+    lastPushedRef.current = serialized
+    const handle = setTimeout(() => {
+      void pushState(state.sync.teamId, state)
+    }, 800)
+    return () => clearTimeout(handle)
   }, [state])
 
   const addBottle: StoreApi['addBottle'] = useCallback((b) => {
@@ -65,11 +118,17 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const deleteBottle: StoreApi['deleteBottle'] = useCallback((id) => {
-    setState((s) => ({
-      ...s,
-      bottles: s.bottles.filter((b) => b.id !== id),
-      transactions: s.transactions.filter((t) => t.bottleId !== id),
-    }))
+    setState((s) => {
+      const orphanedPhotoIds = s.transactions
+        .filter((t) => t.bottleId === id)
+        .flatMap((t) => t.photoIds ?? [])
+      if (orphanedPhotoIds.length > 0) void deletePhotos(orphanedPhotoIds)
+      return {
+        ...s,
+        bottles: s.bottles.filter((b) => b.id !== id),
+        transactions: s.transactions.filter((t) => t.bottleId !== id),
+      }
+    })
   }, [])
 
   const addJob: StoreApi['addJob'] = useCallback((l) => {
@@ -151,14 +210,28 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const deleteTransaction: StoreApi['deleteTransaction'] = useCallback((id) => {
-    setState((s) => ({
-      ...s,
-      transactions: s.transactions.filter((t) => t.id !== id),
-    }))
+    setState((s) => {
+      const tx = s.transactions.find((t) => t.id === id)
+      if (tx?.photoIds?.length) void deletePhotos(tx.photoIds)
+      return {
+        ...s,
+        transactions: s.transactions.filter((t) => t.id !== id),
+      }
+    })
   }, [])
 
   const setTechnician = useCallback(
     (name: string) => setState((s) => ({ ...s, technician: name })),
+    [],
+  )
+
+  const setUnit = useCallback(
+    (unit: WeightUnit) => setState((s) => ({ ...s, unit })),
+    [],
+  )
+
+  const setSyncSettings = useCallback(
+    (sync: SyncSettings) => setState((s) => ({ ...s, sync })),
     [],
   )
 
@@ -181,12 +254,18 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const resetAll = useCallback(() => {
     if (confirm('Erase ALL bottles, jobs, and transactions? This cannot be undone.')) {
-      setState({
-        bottles: [],
-        jobs: [],
-        transactions: [],
-        customRefrigerants: [],
-        technician: '',
+      setState((s) => {
+        const allPhotos = s.transactions.flatMap((t) => t.photoIds ?? [])
+        if (allPhotos.length > 0) void deletePhotos(allPhotos)
+        return {
+          bottles: [],
+          jobs: [],
+          transactions: [],
+          customRefrigerants: [],
+          technician: '',
+          unit: s.unit,
+          sync: s.sync,
+        }
       })
     }
   }, [])
@@ -205,6 +284,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       addTransaction,
       deleteTransaction,
       setTechnician,
+      setUnit,
+      setSyncSettings,
       addCustomRefrigerant,
       removeCustomRefrigerant,
       resetAll,
@@ -221,6 +302,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       addTransaction,
       deleteTransaction,
       setTechnician,
+      setUnit,
+      setSyncSettings,
       addCustomRefrigerant,
       removeCustomRefrigerant,
       resetAll,

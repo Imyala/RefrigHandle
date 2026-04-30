@@ -1,26 +1,36 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   Button,
   Card,
   Field,
   Pill,
+  Select,
   TextInput,
 } from '../components/ui'
 import { useStore } from '../lib/store'
-import { REFRIGERANT_TYPES } from '../lib/types'
+import { REFRIGERANT_TYPES, type WeightUnit } from '../lib/types'
+import { useToast } from '../lib/toast'
+import { isSyncConfigured } from '../lib/sync'
 
 export default function Settings() {
   const {
     state,
     setTechnician,
+    setUnit,
+    setSyncSettings,
     addCustomRefrigerant,
     removeCustomRefrigerant,
     resetAll,
     importState,
   } = useStore()
+  const toast = useToast()
   const [techName, setTechName] = useState(state.technician)
   const [newType, setNewType] = useState('')
+  const [teamIdInput, setTeamIdInput] = useState(state.sync.teamId)
   const fileRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => setTechName(state.technician), [state.technician])
+  useEffect(() => setTeamIdInput(state.sync.teamId), [state.sync.teamId])
 
   function exportJson() {
     const blob = new Blob([JSON.stringify(state, null, 2)], {
@@ -49,6 +59,7 @@ export default function Settings() {
         'equipment',
         'reason',
         'technician',
+        'photos',
         'notes',
       ],
       ...state.transactions.map((t) => {
@@ -67,6 +78,7 @@ export default function Settings() {
           t.equipment ?? '',
           t.reason ?? '',
           t.technician ?? '',
+          (t.photoIds ?? []).length,
           (t.notes ?? '').replace(/[\r\n]+/g, ' '),
         ]
       }),
@@ -120,8 +132,30 @@ export default function Settings() {
               onChange={(e) => setTechName(e.target.value)}
               placeholder="Your name"
             />
-            <Button onClick={() => setTechnician(techName)}>Save</Button>
+            <Button
+              onClick={() => {
+                setTechnician(techName)
+                toast.show('Saved')
+              }}
+            >
+              Save
+            </Button>
           </div>
+        </Field>
+      </Card>
+
+      <Card>
+        <Field label="Weight units" hint="Display only — data is always stored in kg internally">
+          <Select
+            value={state.unit}
+            onChange={(e) => {
+              setUnit(e.target.value as WeightUnit)
+              toast.show(`Switched to ${e.target.value}`)
+            }}
+          >
+            <option value="kg">Kilograms (kg)</option>
+            <option value="lb">Pounds (lb)</option>
+          </Select>
         </Field>
       </Card>
 
@@ -173,9 +207,83 @@ export default function Settings() {
       </Card>
 
       <Card>
+        <div className="mb-2 flex items-center justify-between gap-2">
+          <div className="text-sm font-semibold text-slate-700 dark:text-slate-200">
+            Cloud sync
+          </div>
+          {isSyncConfigured() ? (
+            <Pill tone={state.sync.enabled ? 'green' : 'slate'}>
+              {state.sync.enabled ? 'On' : 'Off'}
+            </Pill>
+          ) : (
+            <Pill tone="amber">Not configured</Pill>
+          )}
+        </div>
+        {!isSyncConfigured() ? (
+          <p className="text-sm text-slate-600 dark:text-slate-400">
+            Cloud sync is built in but inactive — see{' '}
+            <a
+              className="font-medium text-brand-600 hover:underline"
+              href="https://github.com/Imyala/RefrigHandle/blob/main/SYNC.md"
+              target="_blank"
+              rel="noreferrer"
+            >
+              SYNC.md
+            </a>{' '}
+            for the one-time Supabase setup. Without it the app stays fully
+            offline (data only on this device).
+          </p>
+        ) : (
+          <div className="space-y-3">
+            <p className="text-sm text-slate-600 dark:text-slate-400">
+              Devices using the same <strong>Team ID</strong> share the same
+              data in real time. Last write wins.
+            </p>
+            <Field label="Team ID" hint="Pick anything — must match across all devices">
+              <div className="flex gap-2">
+                <TextInput
+                  value={teamIdInput}
+                  onChange={(e) => setTeamIdInput(e.target.value)}
+                  placeholder="e.g. acme-hvac"
+                />
+                <Button
+                  onClick={() => {
+                    setSyncSettings({
+                      enabled: !!teamIdInput.trim(),
+                      teamId: teamIdInput.trim(),
+                    })
+                    toast.show(
+                      teamIdInput.trim() ? 'Cloud sync enabled' : 'Cloud sync paused',
+                    )
+                  }}
+                >
+                  {state.sync.enabled ? 'Update' : 'Connect'}
+                </Button>
+              </div>
+            </Field>
+            {state.sync.enabled && (
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  setSyncSettings({ enabled: false, teamId: state.sync.teamId })
+                  toast.show('Cloud sync paused')
+                }}
+              >
+                Pause sync
+              </Button>
+            )}
+          </div>
+        )}
+      </Card>
+
+      <Card>
         <div className="mb-3 text-sm font-semibold text-slate-700 dark:text-slate-200">
           Backup &amp; export
         </div>
+        <p className="mb-3 text-xs text-slate-500">
+          CSV is the F-Gas-friendly log. JSON is a full backup but does not
+          include photos.
+        </p>
         <div className="flex flex-wrap gap-2">
           <Button variant="secondary" onClick={exportJson}>
             ⬇ Export JSON
@@ -205,7 +313,7 @@ export default function Settings() {
           Danger zone
         </div>
         <p className="mb-3 text-sm text-slate-600 dark:text-slate-400">
-          Erase every bottle, site, and transaction stored on this device. Export first if you want a backup.
+          Erase every bottle, job, and transaction stored on this device. Export first if you want a backup.
         </p>
         <Button variant="danger" onClick={resetAll}>
           Erase all data

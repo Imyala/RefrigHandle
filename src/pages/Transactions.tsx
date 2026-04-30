@@ -18,6 +18,9 @@ import {
   transactionLabel,
 } from '../lib/types'
 import { useToast } from '../lib/toast'
+import { displayToKg, formatWeight, kgToDisplay } from '../lib/units'
+import { ScaleButton } from '../components/ScaleButton'
+import { PhotoPicker, Thumbnail } from '../components/PhotoPicker'
 
 const kindTone: Record<
   TransactionKind,
@@ -32,7 +35,7 @@ const kindTone: Record<
 
 export default function Transactions() {
   const { state, addTransaction, deleteTransaction } = useStore()
-  const { bottles, jobs, transactions } = state
+  const { bottles, jobs, transactions, unit } = state
   const toast = useToast()
 
   const [adding, setAdding] = useState(false)
@@ -113,7 +116,7 @@ export default function Transactions() {
                       <Pill tone={kindTone[t.kind]}>{transactionLabel(t.kind)}</Pill>
                       {t.amount > 0 && (
                         <span className="font-semibold text-slate-900 dark:text-slate-100">
-                          {t.amount.toFixed(2)} kg
+                          {formatWeight(t.amount, unit)}
                         </span>
                       )}
                       <span className="text-sm text-slate-500">
@@ -136,14 +139,21 @@ export default function Transactions() {
                       {t.technician && ` · ${t.technician}`}
                       {t.amount > 0 && (
                         <>
-                          {' · '}gross {t.weightBefore.toFixed(2)} →{' '}
-                          {t.weightAfter.toFixed(2)} kg
+                          {' · '}gross {kgToDisplay(t.weightBefore, unit).toFixed(2)} →{' '}
+                          {formatWeight(t.weightAfter, unit)}
                         </>
                       )}
                     </div>
                     {t.notes && (
                       <div className="mt-1 text-xs italic text-slate-500">
                         “{t.notes}”
+                      </div>
+                    )}
+                    {t.photoIds && t.photoIds.length > 0 && (
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {t.photoIds.map((p) => (
+                          <Thumbnail key={p} id={p} />
+                        ))}
                       </div>
                     )}
                   </div>
@@ -202,10 +212,11 @@ function TransactionForm({
     equipment?: string
     reason?: TransactionReason
     notes?: string
+    photoIds?: string[]
   }) => void
 }) {
   const { state } = useStore()
-  const { bottles, jobs, technician } = state
+  const { bottles, jobs, technician, unit } = state
 
   const [bottleId, setBottleId] = useState(bottles[0]?.id ?? '')
   const [jobId, setJobId] = useState('')
@@ -216,6 +227,7 @@ function TransactionForm({
   const [equipment, setEquipment] = useState('')
   const [reason, setReason] = useState<TransactionReason | ''>('')
   const [notes, setNotes] = useState('')
+  const [photoIds, setPhotoIds] = useState<string[]>([])
 
   const [lastOpen, setLastOpen] = useState(open)
   if (open && !lastOpen) {
@@ -229,17 +241,19 @@ function TransactionForm({
     setEquipment('')
     setReason('')
     setNotes('')
+    setPhotoIds([])
   } else if (!open && lastOpen) {
     setLastOpen(false)
   }
 
   const bottle = bottles.find((b) => b.id === bottleId)
-  const amountNum = parseFloat(amount) || 0
+  const enteredAmount = parseFloat(amount) || 0
+  const amountKg = displayToKg(enteredAmount, unit)
   let projectedAfter = bottle?.grossWeight ?? 0
   if (bottle) {
-    if (kind === 'charge') projectedAfter = bottle.grossWeight - amountNum
-    else if (kind === 'recover') projectedAfter = bottle.grossWeight + amountNum
-    else if (kind === 'adjust') projectedAfter = bottle.grossWeight + amountNum
+    if (kind === 'charge') projectedAfter = bottle.grossWeight - amountKg
+    else if (kind === 'recover') projectedAfter = bottle.grossWeight + amountKg
+    else if (kind === 'adjust') projectedAfter = bottle.grossWeight + amountKg
   }
 
   const showAmount = kind !== 'transfer' && kind !== 'return'
@@ -249,16 +263,18 @@ function TransactionForm({
   function submit(e: React.FormEvent) {
     e.preventDefault()
     if (!bottleId) return
+    const signedAmountKg = kind === 'adjust' ? amountKg : Math.abs(amountKg)
     onSave({
       bottleId,
       jobId: jobId || undefined,
       kind,
-      amount: showAmount ? Math.abs(amountNum) : 0,
+      amount: showAmount ? signedAmountKg : 0,
       date: new Date(date).toISOString(),
       technician: tech.trim() || undefined,
       equipment: equipment.trim() || undefined,
       reason: reason || undefined,
       notes: notes.trim() || undefined,
+      photoIds: photoIds.length > 0 ? photoIds : undefined,
     })
   }
 
@@ -288,7 +304,7 @@ function TransactionForm({
             {bottles.map((b) => (
               <option key={b.id} value={b.id}>
                 {b.bottleNumber} · {b.refrigerantType} ·{' '}
-                {b.grossWeight.toFixed(2)} kg gross
+                {formatWeight(b.grossWeight, unit)} gross
               </option>
             ))}
           </Select>
@@ -315,30 +331,43 @@ function TransactionForm({
           <Field
             label={
               kind === 'adjust'
-                ? 'Adjustment kg (use − for removal)'
-                : 'Amount kg'
+                ? `Adjustment ${unit} (use − for removal)`
+                : `Amount ${unit}`
             }
           >
-            <TextInput
-              type="number"
-              inputMode="decimal"
-              step="0.01"
-              required
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-              placeholder="e.g. 1.25"
-            />
+            <div className="flex gap-2">
+              <TextInput
+                type="number"
+                inputMode="decimal"
+                step="0.01"
+                required
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                placeholder="e.g. 1.25"
+              />
+              {bottle && (kind === 'charge' || kind === 'recover') && (
+                <ScaleButton
+                  onWeightKg={(kg) => {
+                    const delta = Math.abs(kg - bottle.grossWeight)
+                    setAmount(kgToDisplay(delta, unit).toFixed(2))
+                  }}
+                />
+              )}
+            </div>
           </Field>
         )}
 
-        {bottle && showAmount && amountNum > 0 && (
+        {bottle && showAmount && enteredAmount !== 0 && (
           <div className="rounded-xl bg-brand-50 p-3 text-sm text-brand-900 dark:bg-brand-900/20 dark:text-brand-100">
             New gross weight:{' '}
-            <strong>{Math.max(0, projectedAfter).toFixed(2)} kg</strong>
+            <strong>{formatWeight(Math.max(0, projectedAfter), unit)}</strong>
             <br />
             Net refrigerant:{' '}
             <strong>
-              {Math.max(0, projectedAfter - bottle.tareWeight).toFixed(2)} kg
+              {formatWeight(
+                Math.max(0, projectedAfter - bottle.tareWeight),
+                unit,
+              )}
             </strong>
           </div>
         )}
@@ -387,6 +416,10 @@ function TransactionForm({
 
         <Field label="Notes">
           <TextArea value={notes} onChange={(e) => setNotes(e.target.value)} />
+        </Field>
+
+        <Field label="Photos" hint="Optional — gauges, equipment plate, leak check">
+          <PhotoPicker photoIds={photoIds} onChange={setPhotoIds} />
         </Field>
 
         <Button type="submit" full>

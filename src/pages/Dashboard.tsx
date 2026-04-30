@@ -2,10 +2,11 @@ import { Link } from 'react-router-dom'
 import { Button, Card } from '../components/ui'
 import { useStore } from '../lib/store'
 import { netWeight, pluralize, transactionLabel } from '../lib/types'
+import { formatWeight, kgToDisplay } from '../lib/units'
 
 export default function Dashboard() {
   const { state } = useStore()
-  const { bottles, jobs, transactions } = state
+  const { bottles, jobs, transactions, unit } = state
 
   const totalsByType = new Map<string, { count: number; net: number }>()
   for (const b of bottles) {
@@ -34,9 +35,9 @@ export default function Dashboard() {
         </div>
         <div className="mt-1 flex items-baseline gap-2">
           <div className="text-5xl font-bold tabular-nums">
-            {totalNet.toFixed(2)}
+            {kgToDisplay(totalNet, unit).toFixed(2)}
           </div>
-          <div className="text-xl font-medium text-brand-100">kg</div>
+          <div className="text-xl font-medium text-brand-100">{unit}</div>
         </div>
         <div className="mt-3 flex flex-wrap gap-2">
           <span className="inline-flex items-center rounded-full bg-white/15 px-2.5 py-0.5 text-xs font-medium text-white backdrop-blur">
@@ -121,9 +122,9 @@ export default function Dashboard() {
                 </div>
                 <div className="mt-0.5 flex items-baseline gap-1">
                   <span className="text-2xl font-bold tabular-nums text-slate-900 dark:text-slate-100">
-                    {t.net.toFixed(2)}
+                    {kgToDisplay(t.net, unit).toFixed(2)}
                   </span>
-                  <span className="text-sm font-medium text-slate-500">kg</span>
+                  <span className="text-sm font-medium text-slate-500">{unit}</span>
                 </div>
                 <div className="mt-1 text-xs text-slate-500">
                   {pluralize(t.count, 'bottle')}
@@ -163,7 +164,7 @@ export default function Dashboard() {
                     <div className="min-w-0">
                       <div className="font-medium text-slate-900 dark:text-slate-100">
                         {transactionLabel(t.kind)}
-                        {t.amount > 0 && ` · ${t.amount.toFixed(2)} kg`}
+                        {t.amount > 0 && ` · ${formatWeight(t.amount, unit)}`}
                       </div>
                       <div className="truncate text-sm text-slate-500">
                         {bottle?.bottleNumber ?? '?'} ·{' '}

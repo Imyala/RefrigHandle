@@ -23,6 +23,10 @@ import {
   transactionLabel,
 } from '../lib/types'
 import { useToast } from '../lib/toast'
+import { displayToKg, formatWeight, kgToDisplay } from '../lib/units'
+import { BarcodeScannerModalLazy as BarcodeScannerModal } from '../components/BarcodeScannerLazy'
+import { ScaleButton } from '../components/ScaleButton'
+import { PhotoPicker } from '../components/PhotoPicker'
 
 const statusTone: Record<BottleStatus, 'green' | 'amber' | 'slate' | 'red'> = {
   in_stock: 'green',
@@ -34,8 +38,9 @@ const statusTone: Record<BottleStatus, 'green' | 'amber' | 'slate' | 'red'> = {
 export default function Bottles() {
   const { state, addBottle, updateBottle, deleteBottle, addTransaction } =
     useStore()
-  const { bottles, jobs, customRefrigerants } = state
+  const { bottles, jobs, customRefrigerants, unit } = state
   const toast = useToast()
+  const [searchScanOpen, setSearchScanOpen] = useState(false)
 
   const [editing, setEditing] = useState<Bottle | null>(null)
   const [adding, setAdding] = useState(false)
@@ -76,12 +81,33 @@ export default function Bottles() {
       </div>
 
       {bottles.length > 0 && (
-        <TextInput
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search by number, type, or notes…"
-        />
+        <div className="flex gap-2">
+          <TextInput
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search by number, type, or notes…"
+          />
+          <button
+            type="button"
+            onClick={() => setSearchScanOpen(true)}
+            className="shrink-0 rounded-xl bg-slate-200 px-3 text-lg dark:bg-slate-800"
+            aria-label="Scan barcode"
+            title="Scan barcode"
+          >
+            📷
+          </button>
+        </div>
       )}
+
+      <BarcodeScannerModal
+        open={searchScanOpen}
+        onClose={() => setSearchScanOpen(false)}
+        onResult={(text) => {
+          setQuery(text)
+          setSearchScanOpen(false)
+          toast.show(`Scanned: ${text}`, 'info')
+        }}
+      />
 
       <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
         {(['all', 'in_stock', 'on_site', 'returned', 'empty'] as const).map(
@@ -163,14 +189,14 @@ export default function Bottles() {
                   </div>
                   <div className="shrink-0 text-right">
                     <div className="text-lg font-bold tabular-nums text-slate-900 dark:text-slate-100">
-                      {net.toFixed(2)}
+                      {kgToDisplay(net, unit).toFixed(2)}
                       <span className="ml-1 text-xs font-medium text-slate-500">
-                        kg
+                        {unit}
                       </span>
                     </div>
                     {initialNet > 0 && (
                       <div className="text-xs text-slate-500">
-                        of {initialNet.toFixed(1)} kg
+                        of {formatWeight(initialNet, unit, 1)}
                       </div>
                     )}
                   </div>
@@ -262,6 +288,7 @@ function BottleActionSheet({
 }) {
   const { state } = useStore()
   if (!bottle) return null
+  const unit = state.unit
   const job = state.jobs.find((j) => j.id === bottle.currentJobId)
   const net = netWeight(bottle)
   const history = state.transactions
@@ -274,16 +301,17 @@ function BottleActionSheet({
         <div className="rounded-2xl bg-gradient-to-br from-brand-600 to-brand-900 p-4 text-white">
           <div className="flex items-baseline gap-2">
             <div className="text-3xl font-bold tabular-nums">
-              {net.toFixed(2)}
+              {kgToDisplay(net, unit).toFixed(2)}
             </div>
-            <div className="text-base font-medium text-brand-100">kg</div>
+            <div className="text-base font-medium text-brand-100">{unit}</div>
             <div className="ml-auto rounded-full bg-white/15 px-2.5 py-0.5 text-xs font-semibold">
               {bottle.refrigerantType}
             </div>
           </div>
           <div className="mt-1 text-sm text-brand-100">
-            Gross {bottle.grossWeight.toFixed(2)} kg · Tare{' '}
-            {bottle.tareWeight.toFixed(2)} kg · {statusLabel(bottle.status)}
+            Gross {formatWeight(bottle.grossWeight, unit)} · Tare{' '}
+            {formatWeight(bottle.tareWeight, unit)} ·{' '}
+            {statusLabel(bottle.status)}
           </div>
           {job && (
             <div className="mt-1 text-sm text-brand-100">📍 {job.name}</div>
@@ -329,7 +357,7 @@ function BottleActionSheet({
                     <div className="min-w-0">
                       <div className="font-medium text-slate-900 dark:text-slate-100">
                         {transactionLabel(t.kind)}
-                        {t.amount > 0 && ` · ${t.amount.toFixed(2)} kg`}
+                        {t.amount > 0 && ` · ${formatWeight(t.amount, unit)}`}
                       </div>
                       <div className="truncate text-xs text-slate-500">
                         {new Date(t.date).toLocaleString()}
@@ -368,15 +396,18 @@ function QuickLogModal({
     equipment?: string
     reason?: TransactionReason
     notes?: string
+    photoIds?: string[]
   }) => void
 }) {
   const { state } = useStore()
+  const unit = state.unit
   const [amount, setAmount] = useState('')
   const [jobId, setJobId] = useState(bottle?.currentJobId ?? '')
   const [equipment, setEquipment] = useState('')
   const [reason, setReason] = useState<TransactionReason | ''>('')
   const [notes, setNotes] = useState('')
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 16))
+  const [photoIds, setPhotoIds] = useState<string[]>([])
 
   const lastKey = `${bottle?.id}-${kind}-${open}`
   const [seenKey, setSeenKey] = useState('')
@@ -388,18 +419,20 @@ function QuickLogModal({
     setReason('')
     setNotes('')
     setDate(new Date().toISOString().slice(0, 16))
+    setPhotoIds([])
   }
 
   if (!open || !bottle || !kind) return null
 
   const showAmount = kind === 'charge' || kind === 'recover'
   const showJob = kind !== 'return'
-  const amountNum = parseFloat(amount) || 0
+  const enteredAmountDisplay = parseFloat(amount) || 0
+  const amountKg = displayToKg(enteredAmountDisplay, unit)
   const projectedAfter =
     kind === 'charge'
-      ? bottle.grossWeight - amountNum
+      ? bottle.grossWeight - amountKg
       : kind === 'recover'
-        ? bottle.grossWeight + amountNum
+        ? bottle.grossWeight + amountKg
         : bottle.grossWeight
   const projectedNet = Math.max(0, projectedAfter - bottle.tareWeight)
 
@@ -410,12 +443,13 @@ function QuickLogModal({
       bottleId: bottle.id,
       jobId: showJob && jobId ? jobId : undefined,
       kind,
-      amount: showAmount ? Math.abs(amountNum) : 0,
+      amount: showAmount ? Math.abs(amountKg) : 0,
       date: new Date(date).toISOString(),
       technician: state.technician || undefined,
       equipment: equipment.trim() || undefined,
       reason: reason || undefined,
       notes: notes.trim() || undefined,
+      photoIds: photoIds.length > 0 ? photoIds : undefined,
     })
   }
 
@@ -435,33 +469,46 @@ function QuickLogModal({
             {bottle.bottleNumber} · {bottle.refrigerantType}
           </div>
           <div className="text-slate-600 dark:text-slate-300">
-            Currently {netWeight(bottle).toFixed(2)} kg net (
-            {bottle.grossWeight.toFixed(2)} kg gross)
+            Currently {formatWeight(netWeight(bottle), unit)} net (
+            {formatWeight(bottle.grossWeight, unit)} gross)
           </div>
         </div>
 
         {showAmount && (
           <Field
             label={
-              kind === 'charge' ? 'How much charged in? (kg)' : 'How much recovered? (kg)'
+              kind === 'charge'
+                ? `How much charged in? (${unit})`
+                : `How much recovered? (${unit})`
             }
           >
-            <TextInput
-              type="number"
-              inputMode="decimal"
-              step="0.01"
-              required
-              autoFocus
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-              placeholder="e.g. 1.25"
-            />
+            <div className="flex gap-2">
+              <TextInput
+                type="number"
+                inputMode="decimal"
+                step="0.01"
+                required
+                autoFocus
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                placeholder="e.g. 1.25"
+              />
+              <ScaleButton
+                onWeightKg={(kg) => {
+                  // Reading is the new bottle gross from the scale,
+                  // so amount = absolute(kg - current gross).
+                  const delta = Math.abs(kg - bottle.grossWeight)
+                  setAmount(kgToDisplay(delta, unit).toFixed(2))
+                }}
+                label="📡 Scale"
+              />
+            </div>
           </Field>
         )}
 
-        {showAmount && amountNum > 0 && (
+        {showAmount && enteredAmountDisplay > 0 && (
           <div className="rounded-xl bg-brand-50 p-3 text-sm text-brand-900 dark:bg-brand-900/20 dark:text-brand-100">
-            New bottle net: <strong>{projectedNet.toFixed(2)} kg</strong>
+            New bottle net: <strong>{formatWeight(projectedNet, unit)}</strong>
             {projectedAfter < bottle.tareWeight && (
               <span className="ml-2 text-red-600 dark:text-red-300">
                 ⚠ goes below tare
@@ -524,6 +571,10 @@ function QuickLogModal({
           <TextArea value={notes} onChange={(e) => setNotes(e.target.value)} />
         </Field>
 
+        <Field label="Photos" hint="Optional — gauges, equipment plate, leak check">
+          <PhotoPicker photoIds={photoIds} onChange={setPhotoIds} />
+        </Field>
+
         <Button type="submit" full>
           Save
         </Button>
@@ -550,18 +601,25 @@ function BottleForm({
   onDelete?: () => void
 }) {
   const { state } = useStore()
+  const unit = state.unit
+  const initialDisplay = (kg: number) =>
+    kg ? kgToDisplay(kg, unit).toFixed(2) : ''
+
   const [bottleNumber, setBottleNumber] = useState(bottle?.bottleNumber ?? '')
   const [refrigerantType, setRefrigerantType] = useState(
     bottle?.refrigerantType ?? types[0] ?? 'R410A',
   )
-  const [tareWeight, setTareWeight] = useState(String(bottle?.tareWeight ?? ''))
-  const [grossWeight, setGrossWeight] = useState(String(bottle?.grossWeight ?? ''))
+  const [tareWeight, setTareWeight] = useState(initialDisplay(bottle?.tareWeight ?? 0))
+  const [grossWeight, setGrossWeight] = useState(
+    initialDisplay(bottle?.grossWeight ?? 0),
+  )
   const [initialNetWeight, setInitialNetWeight] = useState(
-    String(bottle?.initialNetWeight ?? ''),
+    initialDisplay(bottle?.initialNetWeight ?? 0),
   )
   const [status, setStatus] = useState<BottleStatus>(bottle?.status ?? 'in_stock')
   const [currentJobId, setCurrentJobId] = useState(bottle?.currentJobId ?? '')
   const [notes, setNotes] = useState(bottle?.notes ?? '')
+  const [scanOpen, setScanOpen] = useState(false)
 
   const key = bottle?.id ?? 'new'
   const [lastKey, setLastKey] = useState(key)
@@ -569,9 +627,9 @@ function BottleForm({
     setLastKey(key)
     setBottleNumber(bottle?.bottleNumber ?? '')
     setRefrigerantType(bottle?.refrigerantType ?? types[0] ?? 'R410A')
-    setTareWeight(String(bottle?.tareWeight ?? ''))
-    setGrossWeight(String(bottle?.grossWeight ?? ''))
-    setInitialNetWeight(String(bottle?.initialNetWeight ?? ''))
+    setTareWeight(initialDisplay(bottle?.tareWeight ?? 0))
+    setGrossWeight(initialDisplay(bottle?.grossWeight ?? 0))
+    setInitialNetWeight(initialDisplay(bottle?.initialNetWeight ?? 0))
     setStatus(bottle?.status ?? 'in_stock')
     setCurrentJobId(bottle?.currentJobId ?? '')
     setNotes(bottle?.notes ?? '')
@@ -579,9 +637,11 @@ function BottleForm({
 
   function submit(e: React.FormEvent) {
     e.preventDefault()
-    const tare = parseFloat(tareWeight) || 0
-    const gross = parseFloat(grossWeight) || 0
-    const initialNet = parseFloat(initialNetWeight) || Math.max(0, gross - tare)
+    const tare = displayToKg(parseFloat(tareWeight) || 0, unit)
+    const gross = displayToKg(parseFloat(grossWeight) || 0, unit)
+    const initialNet = parseFloat(initialNetWeight)
+      ? displayToKg(parseFloat(initialNetWeight), unit)
+      : Math.max(0, gross - tare)
     onSave({
       bottleNumber: bottleNumber.trim(),
       refrigerantType,
@@ -594,22 +654,41 @@ function BottleForm({
     })
   }
 
-  const liveNet = Math.max(
-    0,
-    (parseFloat(grossWeight) || 0) - (parseFloat(tareWeight) || 0),
-  )
+  const liveNetKg =
+    displayToKg(parseFloat(grossWeight) || 0, unit) -
+    displayToKg(parseFloat(tareWeight) || 0, unit)
+  const liveNet = Math.max(0, liveNetKg)
 
   return (
     <Modal open={open} title={title} onClose={onClose}>
       <form onSubmit={submit} className="space-y-3">
-        <Field label="Bottle ID / number" hint="Label or serial of the bottle">
-          <TextInput
-            required
-            value={bottleNumber}
-            onChange={(e) => setBottleNumber(e.target.value)}
-            placeholder="e.g. B-102"
-          />
+        <Field label="Bottle ID / number" hint="Label or serial — tap 📷 to scan a barcode">
+          <div className="flex gap-2">
+            <TextInput
+              required
+              value={bottleNumber}
+              onChange={(e) => setBottleNumber(e.target.value)}
+              placeholder="e.g. B-102"
+            />
+            <button
+              type="button"
+              onClick={() => setScanOpen(true)}
+              className="shrink-0 rounded-xl bg-slate-200 px-3 text-lg dark:bg-slate-800"
+              aria-label="Scan barcode"
+              title="Scan barcode"
+            >
+              📷
+            </button>
+          </div>
         </Field>
+        <BarcodeScannerModal
+          open={scanOpen}
+          onClose={() => setScanOpen(false)}
+          onResult={(text) => {
+            setBottleNumber(text)
+            setScanOpen(false)
+          }}
+        />
         <Field label="Refrigerant type">
           <Select
             value={refrigerantType}
@@ -624,37 +703,53 @@ function BottleForm({
         </Field>
 
         <div className="grid grid-cols-2 gap-3">
-          <Field label="Tare (empty) kg">
-            <TextInput
-              type="number"
-              inputMode="decimal"
-              step="0.01"
-              value={tareWeight}
-              onChange={(e) => setTareWeight(e.target.value)}
-              placeholder="e.g. 5.20"
-            />
+          <Field label={`Tare (empty) ${unit}`}>
+            <div className="flex gap-1">
+              <TextInput
+                type="number"
+                inputMode="decimal"
+                step="0.01"
+                value={tareWeight}
+                onChange={(e) => setTareWeight(e.target.value)}
+                placeholder="e.g. 5.20"
+              />
+              <ScaleButton
+                label="📡"
+                onWeightKg={(kg) =>
+                  setTareWeight(kgToDisplay(kg, unit).toFixed(2))
+                }
+              />
+            </div>
           </Field>
-          <Field label="Gross (current) kg">
-            <TextInput
-              type="number"
-              inputMode="decimal"
-              step="0.01"
-              required
-              value={grossWeight}
-              onChange={(e) => setGrossWeight(e.target.value)}
-              placeholder="e.g. 16.30"
-            />
+          <Field label={`Gross (current) ${unit}`}>
+            <div className="flex gap-1">
+              <TextInput
+                type="number"
+                inputMode="decimal"
+                step="0.01"
+                required
+                value={grossWeight}
+                onChange={(e) => setGrossWeight(e.target.value)}
+                placeholder="e.g. 16.30"
+              />
+              <ScaleButton
+                label="📡"
+                onWeightKg={(kg) =>
+                  setGrossWeight(kgToDisplay(kg, unit).toFixed(2))
+                }
+              />
+            </div>
           </Field>
         </div>
 
         {liveNet > 0 && (
           <div className="rounded-xl bg-brand-50 p-3 text-sm text-brand-900 dark:bg-brand-900/20 dark:text-brand-100">
-            Net refrigerant in bottle: <strong>{liveNet.toFixed(2)} kg</strong>
+            Net refrigerant in bottle: <strong>{formatWeight(liveNet, unit)}</strong>
           </div>
         )}
 
         <Field
-          label="Initial net (when received) kg"
+          label={`Initial net (when received) ${unit}`}
           hint="Optional — used for the fill-level bar. Defaults to gross − tare."
         >
           <TextInput

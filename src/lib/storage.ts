@@ -8,11 +8,14 @@ interface LegacyBottle extends Omit<Bottle, 'currentJobId'> {
 interface LegacyTransaction extends Omit<Transaction, 'jobId'> {
   locationId?: string
 }
-interface LegacyState extends Omit<AppState, 'bottles' | 'transactions' | 'jobs'> {
+interface LegacyState
+  extends Omit<AppState, 'bottles' | 'transactions' | 'jobs' | 'unit' | 'sync'> {
   bottles?: LegacyBottle[]
   transactions?: LegacyTransaction[]
   jobs?: AppState['jobs']
   locations?: AppState['jobs']
+  unit?: string
+  sync?: Partial<AppState['sync']>
 }
 
 export function loadState(): AppState {
@@ -47,6 +50,11 @@ export function loadState(): AppState {
       transactions,
       customRefrigerants: parsed.customRefrigerants ?? [],
       technician: parsed.technician ?? '',
+      unit: parsed.unit === 'lb' ? 'lb' : 'kg',
+      sync: {
+        enabled: parsed.sync?.enabled ?? false,
+        teamId: parsed.sync?.teamId ?? '',
+      },
     }
   } catch {
     return { ...EMPTY_STATE }

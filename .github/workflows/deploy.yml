@@ -32,6 +32,10 @@ jobs:
         env:
           # GitHub Pages serves at https://<owner>.github.io/<repo>/
           BASE_PATH: /${{ github.event.repository.name }}/
+          # Optional Supabase sync — set these as repo secrets to enable.
+          # Without them the app stays fully offline.
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
         run: npm run build
 
       - uses: actions/configure-pages@v5
