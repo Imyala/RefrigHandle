@@ -158,7 +158,7 @@ function SiteDetail({
   const [addingUnit, setAddingUnit] = useState(false)
   const [editUnit, setEditUnit] = useState<Unit | null>(null)
   const [decommissionTarget, setDecommissionTarget] = useState<Unit | null>(null)
-  const [showDecommissioned, setShowDecommissioned] = useState(false)
+  const [showDecommissioned, setShowDecommissioned] = useState(true)
 
   const siteId = site?.id ?? ''
   const activeUnits = useMemo(
@@ -277,15 +277,20 @@ function SiteDetail({
 
           {decommissioned.length > 0 && (
             <div>
-              <button
-                className="flex w-full items-center justify-between px-1 text-sm font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400"
-                onClick={() => setShowDecommissioned((v) => !v)}
-              >
-                <span>Decommissioned ({decommissioned.length})</span>
-                <span aria-hidden>{showDecommissioned ? '▾' : '▸'}</span>
-              </button>
-              {showDecommissioned && (
-                <div className="mt-2 space-y-2">
+              <div className="mb-2 flex items-center justify-between px-1">
+                <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                  Decommissioned ({decommissioned.length})
+                </h3>
+                <button
+                  type="button"
+                  onClick={() => setShowDecommissioned((v) => !v)}
+                  className="text-xs font-medium text-brand-600 hover:underline"
+                >
+                  {showDecommissioned ? 'Hide' : 'Show'}
+                </button>
+              </div>
+              {showDecommissioned ? (
+                <div className="space-y-2">
                   {decommissioned.map((u) => (
                     <DecommissionedUnitCard
                       key={u.id}
@@ -313,6 +318,10 @@ function SiteDetail({
                     />
                   ))}
                 </div>
+              ) : (
+                <p className="px-1 text-xs text-slate-500">
+                  Hidden — past decommissioned units kept on record for compliance.
+                </p>
               )}
             </div>
           )}
