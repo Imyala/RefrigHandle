@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Modal } from './ui'
+import { Button, Modal } from './ui'
 import { useStore } from '../lib/store'
 import { REFRIGERANT_TYPES, sortRefrigerants } from '../lib/types'
 
@@ -126,6 +126,12 @@ export function RefrigerantSelect({
               )
             })}
           </div>
+        </div>
+
+        <div className="mt-4">
+          <Button full variant="secondary" onClick={() => setOpen(false)}>
+            Cancel
+          </Button>
         </div>
       </Modal>
     </>

@@ -114,7 +114,6 @@ export function BottleSelect({
         {allowAddNew && onAddNew && (
           <div className="mt-4">
             <Button
-              type="button"
               full
               variant="secondary"
               onClick={() => {
@@ -126,6 +125,12 @@ export function BottleSelect({
             </Button>
           </div>
         )}
+
+        <div className="mt-2">
+          <Button full variant="ghost" onClick={() => setOpen(false)}>
+            Cancel
+          </Button>
+        </div>
       </Modal>
     </>
   )

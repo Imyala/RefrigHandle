@@ -9,6 +9,7 @@ export function Button({
   variant = 'primary',
   full,
   className = '',
+  type = 'button',
   ...rest
 }: ButtonProps) {
   const base =
@@ -25,6 +26,7 @@ export function Button({
   }
   return (
     <button
+      type={type}
       className={`${base} ${variants[variant]} ${full ? 'w-full' : ''} ${className}`}
       {...rest}
     />
@@ -178,9 +180,10 @@ export function Modal({
             {title}
           </h2>
           <button
+            type="button"
             onClick={onClose}
             aria-label="Close"
-            className="rounded-full p-2 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"
+            className="flex h-11 w-11 items-center justify-center rounded-full text-xl text-slate-500 hover:bg-slate-100 active:bg-slate-200 dark:hover:bg-slate-800 dark:active:bg-slate-700"
           >
             ✕
           </button>
