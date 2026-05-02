@@ -461,16 +461,18 @@ function TransactionForm({
 
         {showCompliance && (
           <>
-            <Field
-              label="Equipment"
-              hint="Helps with F-Gas log e.g. 'Daikin VRV unit #3'"
-            >
-              <TextInput
-                value={equipment}
-                onChange={(e) => setEquipment(e.target.value)}
-                placeholder="e.g. Chiller AHU-2"
-              />
-            </Field>
+            {!unitId && (
+              <Field
+                label="Equipment (free text)"
+                hint="Use only if the equipment isn't tracked as a Unit at the site above"
+              >
+                <TextInput
+                  value={equipment}
+                  onChange={(e) => setEquipment(e.target.value)}
+                  placeholder="e.g. Chiller AHU-2"
+                />
+              </Field>
+            )}
             <Field label="Reason">
               <Select
                 value={reason}

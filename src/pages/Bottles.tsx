@@ -717,15 +717,18 @@ function QuickLogModal({
 
           {showCompliance && (
             <>
-              <Field
-                label="Equipment (free text)"
-                hint="Optional — only if no Unit picked above. e.g. 'Chiller AHU-2'"
-              >
-                <TextInput
-                  value={equipment}
-                  onChange={(e) => setEquipment(e.target.value)}
-                />
-              </Field>
+              {!unitId && (
+                <Field
+                  label="Equipment (free text)"
+                  hint="Use only if the equipment isn't tracked as a Unit at the site above"
+                >
+                  <TextInput
+                    value={equipment}
+                    onChange={(e) => setEquipment(e.target.value)}
+                    placeholder="e.g. Chiller AHU-2"
+                  />
+                </Field>
+              )}
               <Field label="Reason">
                 <Select
                   value={reason}
