@@ -77,13 +77,13 @@ export default function Dashboard() {
             </div>
           </Card>
         </Link>
-        <Link to="/transactions" className="block">
+        <Link to="/sites" className="block">
           <Card className="!p-4 transition active:scale-[0.98]">
             <div className="font-semibold text-slate-900 dark:text-slate-100">
-              Log a charge
+              Sites
             </div>
             <div className="text-xs text-slate-500">
-              {pluralize(transactions.length, 'entry', 'entries')}
+              {pluralize(sites.length, 'site')}
             </div>
           </Card>
         </Link>
