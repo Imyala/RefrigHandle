@@ -492,6 +492,21 @@ function QuickLogModal({
     ? Math.max(0, projectedSourceAfter - sourceBottle.tareWeight)
     : 0
 
+  // Physical-impossibility blocks. You can't take out what isn't there.
+  // Charges of equipment, and bottle-to-bottle recovers from a source,
+  // can't exceed the source bottle's current net refrigerant. Adjust is
+  // a manual correction — left unblocked. Over-fill on a destination
+  // recover is still allowed (just warned), per AS 2030.5 verification
+  // workflows where techs over-fill in practice.
+  const currentNet = netWeight(bottle)
+  const blockOverdraw =
+    kind === 'charge' && bottleAmountKg > currentNet + 0.01
+  const blockSourceOverdraw =
+    isBottleToBottleRecover &&
+    !!sourceBottle &&
+    amountKg > netWeight(sourceBottle) + 0.01
+  const submitBlocked = blockOverdraw || blockSourceOverdraw
+
   function handleUnitChange(value: string) {
     if (value === '__new__') {
       setQuickAddUnitOpen(true)
@@ -503,6 +518,7 @@ function QuickLogModal({
   function submit(e: React.FormEvent) {
     e.preventDefault()
     if (!kind || !bottle) return
+    if (submitBlocked) return
     onSave({
       bottleId: bottle.id,
       sourceBottleId: isBottleToBottleRecover && sourceBottleId ? sourceBottleId : undefined,
@@ -672,11 +688,14 @@ function QuickLogModal({
                 }`}
               >
                 New bottle net: <strong>{formatWeight(projectedNet, unit)}</strong>
-                {projectedAfter < bottle.tareWeight && (
+                {blockOverdraw && (
+                  <div className="mt-1 font-semibold text-red-600 dark:text-red-300">
+                    ⛔ More than this bottle has ({formatWeight(currentNet, unit)} available) — can't save
+                  </div>
+                )}
+                {!blockOverdraw && projectedAfter < bottle.tareWeight && (
                   <span className="ml-2 text-red-600 dark:text-red-300">
-                    {kind === 'charge'
-                      ? 'more than this bottle currently has'
-                      : 'goes below tare'}
+                    goes below tare
                   </span>
                 )}
                 {overDest > 0 && (
@@ -695,10 +714,11 @@ function QuickLogModal({
                   <div>
                     Source bottle net after:{' '}
                     <strong>{formatWeight(projectedSourceNet, unit)}</strong>
-                    {projectedSourceAfter < sourceBottle.tareWeight && (
-                      <span className="ml-2 text-red-600 dark:text-red-300">
-                        more than the source bottle has
-                      </span>
+                    {blockSourceOverdraw && (
+                      <div className="mt-1 font-semibold text-red-600 dark:text-red-300">
+                        ⛔ More than the source bottle has (
+                        {formatWeight(netWeight(sourceBottle), unit)} available) — can't save
+                      </div>
                     )}
                   </div>
                 )}
@@ -805,8 +825,8 @@ function QuickLogModal({
             <TextArea value={notes} onChange={(e) => setNotes(e.target.value)} />
           </Field>
 
-          <Button type="submit" full>
-            Save
+          <Button type="submit" full disabled={submitBlocked}>
+            {submitBlocked ? 'Amount exceeds bottle contents' : 'Save'}
           </Button>
         </form>
       </Modal>

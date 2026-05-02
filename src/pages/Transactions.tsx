@@ -15,6 +15,7 @@ import {
   type TransactionKind,
   type TransactionReason,
   REASON_LABELS,
+  netWeight,
   overfillKg,
   transactionLabel,
   transactionLoss,
@@ -289,9 +290,17 @@ function TransactionForm({
   const showCompliance = kind === 'charge' || kind === 'recover'
   const supportsLoss = kind === 'charge' || kind === 'recover'
 
+  // Block over-draw on charge: can't take more refrigerant than the bottle
+  // currently holds. Adjust is a manual signed correction — left unblocked.
+  const currentNet = bottle ? netWeight(bottle) : 0
+  const blockOverdraw =
+    !!bottle && kind === 'charge' && bottleAmountKg > currentNet + 0.01
+  const submitBlocked = blockOverdraw
+
   function submit(e: React.FormEvent) {
     e.preventDefault()
     if (!bottleId) return
+    if (submitBlocked) return
     const signedAmountKg = kind === 'adjust' ? amountKg : Math.abs(amountKg)
     onSave({
       bottleId,
@@ -445,9 +454,11 @@ function TransactionForm({
           return (
           <div
             className={`rounded-xl p-3 text-sm ${
-              over > 0
-                ? 'bg-amber-50 text-amber-900 dark:bg-amber-900/20 dark:text-amber-100'
-                : 'bg-brand-50 text-brand-900 dark:bg-brand-900/20 dark:text-brand-100'
+              blockOverdraw
+                ? 'bg-red-50 text-red-900 dark:bg-red-900/20 dark:text-red-100'
+                : over > 0
+                  ? 'bg-amber-50 text-amber-900 dark:bg-amber-900/20 dark:text-amber-100'
+                  : 'bg-brand-50 text-brand-900 dark:bg-brand-900/20 dark:text-brand-100'
             }`}
           >
             New gross weight:{' '}
@@ -455,6 +466,11 @@ function TransactionForm({
             <br />
             Net refrigerant:{' '}
             <strong>{formatWeight(projectedNet, unit)}</strong>
+            {blockOverdraw && (
+              <div className="mt-1 font-semibold">
+                ⛔ More than this bottle has ({formatWeight(currentNet, unit)} available) — can't save
+              </div>
+            )}
             {over > 0 && (
               <div className="mt-1 font-semibold">
                 ⚠ Over safe-fill limit by {formatWeight(over, unit)} (cap.{' '}
@@ -519,8 +535,8 @@ function TransactionForm({
           <TextArea value={notes} onChange={(e) => setNotes(e.target.value)} />
         </Field>
 
-        <Button type="submit" full>
-          Save
+        <Button type="submit" full disabled={submitBlocked}>
+          {submitBlocked ? 'Amount exceeds bottle contents' : 'Save'}
         </Button>
       </form>
     </Modal>
