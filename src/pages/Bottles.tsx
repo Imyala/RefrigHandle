@@ -993,12 +993,28 @@ function BottleForm({
   const [grossWeight, setGrossWeight] = useState(
     initialDisplay(bottle?.grossWeight ?? 0),
   )
-  const [initialNetWeight, setInitialNetWeight] = useState(
-    initialDisplay(bottle?.initialNetWeight ?? 0),
-  )
   const [status, setStatus] = useState<BottleStatus>(bottle?.status ?? 'in_stock')
   const [currentSiteId, setCurrentSiteId] = useState(bottle?.currentSiteId ?? '')
   const [notes, setNotes] = useState(bottle?.notes ?? '')
+
+  // "Manual capacity" only matters for bottles received partially used.
+  // For the common case (fresh full bottle from supplier) capacity == net.
+  const liveNetKgRaw =
+    displayToKg(parseFloat(grossWeight) || 0, unit) -
+    displayToKg(parseFloat(tareWeight) || 0, unit)
+  const liveNet = Math.max(0, liveNetKgRaw)
+
+  const initialCapacityFromBottle = (b?: Bottle): boolean => {
+    if (!b) return false
+    const liveB = Math.max(0, b.grossWeight - b.tareWeight)
+    return Math.abs(b.initialNetWeight - liveB) > 0.01
+  }
+  const [manualCapacity, setManualCapacity] = useState(
+    initialCapacityFromBottle(bottle),
+  )
+  const [capacityWeight, setCapacityWeight] = useState(
+    initialDisplay(bottle?.initialNetWeight ?? 0),
+  )
 
   const key = bottle?.id ?? 'new'
   const [lastKey, setLastKey] = useState(key)
@@ -1008,19 +1024,22 @@ function BottleForm({
     setRefrigerantType(bottle?.refrigerantType ?? types[0] ?? 'R410A')
     setTareWeight(initialDisplay(bottle?.tareWeight ?? 0))
     setGrossWeight(initialDisplay(bottle?.grossWeight ?? 0))
-    setInitialNetWeight(initialDisplay(bottle?.initialNetWeight ?? 0))
     setStatus(bottle?.status ?? 'in_stock')
     setCurrentSiteId(bottle?.currentSiteId ?? '')
     setNotes(bottle?.notes ?? '')
+    setManualCapacity(initialCapacityFromBottle(bottle))
+    setCapacityWeight(initialDisplay(bottle?.initialNetWeight ?? 0))
   }
 
   function submit(e: React.FormEvent) {
     e.preventDefault()
     const tare = displayToKg(parseFloat(tareWeight) || 0, unit)
     const gross = displayToKg(parseFloat(grossWeight) || 0, unit)
-    const initialNet = parseFloat(initialNetWeight)
-      ? displayToKg(parseFloat(initialNetWeight), unit)
-      : Math.max(0, gross - tare)
+    const currentNet = Math.max(0, gross - tare)
+    const initialNet =
+      manualCapacity && parseFloat(capacityWeight)
+        ? displayToKg(parseFloat(capacityWeight), unit)
+        : currentNet
     onSave({
       bottleNumber: bottleNumber.trim(),
       refrigerantType,
@@ -1032,11 +1051,6 @@ function BottleForm({
       notes: notes.trim() || undefined,
     })
   }
-
-  const liveNetKg =
-    displayToKg(parseFloat(grossWeight) || 0, unit) -
-    displayToKg(parseFloat(tareWeight) || 0, unit)
-  const liveNet = Math.max(0, liveNetKg)
 
   return (
     <Modal open={open} title={title} onClose={onClose}>
@@ -1083,23 +1097,39 @@ function BottleForm({
 
         {liveNet > 0 && (
           <div className="rounded-xl bg-brand-50 p-3 text-sm text-brand-900 dark:bg-brand-900/20 dark:text-brand-100">
-            Net refrigerant in bottle: <strong>{formatWeight(liveNet, unit)}</strong>
+            Net refrigerant in bottle:{' '}
+            <strong>{formatWeight(liveNet, unit)}</strong>
+            <div className="mt-0.5 text-xs">
+              (gross − tare, calculated automatically)
+            </div>
           </div>
         )}
 
-        <Field
-          label={`Initial net (when received) ${unit}`}
-          hint="Optional — used for the fill-level bar. Defaults to gross − tare."
+        <button
+          type="button"
+          onClick={() => setManualCapacity((v) => !v)}
+          className="text-left text-xs font-medium text-brand-600 hover:underline"
         >
-          <TextInput
-            type="number"
-            inputMode="decimal"
-            step="0.01"
-            value={initialNetWeight}
-            onChange={(e) => setInitialNetWeight(e.target.value)}
-            placeholder="e.g. 11.10"
-          />
-        </Field>
+          {manualCapacity
+            ? 'Hide capacity field — use net as the full charge'
+            : 'Bottle was already part-used when received? (set full charge manually)'}
+        </button>
+
+        {manualCapacity && (
+          <Field
+            label={`Cylinder full charge (${unit})`}
+            hint="The refrigerant amount when the bottle is brand-new. Used only for the % remaining bar."
+          >
+            <TextInput
+              type="number"
+              inputMode="decimal"
+              step="0.01"
+              value={capacityWeight}
+              onChange={(e) => setCapacityWeight(e.target.value)}
+              placeholder={`e.g. ${unit === 'kg' ? '11.10' : '24.47'}`}
+            />
+          </Field>
+        )}
 
         <Field label="Status">
           <Select
