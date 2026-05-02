@@ -326,8 +326,13 @@ function BottleActionSheet({
           </Button>
         </div>
 
-        <Button onClick={() => onLog('return')} variant="secondary" full>
-          Return bottle
+        <Button
+          onClick={() => onLog('return')}
+          variant="secondary"
+          full
+          disabled={bottle.status === 'returned'}
+        >
+          {bottle.status === 'returned' ? 'Already returned' : 'Return bottle'}
         </Button>
 
         <Button onClick={onEdit} variant="ghost" full>
@@ -505,7 +510,13 @@ function QuickLogModal({
     isBottleToBottleRecover &&
     !!sourceBottle &&
     amountKg > netWeight(sourceBottle) + 0.01
-  const submitBlocked = blockOverdraw || blockSourceOverdraw
+  // A bottle that's already been returned can't be returned again. To
+  // log another return the tech needs to first put the bottle back into
+  // service (edit → status: in stock).
+  const blockAlreadyReturned =
+    kind === 'return' && bottle.status === 'returned'
+  const submitBlocked =
+    blockOverdraw || blockSourceOverdraw || blockAlreadyReturned
 
   function handleUnitChange(value: string) {
     if (value === '__new__') {
@@ -800,7 +811,15 @@ function QuickLogModal({
             </>
           )}
 
-          {kind === 'return' && (
+          {kind === 'return' && blockAlreadyReturned && (
+            <div className="rounded-xl bg-red-50 p-3 text-sm text-red-900 dark:bg-red-900/20 dark:text-red-100">
+              ⛔ This bottle is already marked as returned. To log another
+              return, edit the bottle first and set its status back to In
+              stock.
+            </div>
+          )}
+
+          {kind === 'return' && !blockAlreadyReturned && (
             <Field
               label="Store / supplier"
               hint="Where is the bottle being returned? Optional."
@@ -826,7 +845,11 @@ function QuickLogModal({
           </Field>
 
           <Button type="submit" full disabled={submitBlocked}>
-            {submitBlocked ? 'Amount exceeds bottle contents' : 'Save'}
+            {blockAlreadyReturned
+              ? 'Already returned'
+              : submitBlocked
+                ? 'Amount exceeds bottle contents'
+                : 'Save'}
           </Button>
         </form>
       </Modal>

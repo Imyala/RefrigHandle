@@ -1,4 +1,5 @@
 import type { ButtonHTMLAttributes, InputHTMLAttributes, SelectHTMLAttributes, TextareaHTMLAttributes, ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 
 type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: 'primary' | 'secondary' | 'danger' | 'ghost'
@@ -161,7 +162,11 @@ export function Modal({
     size === 'lg'
       ? 'flex h-svh w-full max-w-2xl flex-col overflow-y-auto bg-white p-5 shadow-xl dark:bg-slate-900 sm:h-[92svh] sm:rounded-3xl'
       : 'max-h-[90svh] w-full max-w-md overflow-y-auto rounded-t-3xl bg-white p-5 shadow-xl dark:bg-slate-900 sm:rounded-3xl'
-  return (
+  // Portal to <body> so the modal escapes any parent <form>. Otherwise,
+  // a Save button inside a nested form (e.g. the Custom-cylinder form
+  // rendered inside the BottleForm) ends up submitting the outer form
+  // because HTML doesn't honour nested <form> elements.
+  return createPortal(
     <div className={overlayCls} onClick={onClose}>
       <div
         className={containerCls}
@@ -190,6 +195,7 @@ export function Modal({
         </div>
         {children}
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }

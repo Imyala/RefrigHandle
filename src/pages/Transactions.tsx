@@ -295,7 +295,11 @@ function TransactionForm({
   const currentNet = bottle ? netWeight(bottle) : 0
   const blockOverdraw =
     !!bottle && kind === 'charge' && bottleAmountKg > currentNet + 0.01
-  const submitBlocked = blockOverdraw
+  // Already-returned bottles can't be returned again — they need to be
+  // put back into service first.
+  const blockAlreadyReturned =
+    !!bottle && kind === 'return' && bottle.status === 'returned'
+  const submitBlocked = blockOverdraw || blockAlreadyReturned
 
   function submit(e: React.FormEvent) {
     e.preventDefault()
@@ -535,8 +539,19 @@ function TransactionForm({
           <TextArea value={notes} onChange={(e) => setNotes(e.target.value)} />
         </Field>
 
+        {blockAlreadyReturned && (
+          <div className="rounded-xl bg-red-50 p-3 text-sm text-red-900 dark:bg-red-900/20 dark:text-red-100">
+            ⛔ This bottle is already marked as returned. Edit the bottle
+            first and set its status back to In stock to log another return.
+          </div>
+        )}
+
         <Button type="submit" full disabled={submitBlocked}>
-          {submitBlocked ? 'Amount exceeds bottle contents' : 'Save'}
+          {blockAlreadyReturned
+            ? 'Already returned'
+            : blockOverdraw
+              ? 'Amount exceeds bottle contents'
+              : 'Save'}
         </Button>
       </form>
     </Modal>
