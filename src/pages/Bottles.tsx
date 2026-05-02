@@ -510,6 +510,15 @@ function QuickLogModal({
     isBottleToBottleRecover &&
     !!sourceBottle &&
     amountKg > netWeight(sourceBottle) + 0.01
+  // Source-bottle refrigerant must match the destination — mixing is a
+  // contamination event that ruins both bottles for reclamation. Warn
+  // strongly but don't auto-block; some techs may be intentionally
+  // consolidating into a "mixed waste" cylinder.
+  const refrigerantMismatch =
+    isBottleToBottleRecover &&
+    !!sourceBottle &&
+    sourceBottle.refrigerantType.toUpperCase() !==
+      bottle.refrigerantType.toUpperCase()
   // A bottle that's already been returned can't be returned again. To
   // log another return the tech needs to first put the bottle back into
   // service (edit → status: in stock).
@@ -620,6 +629,21 @@ function QuickLogModal({
                 modalTitle="Pick source bottle"
               />
             </Field>
+          )}
+
+          {refrigerantMismatch && sourceBottle && (
+            <div className="rounded-xl border border-red-300 bg-red-50 p-3 text-sm text-red-900 dark:border-red-700 dark:bg-red-900/20 dark:text-red-100">
+              <div className="font-semibold">
+                ⚠ Refrigerant mismatch — this would contaminate both bottles
+              </div>
+              <div className="mt-1 text-xs">
+                Source is{' '}
+                <strong>{sourceBottle.refrigerantType}</strong>, destination is{' '}
+                <strong>{bottle.refrigerantType}</strong>. Mixed refrigerants
+                can't be reused or reclaimed without expensive separation —
+                check both bottles before continuing.
+              </div>
+            </div>
           )}
 
           {showAmount && (
