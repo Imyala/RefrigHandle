@@ -1060,14 +1060,6 @@ function BottleForm({
     displayToKg(parseFloat(tareWeight) || 0, unit)
   const liveNet = Math.max(0, liveNetKgRaw)
 
-  const initialCapacityFromBottle = (b?: Bottle): boolean => {
-    if (!b) return false
-    const liveB = Math.max(0, b.grossWeight - b.tareWeight)
-    return Math.abs(b.initialNetWeight - liveB) > 0.01
-  }
-  const [manualCapacity, setManualCapacity] = useState(
-    initialCapacityFromBottle(bottle),
-  )
   const [capacityWeight, setCapacityWeight] = useState(
     initialDisplay(bottle?.initialNetWeight ?? 0),
   )
@@ -1099,7 +1091,6 @@ function BottleForm({
     setStatus(bottle?.status ?? 'in_stock')
     setCurrentSiteId(bottle?.currentSiteId ?? '')
     setNotes(bottle?.notes ?? '')
-    setManualCapacity(initialCapacityFromBottle(bottle))
     setCapacityWeight(initialDisplay(bottle?.initialNetWeight ?? 0))
     setAppliedPresetId('')
   }
@@ -1109,9 +1100,10 @@ function BottleForm({
     const tare = displayToKg(parseFloat(tareWeight) || 0, unit)
     const gross = displayToKg(parseFloat(grossWeight) || 0, unit)
     const currentNet = Math.max(0, gross - tare)
+    const enteredCap = parseFloat(capacityWeight)
     const initialNet =
-      manualCapacity && parseFloat(capacityWeight)
-        ? displayToKg(parseFloat(capacityWeight), unit)
+      enteredCap && enteredCap > 0
+        ? displayToKg(enteredCap, unit)
         : currentNet
     onSave({
       bottleNumber: bottleNumber.trim(),
@@ -1127,7 +1119,6 @@ function BottleForm({
 
   function applyPreset(preset: BottlePreset) {
     setTareWeight(kgToDisplay(preset.tareKg, unit).toFixed(2))
-    setManualCapacity(true)
     // Use the refrigerant-specific filling ratio when the preset has a
     // water capacity. Custom presets without a WC fall back to the
     // user-entered safeFillKg.
@@ -1196,9 +1187,7 @@ function BottleForm({
         </div>
 
         {liveNet > 0 && (() => {
-          const capacityKg = manualCapacity
-            ? displayToKg(parseFloat(capacityWeight) || 0, unit)
-            : 0
+          const capacityKg = displayToKg(parseFloat(capacityWeight) || 0, unit)
           const over = capacityKg > 0 ? overfillKg(liveNet, capacityKg) : 0
           return (
             <div
@@ -1222,34 +1211,22 @@ function BottleForm({
           )
         })()}
 
-        <button
-          type="button"
-          onClick={() => setManualCapacity((v) => !v)}
-          className="text-left text-xs font-medium text-brand-600 hover:underline"
+        <Field
+          label={`Safe fill / cylinder capacity (${unit})`}
+          hint="Auto-set when you pick a cylinder preset and a refrigerant. Edit to override. Used for the % remaining bar and the overfill warning."
         >
-          {manualCapacity
-            ? 'Hide capacity field — use net as the full charge'
-            : 'Bottle was already part-used when received? (set full charge manually)'}
-        </button>
-
-        {manualCapacity && (
-          <Field
-            label={`Safe fill / cylinder capacity (${unit})`}
-            hint="The maximum safe refrigerant load (typically 80 % of water capacity). Used for the % remaining bar and the overfill warning."
-          >
-            <TextInput
-              type="number"
-              inputMode="decimal"
-              step="0.01"
-              value={capacityWeight}
-              onChange={(e) => {
-                setCapacityWeight(e.target.value)
-                setAppliedPresetId('')
-              }}
-              placeholder={`e.g. ${unit === 'kg' ? '11.10' : '24.47'}`}
-            />
-          </Field>
-        )}
+          <TextInput
+            type="number"
+            inputMode="decimal"
+            step="0.01"
+            value={capacityWeight}
+            onChange={(e) => {
+              setCapacityWeight(e.target.value)
+              setAppliedPresetId('')
+            }}
+            placeholder={`e.g. ${unit === 'kg' ? '11.10' : '24.47'}`}
+          />
+        </Field>
 
         <Field label="Status">
           <Select
