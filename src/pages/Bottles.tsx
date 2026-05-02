@@ -17,9 +17,12 @@ import {
   type TransactionKind,
   type TransactionReason,
   type Unit,
+  BOTTLE_PRESETS,
   REFRIGERANT_TYPES,
   REASON_LABELS,
   netWeight,
+  overfillKg,
+  safeFillFromWaterCapacity,
   sortRefrigerants,
   statusLabel,
   transactionLabel,
@@ -138,6 +141,7 @@ export default function Bottles() {
             const initialNet = b.initialNetWeight || 0
             const pct =
               initialNet > 0 ? Math.min(100, Math.max(0, (net / initialNet) * 100)) : 0
+            const over = overfillKg(net, initialNet)
             return (
               <Card key={b.id} className="!p-3">
                 <button
@@ -155,6 +159,9 @@ export default function Bottles() {
                       <Pill tone={statusTone[b.status]}>
                         {statusLabel(b.status)}
                       </Pill>
+                      {over > 0 && (
+                        <Pill tone="amber">Overfill +{formatWeight(over, unit)}</Pill>
+                      )}
                     </div>
                     {site && (
                       <div className="mt-1 text-sm text-slate-500">
@@ -164,7 +171,7 @@ export default function Bottles() {
                     {initialNet > 0 && (
                       <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800">
                         <div
-                          className="h-full rounded-full bg-brand-500"
+                          className={`h-full rounded-full ${over > 0 ? 'bg-amber-500' : 'bg-brand-500'}`}
                           style={{ width: `${pct}%` }}
                         />
                       </div>
@@ -645,33 +652,48 @@ function QuickLogModal({
             </Field>
           )}
 
-          {showAmount && enteredAmountDisplay > 0 && (
-            <div className="rounded-xl bg-brand-50 p-3 text-sm text-brand-900 dark:bg-brand-900/20 dark:text-brand-100">
-              New bottle net: <strong>{formatWeight(projectedNet, unit)}</strong>
-              {projectedAfter < bottle.tareWeight && (
-                <span className="ml-2 text-red-600 dark:text-red-300">
-                  goes below tare
-                </span>
-              )}
-              {lossKg > 0 && (
-                <div>
-                  Loss: <strong>{formatWeight(lossKg, unit)}</strong>{' '}
-                  <span className="text-xs">(in hoses / vented)</span>
-                </div>
-              )}
-              {sourceBottle && (
-                <div>
-                  Source bottle net after:{' '}
-                  <strong>{formatWeight(projectedSourceNet, unit)}</strong>
-                  {projectedSourceAfter < sourceBottle.tareWeight && (
-                    <span className="ml-2 text-red-600 dark:text-red-300">
-                      source goes below tare
-                    </span>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
+          {showAmount && enteredAmountDisplay > 0 && (() => {
+            const overDest = overfillKg(projectedNet, bottle.initialNetWeight)
+            return (
+              <div
+                className={`rounded-xl p-3 text-sm ${
+                  overDest > 0
+                    ? 'bg-amber-50 text-amber-900 dark:bg-amber-900/20 dark:text-amber-100'
+                    : 'bg-brand-50 text-brand-900 dark:bg-brand-900/20 dark:text-brand-100'
+                }`}
+              >
+                New bottle net: <strong>{formatWeight(projectedNet, unit)}</strong>
+                {projectedAfter < bottle.tareWeight && (
+                  <span className="ml-2 text-red-600 dark:text-red-300">
+                    goes below tare
+                  </span>
+                )}
+                {overDest > 0 && (
+                  <div className="mt-1 font-semibold">
+                    ⚠ Over safe-fill limit by {formatWeight(overDest, unit)} (cap.{' '}
+                    {formatWeight(bottle.initialNetWeight, unit)})
+                  </div>
+                )}
+                {lossKg > 0 && (
+                  <div>
+                    Loss: <strong>{formatWeight(lossKg, unit)}</strong>{' '}
+                    <span className="text-xs">(in hoses / vented)</span>
+                  </div>
+                )}
+                {sourceBottle && (
+                  <div>
+                    Source bottle net after:{' '}
+                    <strong>{formatWeight(projectedSourceNet, unit)}</strong>
+                    {projectedSourceAfter < sourceBottle.tareWeight && (
+                      <span className="ml-2 text-red-600 dark:text-red-300">
+                        source goes below tare
+                      </span>
+                    )}
+                  </div>
+                )}
+              </div>
+            )
+          })()}
 
           {showSite && (
             <>
@@ -1055,9 +1077,42 @@ function BottleForm({
     })
   }
 
+  function applyPreset(presetId: string) {
+    const preset = BOTTLE_PRESETS.find((p) => p.id === presetId)
+    if (!preset) return
+    setTareWeight(kgToDisplay(preset.tareKg, unit).toFixed(2))
+    setManualCapacity(true)
+    setCapacityWeight(
+      kgToDisplay(safeFillFromWaterCapacity(preset.waterCapacityKg), unit).toFixed(
+        2,
+      ),
+    )
+  }
+
   return (
     <Modal open={open} title={title} onClose={onClose}>
       <form onSubmit={submit} className="space-y-3">
+        <Field
+          label="Cylinder type (optional)"
+          hint="Pick a standard size to auto-fill tare and 80 % safe-fill capacity. Adjust to match the actual stamp on the bottle."
+        >
+          <Select
+            defaultValue=""
+            onChange={(e) => {
+              applyPreset(e.target.value)
+              e.target.value = ''
+            }}
+          >
+            <option value="">— custom (manual entry) —</option>
+            {BOTTLE_PRESETS.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.label} — tare {p.tareKg} kg, safe fill{' '}
+                {safeFillFromWaterCapacity(p.waterCapacityKg)} kg
+              </option>
+            ))}
+          </Select>
+        </Field>
+
         <Field label="Bottle ID / number" hint="Label or serial of the bottle">
           <TextInput
             required
@@ -1098,15 +1153,32 @@ function BottleForm({
           </Field>
         </div>
 
-        {liveNet > 0 && (
-          <div className="rounded-xl bg-brand-50 p-3 text-sm text-brand-900 dark:bg-brand-900/20 dark:text-brand-100">
-            Net refrigerant in bottle:{' '}
-            <strong>{formatWeight(liveNet, unit)}</strong>
-            <div className="mt-0.5 text-xs">
-              (gross − tare, calculated automatically)
+        {liveNet > 0 && (() => {
+          const capacityKg = manualCapacity
+            ? displayToKg(parseFloat(capacityWeight) || 0, unit)
+            : 0
+          const over = capacityKg > 0 ? overfillKg(liveNet, capacityKg) : 0
+          return (
+            <div
+              className={`rounded-xl p-3 text-sm ${
+                over > 0
+                  ? 'bg-amber-50 text-amber-900 dark:bg-amber-900/20 dark:text-amber-100'
+                  : 'bg-brand-50 text-brand-900 dark:bg-brand-900/20 dark:text-brand-100'
+              }`}
+            >
+              Net refrigerant in bottle:{' '}
+              <strong>{formatWeight(liveNet, unit)}</strong>
+              <div className="mt-0.5 text-xs">
+                (gross − tare, calculated automatically)
+              </div>
+              {over > 0 && (
+                <div className="mt-1 font-semibold">
+                  ⚠ Over safe-fill limit by {formatWeight(over, unit)}
+                </div>
+              )}
             </div>
-          </div>
-        )}
+          )
+        })()}
 
         <button
           type="button"
@@ -1120,8 +1192,8 @@ function BottleForm({
 
         {manualCapacity && (
           <Field
-            label={`Cylinder full charge (${unit})`}
-            hint="The refrigerant amount when the bottle is brand-new. Used only for the % remaining bar."
+            label={`Safe fill / cylinder capacity (${unit})`}
+            hint="The maximum safe refrigerant load (typically 80 % of water capacity). Used for the % remaining bar and the overfill warning."
           >
             <TextInput
               type="number"

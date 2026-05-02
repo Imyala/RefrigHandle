@@ -15,6 +15,7 @@ import {
   type TransactionKind,
   type TransactionReason,
   REASON_LABELS,
+  overfillKg,
   transactionLabel,
   transactionLoss,
 } from '../lib/types'
@@ -438,18 +439,28 @@ function TransactionForm({
           </Field>
         )}
 
-        {bottle && showAmount && enteredAmount !== 0 && (
-          <div className="rounded-xl bg-brand-50 p-3 text-sm text-brand-900 dark:bg-brand-900/20 dark:text-brand-100">
+        {bottle && showAmount && enteredAmount !== 0 && (() => {
+          const projectedNet = Math.max(0, projectedAfter - bottle.tareWeight)
+          const over = overfillKg(projectedNet, bottle.initialNetWeight)
+          return (
+          <div
+            className={`rounded-xl p-3 text-sm ${
+              over > 0
+                ? 'bg-amber-50 text-amber-900 dark:bg-amber-900/20 dark:text-amber-100'
+                : 'bg-brand-50 text-brand-900 dark:bg-brand-900/20 dark:text-brand-100'
+            }`}
+          >
             New gross weight:{' '}
             <strong>{formatWeight(Math.max(0, projectedAfter), unit)}</strong>
             <br />
             Net refrigerant:{' '}
-            <strong>
-              {formatWeight(
-                Math.max(0, projectedAfter - bottle.tareWeight),
-                unit,
-              )}
-            </strong>
+            <strong>{formatWeight(projectedNet, unit)}</strong>
+            {over > 0 && (
+              <div className="mt-1 font-semibold">
+                ⚠ Over safe-fill limit by {formatWeight(over, unit)} (cap.{' '}
+                {formatWeight(bottle.initialNetWeight, unit)})
+              </div>
+            )}
             {lossKg > 0 && (
               <div>
                 Loss: <strong>{formatWeight(lossKg, unit)}</strong>{' '}
@@ -457,7 +468,8 @@ function TransactionForm({
               </div>
             )}
           </div>
-        )}
+          )
+        })()}
 
         {showCompliance && (
           <>

@@ -242,6 +242,44 @@ export function netWeight(b: Bottle): number {
   return Math.max(0, b.grossWeight - b.tareWeight)
 }
 
+// Returns kg over the bottle's safe fill (initial net / capacity).
+// Zero if the bottle has no capacity recorded or is within limits.
+export function overfillKg(netKg: number, capacityKg: number): number {
+  if (!capacityKg || capacityKg <= 0) return 0
+  return Math.max(0, netKg - capacityKg)
+}
+
+export function isOverfilled(b: Bottle): boolean {
+  return overfillKg(netWeight(b), b.initialNetWeight) > 0.01
+}
+
+// Common HVAC/R recovery cylinder presets. Tare is the nominal stamped
+// tare from the manufacturer's spec sheet — techs should still confirm
+// against the actual cylinder. Safe fill is calculated as 80 % of the
+// water capacity, per DOT/CFR-49 rules for refrigerant cylinders.
+export interface BottlePreset {
+  id: string
+  label: string
+  tareKg: number
+  waterCapacityKg: number
+}
+
+export const SAFE_FILL_FRACTION = 0.8
+
+export function safeFillFromWaterCapacity(wcKg: number): number {
+  return Math.round(wcKg * SAFE_FILL_FRACTION * 100) / 100
+}
+
+export const BOTTLE_PRESETS: BottlePreset[] = [
+  { id: '30lb',     label: '30 lb DOT recovery',          tareKg: 7.6,   waterCapacityKg: 11.9 },
+  { id: '50lb',     label: '50 lb DOT recovery',          tareKg: 13.3,  waterCapacityKg: 21.6 },
+  { id: '123lb',    label: '123 lb DOT recovery',         tareKg: 26.3,  waterCapacityKg: 55.8 },
+  { id: '239lb-l',  label: '239 lb DOT (light shell)',    tareKg: 33.1,  waterCapacityKg: 108.4 },
+  { id: '239lb-h',  label: '239 lb DOT (heavy shell)',    tareKg: 51.3,  waterCapacityKg: 108.4 },
+  { id: '1000lb-l', label: '1,000 lb DOT (light shell)',  tareKg: 130.2, waterCapacityKg: 450 },
+  { id: '1000lb-h', label: '1,000 lb DOT (heavy shell)',  tareKg: 213.6, waterCapacityKg: 450 },
+]
+
 export function statusLabel(s: BottleStatus): string {
   switch (s) {
     case 'in_stock':
