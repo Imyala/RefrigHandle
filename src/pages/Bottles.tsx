@@ -13,22 +13,22 @@ import {
 import { useStore } from '../lib/store'
 import {
   type Bottle,
+  type BottlePreset,
   type BottleStatus,
   type TransactionKind,
   type TransactionReason,
   type Unit,
-  BOTTLE_PRESETS,
   REFRIGERANT_TYPES,
   REASON_LABELS,
   netWeight,
   overfillKg,
-  safeFillFromWaterCapacity,
   sortRefrigerants,
   statusLabel,
   transactionLabel,
 } from '../lib/types'
 import { RefrigerantSelect } from '../components/RefrigerantSelect'
 import { BottleSelect } from '../components/BottleSelect'
+import { CylinderPresetSelect } from '../components/CylinderPresetSelect'
 import { useToast } from '../lib/toast'
 import { displayToKg, formatWeight, kgToDisplay } from '../lib/units'
 
@@ -1077,40 +1077,20 @@ function BottleForm({
     })
   }
 
-  function applyPreset(presetId: string) {
-    const preset = BOTTLE_PRESETS.find((p) => p.id === presetId)
-    if (!preset) return
+  function applyPreset(preset: BottlePreset) {
     setTareWeight(kgToDisplay(preset.tareKg, unit).toFixed(2))
     setManualCapacity(true)
-    setCapacityWeight(
-      kgToDisplay(safeFillFromWaterCapacity(preset.waterCapacityKg), unit).toFixed(
-        2,
-      ),
-    )
+    setCapacityWeight(kgToDisplay(preset.safeFillKg, unit).toFixed(2))
   }
 
   return (
     <Modal open={open} title={title} onClose={onClose}>
       <form onSubmit={submit} className="space-y-3">
         <Field
-          label="Cylinder type (optional)"
-          hint="Pick a standard size to auto-fill tare and 80 % safe-fill capacity. Adjust to match the actual stamp on the bottle."
+          label="Cylinder preset"
+          hint="Optional — tap to apply a standard size's tare and safe-fill capacity. Star presets you use often, or add your own."
         >
-          <Select
-            defaultValue=""
-            onChange={(e) => {
-              applyPreset(e.target.value)
-              e.target.value = ''
-            }}
-          >
-            <option value="">— custom (manual entry) —</option>
-            {BOTTLE_PRESETS.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.label} — tare {p.tareKg} kg, safe fill{' '}
-                {safeFillFromWaterCapacity(p.waterCapacityKg)} kg
-              </option>
-            ))}
-          </Select>
+          <CylinderPresetSelect onApply={applyPreset} />
         </Field>
 
         <Field label="Bottle ID / number" hint="Label or serial of the bottle">

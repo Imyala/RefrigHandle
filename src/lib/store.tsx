@@ -11,6 +11,7 @@ import {
 import {
   type AppState,
   type Bottle,
+  type BottlePreset,
   type Site,
   type SyncSettings,
   type Theme,
@@ -55,6 +56,11 @@ interface StoreApi {
   addCustomRefrigerant: (name: string) => void
   removeCustomRefrigerant: (name: string) => void
   toggleFavoriteRefrigerant: (name: string) => void
+  addCustomBottlePreset: (
+    p: Omit<BottlePreset, 'id' | 'custom'>,
+  ) => BottlePreset
+  removeCustomBottlePreset: (id: string) => void
+  toggleFavoriteBottlePreset: (id: string) => void
   // bulk
   resetAll: () => void
   importState: (s: AppState) => void
@@ -364,6 +370,35 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     }))
   }, [])
 
+  const addCustomBottlePreset: StoreApi['addCustomBottlePreset'] = useCallback(
+    (p) => {
+      const preset: BottlePreset = { ...p, id: uid(), custom: true }
+      setState((s) => ({
+        ...s,
+        customBottlePresets: [...s.customBottlePresets, preset],
+      }))
+      return preset
+    },
+    [],
+  )
+
+  const removeCustomBottlePreset = useCallback((id: string) => {
+    setState((s) => ({
+      ...s,
+      customBottlePresets: s.customBottlePresets.filter((p) => p.id !== id),
+      favoriteBottlePresets: s.favoriteBottlePresets.filter((x) => x !== id),
+    }))
+  }, [])
+
+  const toggleFavoriteBottlePreset = useCallback((id: string) => {
+    setState((s) => ({
+      ...s,
+      favoriteBottlePresets: s.favoriteBottlePresets.includes(id)
+        ? s.favoriteBottlePresets.filter((x) => x !== id)
+        : [...s.favoriteBottlePresets, id],
+    }))
+  }, [])
+
   const resetAll = useCallback(() => {
     if (
       confirm(
@@ -377,6 +412,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         transactions: [],
         customRefrigerants: [],
         favoriteRefrigerants: [],
+        customBottlePresets: [],
+        favoriteBottlePresets: [],
         technician: '',
         unit: s.unit,
         theme: s.theme,
@@ -410,6 +447,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       addCustomRefrigerant,
       removeCustomRefrigerant,
       toggleFavoriteRefrigerant,
+      addCustomBottlePreset,
+      removeCustomBottlePreset,
+      toggleFavoriteBottlePreset,
       resetAll,
       importState,
     }),
@@ -435,6 +475,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       addCustomRefrigerant,
       removeCustomRefrigerant,
       toggleFavoriteRefrigerant,
+      addCustomBottlePreset,
+      removeCustomBottlePreset,
+      toggleFavoriteBottlePreset,
       resetAll,
       importState,
     ],

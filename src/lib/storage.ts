@@ -23,7 +23,15 @@ interface LegacyTransaction
 interface LegacyState
   extends Omit<
     AppState,
-    'bottles' | 'transactions' | 'sites' | 'units' | 'unit' | 'sync' | 'theme'
+    | 'bottles'
+    | 'transactions'
+    | 'sites'
+    | 'units'
+    | 'unit'
+    | 'sync'
+    | 'theme'
+    | 'customBottlePresets'
+    | 'favoriteBottlePresets'
   > {
   bottles?: LegacyBottle[]
   transactions?: LegacyTransaction[]
@@ -34,6 +42,8 @@ interface LegacyState
   unit?: string
   theme?: string
   sync?: Partial<AppState['sync']>
+  customBottlePresets?: AppState['customBottlePresets']
+  favoriteBottlePresets?: AppState['favoriteBottlePresets']
 }
 
 export function loadState(): AppState {
@@ -78,6 +88,8 @@ export function loadState(): AppState {
       transactions,
       customRefrigerants: parsed.customRefrigerants ?? [],
       favoriteRefrigerants: parsed.favoriteRefrigerants ?? [],
+      customBottlePresets: parsed.customBottlePresets ?? [],
+      favoriteBottlePresets: parsed.favoriteBottlePresets ?? [],
       technician: parsed.technician ?? '',
       unit: parsed.unit === 'lb' ? 'lb' : 'kg',
       theme:

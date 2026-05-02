@@ -203,6 +203,8 @@ export interface AppState {
   transactions: Transaction[]
   customRefrigerants: string[]
   favoriteRefrigerants: string[]
+  customBottlePresets: BottlePreset[]
+  favoriteBottlePresets: string[]
   technician: string
   unit: WeightUnit
   theme: Theme
@@ -216,6 +218,8 @@ export const EMPTY_STATE: AppState = {
   transactions: [],
   customRefrigerants: [],
   favoriteRefrigerants: [],
+  customBottlePresets: [],
+  favoriteBottlePresets: [],
   technician: '',
   unit: 'kg',
   theme: 'system',
@@ -257,27 +261,29 @@ export function isOverfilled(b: Bottle): boolean {
 // tare from the manufacturer's spec sheet — techs should still confirm
 // against the actual cylinder. Safe fill is calculated as 80 % of the
 // water capacity, per DOT/CFR-49 rules for refrigerant cylinders.
-export interface BottlePreset {
-  id: string
-  label: string
-  tareKg: number
-  waterCapacityKg: number
-}
-
 export const SAFE_FILL_FRACTION = 0.8
 
 export function safeFillFromWaterCapacity(wcKg: number): number {
   return Math.round(wcKg * SAFE_FILL_FRACTION * 100) / 100
 }
 
+export interface BottlePreset {
+  id: string
+  label: string
+  tareKg: number
+  safeFillKg: number
+  waterCapacityKg?: number // optional info — only set for built-in DOT presets
+  custom?: boolean
+}
+
 export const BOTTLE_PRESETS: BottlePreset[] = [
-  { id: '30lb',     label: '30 lb DOT recovery',          tareKg: 7.6,   waterCapacityKg: 11.9 },
-  { id: '50lb',     label: '50 lb DOT recovery',          tareKg: 13.3,  waterCapacityKg: 21.6 },
-  { id: '123lb',    label: '123 lb DOT recovery',         tareKg: 26.3,  waterCapacityKg: 55.8 },
-  { id: '239lb-l',  label: '239 lb DOT (light shell)',    tareKg: 33.1,  waterCapacityKg: 108.4 },
-  { id: '239lb-h',  label: '239 lb DOT (heavy shell)',    tareKg: 51.3,  waterCapacityKg: 108.4 },
-  { id: '1000lb-l', label: '1,000 lb DOT (light shell)',  tareKg: 130.2, waterCapacityKg: 450 },
-  { id: '1000lb-h', label: '1,000 lb DOT (heavy shell)',  tareKg: 213.6, waterCapacityKg: 450 },
+  { id: '30lb',     label: '30 lb DOT recovery',         tareKg: 7.6,   waterCapacityKg: 11.9,  safeFillKg: safeFillFromWaterCapacity(11.9)  },
+  { id: '50lb',     label: '50 lb DOT recovery',         tareKg: 13.3,  waterCapacityKg: 21.6,  safeFillKg: safeFillFromWaterCapacity(21.6)  },
+  { id: '123lb',    label: '123 lb DOT recovery',        tareKg: 26.3,  waterCapacityKg: 55.8,  safeFillKg: safeFillFromWaterCapacity(55.8)  },
+  { id: '239lb-l',  label: '239 lb DOT (light shell)',   tareKg: 33.1,  waterCapacityKg: 108.4, safeFillKg: safeFillFromWaterCapacity(108.4) },
+  { id: '239lb-h',  label: '239 lb DOT (heavy shell)',   tareKg: 51.3,  waterCapacityKg: 108.4, safeFillKg: safeFillFromWaterCapacity(108.4) },
+  { id: '1000lb-l', label: '1,000 lb DOT (light shell)', tareKg: 130.2, waterCapacityKg: 450,   safeFillKg: safeFillFromWaterCapacity(450)   },
+  { id: '1000lb-h', label: '1,000 lb DOT (heavy shell)', tareKg: 213.6, waterCapacityKg: 450,   safeFillKg: safeFillFromWaterCapacity(450)   },
 ]
 
 export function statusLabel(s: BottleStatus): string {
