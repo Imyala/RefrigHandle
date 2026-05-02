@@ -1040,6 +1040,7 @@ function BottleForm({
   const [capacityWeight, setCapacityWeight] = useState(
     initialDisplay(bottle?.initialNetWeight ?? 0),
   )
+  const [appliedPresetId, setAppliedPresetId] = useState('')
 
   const key = bottle?.id ?? 'new'
   const [lastKey, setLastKey] = useState(key)
@@ -1054,6 +1055,7 @@ function BottleForm({
     setNotes(bottle?.notes ?? '')
     setManualCapacity(initialCapacityFromBottle(bottle))
     setCapacityWeight(initialDisplay(bottle?.initialNetWeight ?? 0))
+    setAppliedPresetId('')
   }
 
   function submit(e: React.FormEvent) {
@@ -1081,6 +1083,7 @@ function BottleForm({
     setTareWeight(kgToDisplay(preset.tareKg, unit).toFixed(2))
     setManualCapacity(true)
     setCapacityWeight(kgToDisplay(preset.safeFillKg, unit).toFixed(2))
+    setAppliedPresetId(preset.id)
   }
 
   return (
@@ -1090,7 +1093,10 @@ function BottleForm({
           label="Cylinder preset"
           hint="Optional — tap to apply a standard size's tare and safe-fill capacity. Star presets you use often, or add your own."
         >
-          <CylinderPresetSelect onApply={applyPreset} />
+          <CylinderPresetSelect
+            value={appliedPresetId}
+            onApply={applyPreset}
+          />
         </Field>
 
         <Field label="Bottle ID / number" hint="Label or serial of the bottle">
@@ -1116,7 +1122,10 @@ function BottleForm({
               inputMode="decimal"
               step="0.01"
               value={tareWeight}
-              onChange={(e) => setTareWeight(e.target.value)}
+              onChange={(e) => {
+                setTareWeight(e.target.value)
+                setAppliedPresetId('')
+              }}
               placeholder="e.g. 5.20"
             />
           </Field>
@@ -1180,7 +1189,10 @@ function BottleForm({
               inputMode="decimal"
               step="0.01"
               value={capacityWeight}
-              onChange={(e) => setCapacityWeight(e.target.value)}
+              onChange={(e) => {
+                setCapacityWeight(e.target.value)
+                setAppliedPresetId('')
+              }}
               placeholder={`e.g. ${unit === 'kg' ? '11.10' : '24.47'}`}
             />
           </Field>

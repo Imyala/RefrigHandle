@@ -8,9 +8,11 @@ const triggerStyle =
   'flex w-full items-center justify-between rounded-xl border border-slate-300 bg-white px-3 py-3 text-base text-left text-slate-900 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/30 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100'
 
 export function CylinderPresetSelect({
+  value,
   onApply,
   placeholder = 'Pick a cylinder type',
 }: {
+  value?: string
   onApply: (preset: BottlePreset) => void
   placeholder?: string
 }) {
@@ -41,6 +43,13 @@ export function CylinderPresetSelect({
     return [...favs, ...rest]
   }, [allPresets, favorites])
 
+  const selectedPreset = value
+    ? allPresets.find((p) => p.id === value)
+    : undefined
+  const triggerText = selectedPreset
+    ? presetLabel(selectedPreset, unit)
+    : placeholder
+
   return (
     <>
       <button
@@ -49,7 +58,9 @@ export function CylinderPresetSelect({
         className={triggerStyle}
         aria-haspopup="dialog"
       >
-        <span className="text-slate-500">{placeholder}</span>
+        <span className={selectedPreset ? '' : 'text-slate-500'}>
+          {triggerText}
+        </span>
         <span aria-hidden className="text-slate-400">
           ▾
         </span>
@@ -65,9 +76,15 @@ export function CylinderPresetSelect({
             {sortedPresets.map((p) => {
               const starred = favorites.includes(p.id)
               const isCustom = p.custom === true
+              const isSelected = value === p.id
               const display = presetLabel(p, unit)
               return (
-                <div key={p.id} className="flex items-stretch">
+                <div
+                  key={p.id}
+                  className={`flex items-stretch ${
+                    isSelected ? 'bg-brand-50 dark:bg-brand-900/30' : ''
+                  }`}
+                >
                   <button
                     type="button"
                     onClick={() => toggleFavoriteBottlePreset(p.id)}
@@ -92,6 +109,11 @@ export function CylinderPresetSelect({
                   >
                     <div className="font-medium text-slate-900 dark:text-slate-100">
                       {display}
+                      {isSelected && (
+                        <span className="ml-2 text-xs font-normal text-brand-600 dark:text-brand-400">
+                          applied
+                        </span>
+                      )}
                     </div>
                     <div className="text-xs text-slate-500">
                       Tare {formatWeight(p.tareKg, unit)} · Safe fill{' '}
