@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Button, Field, Modal, TextInput } from './ui'
 import { useStore } from '../lib/store'
-import { BOTTLE_PRESETS, type BottlePreset } from '../lib/types'
+import { BOTTLE_PRESETS, presetLabel, type BottlePreset } from '../lib/types'
 import { displayToKg, formatWeight, kgToDisplay } from '../lib/units'
 
 const triggerStyle =
@@ -65,6 +65,7 @@ export function CylinderPresetSelect({
             {sortedPresets.map((p) => {
               const starred = favorites.includes(p.id)
               const isCustom = p.custom === true
+              const display = presetLabel(p, unit)
               return (
                 <div key={p.id} className="flex items-stretch">
                   <button
@@ -76,7 +77,7 @@ export function CylinderPresetSelect({
                         : 'text-slate-400 hover:text-amber-500 dark:text-slate-500'
                     }`}
                     aria-label={
-                      starred ? `Unfavourite ${p.label}` : `Favourite ${p.label}`
+                      starred ? `Unfavourite ${display}` : `Favourite ${display}`
                     }
                   >
                     {starred ? '★' : '☆'}
@@ -90,7 +91,7 @@ export function CylinderPresetSelect({
                     className="flex-1 px-3 py-3 text-left hover:bg-slate-100 dark:hover:bg-slate-800"
                   >
                     <div className="font-medium text-slate-900 dark:text-slate-100">
-                      {p.label}
+                      {display}
                     </div>
                     <div className="text-xs text-slate-500">
                       Tare {formatWeight(p.tareKg, unit)} · Safe fill{' '}
@@ -103,14 +104,14 @@ export function CylinderPresetSelect({
                       onClick={() => {
                         if (
                           confirm(
-                            `Remove "${p.label}" from your custom cylinders?`,
+                            `Remove "${display}" from your custom cylinders?`,
                           )
                         ) {
                           removeCustomBottlePreset(p.id)
                         }
                       }}
                       className="shrink-0 px-3 text-sm text-slate-400 hover:bg-slate-100 hover:text-red-600 dark:hover:bg-slate-800"
-                      aria-label={`Delete ${p.label}`}
+                      aria-label={`Delete ${display}`}
                       title="Delete custom preset"
                     >
                       ✕
