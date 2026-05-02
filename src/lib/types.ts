@@ -189,6 +189,8 @@ export interface Transaction {
 
 export type WeightUnit = 'kg' | 'lb'
 
+export type Theme = 'system' | 'light' | 'dark'
+
 export interface SyncSettings {
   enabled: boolean
   teamId: string
@@ -203,6 +205,7 @@ export interface AppState {
   favoriteRefrigerants: string[]
   technician: string
   unit: WeightUnit
+  theme: Theme
   sync: SyncSettings
 }
 
@@ -215,6 +218,7 @@ export const EMPTY_STATE: AppState = {
   favoriteRefrigerants: [],
   technician: '',
   unit: 'kg',
+  theme: 'system',
   sync: { enabled: false, teamId: '' },
 }
 

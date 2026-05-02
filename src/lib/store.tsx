@@ -13,6 +13,7 @@ import {
   type Bottle,
   type Site,
   type SyncSettings,
+  type Theme,
   type Transaction,
   type Unit,
   type WeightUnit,
@@ -49,6 +50,7 @@ interface StoreApi {
   // settings
   setTechnician: (name: string) => void
   setUnit: (u: WeightUnit) => void
+  setTheme: (t: Theme) => void
   setSyncSettings: (s: SyncSettings) => void
   addCustomRefrigerant: (name: string) => void
   removeCustomRefrigerant: (name: string) => void
@@ -325,6 +327,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     [],
   )
 
+  const setTheme = useCallback(
+    (theme: Theme) => setState((s) => ({ ...s, theme })),
+    [],
+  )
+
   const setSyncSettings = useCallback(
     (sync: SyncSettings) => setState((s) => ({ ...s, sync })),
     [],
@@ -372,6 +379,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         favoriteRefrigerants: [],
         technician: '',
         unit: s.unit,
+        theme: s.theme,
         sync: s.sync,
       }))
     }
@@ -397,6 +405,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       deleteTransaction,
       setTechnician,
       setUnit,
+      setTheme,
       setSyncSettings,
       addCustomRefrigerant,
       removeCustomRefrigerant,
@@ -421,6 +430,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       deleteTransaction,
       setTechnician,
       setUnit,
+      setTheme,
       setSyncSettings,
       addCustomRefrigerant,
       removeCustomRefrigerant,

@@ -8,7 +8,12 @@ import {
   TextInput,
 } from '../components/ui'
 import { useStore } from '../lib/store'
-import { REFRIGERANT_TYPES, transactionLoss, type WeightUnit } from '../lib/types'
+import {
+  REFRIGERANT_TYPES,
+  transactionLoss,
+  type Theme,
+  type WeightUnit,
+} from '../lib/types'
 import { useToast } from '../lib/toast'
 import { isSyncConfigured } from '../lib/sync'
 
@@ -17,6 +22,7 @@ export default function Settings() {
     state,
     setTechnician,
     setUnit,
+    setTheme,
     setSyncSettings,
     addCustomRefrigerant,
     removeCustomRefrigerant,
@@ -159,6 +165,35 @@ export default function Settings() {
             >
               Save
             </Button>
+          </div>
+        </Field>
+      </Card>
+
+      <Card>
+        <Field
+          label="Theme"
+          hint="Dark mode is easier on the eyes in plant rooms and basements"
+        >
+          <div className="grid grid-cols-3 gap-2">
+            {(['light', 'dark', 'system'] as Theme[]).map((t) => (
+              <button
+                key={t}
+                type="button"
+                onClick={() => {
+                  setTheme(t)
+                  toast.show(
+                    t === 'system' ? 'Following system theme' : `${t[0].toUpperCase()}${t.slice(1)} mode`,
+                  )
+                }}
+                className={`rounded-xl px-3 py-3 text-sm font-medium capitalize transition ${
+                  state.theme === t
+                    ? 'bg-brand-600 text-white'
+                    : 'bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-200'
+                }`}
+              >
+                {t}
+              </button>
+            ))}
           </div>
         </Field>
       </Card>

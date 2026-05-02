@@ -23,7 +23,7 @@ interface LegacyTransaction
 interface LegacyState
   extends Omit<
     AppState,
-    'bottles' | 'transactions' | 'sites' | 'units' | 'unit' | 'sync'
+    'bottles' | 'transactions' | 'sites' | 'units' | 'unit' | 'sync' | 'theme'
   > {
   bottles?: LegacyBottle[]
   transactions?: LegacyTransaction[]
@@ -32,6 +32,7 @@ interface LegacyState
   locations?: Site[]
   units?: AppState['units']
   unit?: string
+  theme?: string
   sync?: Partial<AppState['sync']>
 }
 
@@ -79,6 +80,10 @@ export function loadState(): AppState {
       favoriteRefrigerants: parsed.favoriteRefrigerants ?? [],
       technician: parsed.technician ?? '',
       unit: parsed.unit === 'lb' ? 'lb' : 'kg',
+      theme:
+        parsed.theme === 'light' || parsed.theme === 'dark'
+          ? parsed.theme
+          : 'system',
       sync: {
         enabled: parsed.sync?.enabled ?? false,
         teamId: parsed.sync?.teamId ?? '',

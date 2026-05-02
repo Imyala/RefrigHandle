@@ -2,6 +2,7 @@ import { HashRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { Layout } from './components/Layout'
 import { StoreProvider } from './lib/store'
 import { ToastProvider } from './lib/toast'
+import { ThemeApplier } from './lib/theme'
 import Dashboard from './pages/Dashboard'
 import Bottles from './pages/Bottles'
 import Sites from './pages/Sites'
@@ -11,6 +12,7 @@ import Settings from './pages/Settings'
 export default function App() {
   return (
     <StoreProvider>
+      <ThemeApplier />
       <ToastProvider>
         <HashRouter>
           <Routes>
