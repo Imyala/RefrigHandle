@@ -912,8 +912,16 @@ function BottleQuickAdd({
     setLastOpen(false)
   }
 
+  const tareKgPreview = displayToKg(parseFloat(tare) || 0, displayUnit)
+  const grossKgPreview = displayToKg(parseFloat(gross) || 0, displayUnit)
+  const tareExceedsGross =
+    tareKgPreview > 0 &&
+    grossKgPreview > 0 &&
+    tareKgPreview > grossKgPreview + 0.01
+
   function submit(e: React.FormEvent) {
     e.preventDefault()
+    if (tareExceedsGross) return
     const tareKg = displayToKg(parseFloat(tare) || 0, displayUnit)
     const grossKg = displayToKg(parseFloat(gross) || 0, displayUnit)
     onCreate({
@@ -966,11 +974,17 @@ function BottleQuickAdd({
             />
           </Field>
         </div>
+        {tareExceedsGross && (
+          <div className="rounded-xl bg-red-50 p-3 text-sm text-red-900 dark:bg-red-900/20 dark:text-red-100">
+            ⛔ Tare can't be more than gross — gross is the total bottle
+            weight (tare + refrigerant).
+          </div>
+        )}
         <p className="text-xs text-slate-500">
           For full details (notes, status, current site) edit the bottle from the Bottles tab after saving.
         </p>
-        <Button type="submit" full>
-          Add bottle
+        <Button type="submit" full disabled={tareExceedsGross}>
+          {tareExceedsGross ? 'Tare exceeds gross' : 'Add bottle'}
         </Button>
       </form>
     </Modal>
@@ -1082,6 +1096,12 @@ function BottleForm({
     displayToKg(parseFloat(grossWeight) || 0, unit) -
     displayToKg(parseFloat(tareWeight) || 0, unit)
   const liveNet = Math.max(0, liveNetKgRaw)
+  const tareKgEntered = displayToKg(parseFloat(tareWeight) || 0, unit)
+  const grossKgEntered = displayToKg(parseFloat(grossWeight) || 0, unit)
+  // Gross is the total bottle weight (tare + refrigerant) — it can never
+  // be less than tare. Show an inline error and block save.
+  const tareExceedsGross =
+    tareKgEntered > 0 && grossKgEntered > 0 && tareKgEntered > grossKgEntered + 0.01
 
   const [capacityWeight, setCapacityWeight] = useState(
     initialDisplay(bottle?.initialNetWeight ?? 0),
@@ -1120,6 +1140,7 @@ function BottleForm({
 
   function submit(e: React.FormEvent) {
     e.preventDefault()
+    if (tareExceedsGross) return
     const tare = displayToKg(parseFloat(tareWeight) || 0, unit)
     const gross = displayToKg(parseFloat(grossWeight) || 0, unit)
     const currentNet = Math.max(0, gross - tare)
@@ -1209,7 +1230,16 @@ function BottleForm({
           </Field>
         </div>
 
-        {liveNet > 0 && (() => {
+        {tareExceedsGross && (
+          <div className="rounded-xl bg-red-50 p-3 text-sm text-red-900 dark:bg-red-900/20 dark:text-red-100">
+            ⛔ Tare ({formatWeight(tareKgEntered, unit)}) is greater than gross
+            ({formatWeight(grossKgEntered, unit)}). Gross is the total bottle
+            weight (tare + refrigerant), so it can't be less than tare. Check
+            both readings.
+          </div>
+        )}
+
+        {!tareExceedsGross && liveNet > 0 && (() => {
           const capacityKg = displayToKg(parseFloat(capacityWeight) || 0, unit)
           const over = capacityKg > 0 ? overfillKg(liveNet, capacityKg) : 0
           return (
@@ -1284,8 +1314,8 @@ function BottleForm({
         </Field>
 
         <div className="flex gap-2 pt-2">
-          <Button type="submit" full>
-            Save
+          <Button type="submit" full disabled={tareExceedsGross}>
+            {tareExceedsGross ? 'Tare exceeds gross' : 'Save'}
           </Button>
           {onDelete && (
             <Button type="button" variant="danger" onClick={onDelete}>
