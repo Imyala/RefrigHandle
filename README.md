@@ -7,7 +7,7 @@ Android phones/tablets, and any desktop browser from a single codebase.
 ## What it tracks
 
 - **Bottles** — ID/serial, refrigerant type (R410A, R22, R32, R134A, R407C, R404A,
-  R290, R600A, R1234YF, R454B, R513A, plus your own custom types), tare weight,
+  R290, R600A, R1234YF, R454B, R513A), tare weight,
   current gross weight, status (in stock / on site / returned / empty)
 - **Sites / locations** — clients, addresses, which bottles are deployed there
 - **Transactions** — charge into equipment, recover from equipment, transfer
