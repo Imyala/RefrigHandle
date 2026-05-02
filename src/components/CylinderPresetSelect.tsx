@@ -1,7 +1,14 @@
 import { useMemo, useState } from 'react'
 import { Button, Field, Modal, TextInput } from './ui'
 import { useStore } from '../lib/store'
-import { BOTTLE_PRESETS, presetLabel, type BottlePreset } from '../lib/types'
+import {
+  BOTTLE_PRESETS,
+  FALLBACK_FR,
+  fillingRatio,
+  presetLabel,
+  safeFillKgFor,
+  type BottlePreset,
+} from '../lib/types'
 import { displayToKg, formatWeight, kgToDisplay } from '../lib/units'
 
 const triggerStyle =
@@ -10,10 +17,12 @@ const triggerStyle =
 export function CylinderPresetSelect({
   value,
   onApply,
+  refrigerantType,
   placeholder = 'Pick a cylinder type',
 }: {
   value?: string
   onApply: (preset: BottlePreset) => void
+  refrigerantType?: string
   placeholder?: string
 }) {
   const {
@@ -71,6 +80,20 @@ export function CylinderPresetSelect({
           Tap a row to apply tare and safe-fill capacity to the form. Tap the
           star to keep one at the top of the list.
         </p>
+        {refrigerantType ? (
+          <p className="mb-3 rounded-xl bg-slate-100 p-2 text-xs text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+            Safe fill below is calculated for{' '}
+            <strong>{refrigerantType}</strong> (FR{' '}
+            {fillingRatio(refrigerantType).toFixed(2)}). Always verify against
+            the FR stamped on the actual cylinder.
+          </p>
+        ) : (
+          <p className="mb-3 rounded-xl bg-amber-50 p-2 text-xs text-amber-900 dark:bg-amber-900/20 dark:text-amber-100">
+            No refrigerant selected — safe fill below uses a conservative
+            fallback (FR {FALLBACK_FR.toFixed(2)}). Pick a refrigerant first
+            for a refrigerant-specific value.
+          </p>
+        )}
         <div className="-mx-1 max-h-[60svh] overflow-y-auto">
           <div className="divide-y divide-slate-200 rounded-xl border border-slate-200 dark:divide-slate-800 dark:border-slate-800">
             {sortedPresets.map((p) => {
@@ -117,7 +140,12 @@ export function CylinderPresetSelect({
                     </div>
                     <div className="text-xs text-slate-500">
                       Tare {formatWeight(p.tareKg, unit)} · Safe fill{' '}
-                      {formatWeight(p.safeFillKg, unit)}
+                      {formatWeight(
+                        p.waterCapacityKg
+                          ? safeFillKgFor(p.waterCapacityKg, refrigerantType)
+                          : p.safeFillKg,
+                        unit,
+                      )}
                     </div>
                   </button>
                   {isCustom && (

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   Button,
   Card,
@@ -18,10 +18,12 @@ import {
   type TransactionKind,
   type TransactionReason,
   type Unit,
+  BOTTLE_PRESETS,
   REFRIGERANT_TYPES,
   REASON_LABELS,
   netWeight,
   overfillKg,
+  safeFillKgFor,
   sortRefrigerants,
   statusLabel,
   transactionLabel,
@@ -1051,6 +1053,21 @@ function BottleForm({
   )
   const [appliedPresetId, setAppliedPresetId] = useState('')
 
+  // When the refrigerant changes AND a preset is applied, recompute safe
+  // fill from the preset's water capacity × FR for the new refrigerant.
+  // No-op if the user has manually edited tare/capacity (which clears
+  // appliedPresetId).
+  useEffect(() => {
+    if (!appliedPresetId) return
+    const preset = [
+      ...BOTTLE_PRESETS,
+      ...state.customBottlePresets.map((p) => ({ ...p, custom: true })),
+    ].find((p) => p.id === appliedPresetId)
+    if (!preset?.waterCapacityKg) return
+    const newSafe = safeFillKgFor(preset.waterCapacityKg, refrigerantType)
+    setCapacityWeight(kgToDisplay(newSafe, unit).toFixed(2))
+  }, [refrigerantType, appliedPresetId, state.customBottlePresets, unit])
+
   const key = bottle?.id ?? 'new'
   const [lastKey, setLastKey] = useState(key)
   if (open && lastKey !== key) {
@@ -1091,7 +1108,13 @@ function BottleForm({
   function applyPreset(preset: BottlePreset) {
     setTareWeight(kgToDisplay(preset.tareKg, unit).toFixed(2))
     setManualCapacity(true)
-    setCapacityWeight(kgToDisplay(preset.safeFillKg, unit).toFixed(2))
+    // Use the refrigerant-specific filling ratio when the preset has a
+    // water capacity. Custom presets without a WC fall back to the
+    // user-entered safeFillKg.
+    const safeFill = preset.waterCapacityKg
+      ? safeFillKgFor(preset.waterCapacityKg, refrigerantType)
+      : preset.safeFillKg
+    setCapacityWeight(kgToDisplay(safeFill, unit).toFixed(2))
     setAppliedPresetId(preset.id)
   }
 
@@ -1105,6 +1128,7 @@ function BottleForm({
           <CylinderPresetSelect
             value={appliedPresetId}
             onApply={applyPreset}
+            refrigerantType={refrigerantType}
           />
         </Field>
 

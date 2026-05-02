@@ -298,6 +298,73 @@ export function presetLabel(p: BottlePreset, unit: WeightUnit): string {
   return p.label
 }
 
+// Filling ratios per refrigerant (kg of refrigerant per L of water capacity).
+// Source: US DOT/CFR 49 173.304a Table 4 — values are nominally aligned with
+// AS 2030.5 (Australia) but should always be verified against the actual
+// cylinder's stamped FR for the refrigerant being recovered.
+//
+// max safe fill (kg) = water capacity (L) × FR
+export const REFRIGERANT_FR: Record<string, number> = {
+  // Common HVAC HFC
+  R32: 0.78,
+  R134A: 1.04,
+  R404A: 0.82,
+  R407A: 0.94,
+  R407C: 0.94,
+  R407F: 0.95,
+  R410A: 0.94,
+  // R404A / R134a replacements (lower-GWP HFC blends)
+  R448A: 0.94,
+  R449A: 0.94,
+  R450A: 1.04,
+  R452A: 0.86,
+  R452B: 0.91,
+  R454B: 0.86,
+  R455A: 0.78,
+  R466A: 0.94,
+  // Refrigeration / low-temp
+  R507A: 0.86,
+  R508B: 1.04,
+  // Legacy CFC / HCFC
+  R12: 1.10,
+  R22: 1.04,
+  R23: 1.06,
+  R401A: 1.06,
+  R402A: 0.95,
+  R408A: 0.96,
+  R409A: 1.05,
+  R502: 1.04,
+  // Hydrocarbons (flammable — much lower fill density)
+  R290: 0.43,
+  R600: 0.42,
+  R600A: 0.42,
+  R1270: 0.43,
+  // HFO
+  R1234YF: 1.04,
+  R1234ZE: 1.04,
+  R1233ZD: 1.20,
+  // Naturals
+  R744: 0.68, // CO2 (high-pressure)
+  R717: 0.53, // ammonia
+}
+
+// Conservative fallback when a refrigerant has no FR entry (custom blend,
+// unknown refrigerant) — assumes water density. Picks 0.80 to match the
+// generic "80 % of water capacity" rule of thumb used in older guidance.
+export const FALLBACK_FR = 0.8
+
+export function fillingRatio(refrigerant?: string): number {
+  if (!refrigerant) return FALLBACK_FR
+  return REFRIGERANT_FR[refrigerant.toUpperCase()] ?? FALLBACK_FR
+}
+
+export function safeFillKgFor(
+  waterCapacityKg: number,
+  refrigerant?: string,
+): number {
+  return Math.round(waterCapacityKg * fillingRatio(refrigerant) * 100) / 100
+}
+
 export function statusLabel(s: BottleStatus): string {
   switch (s) {
     case 'in_stock':
