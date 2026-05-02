@@ -51,7 +51,14 @@ export default function Bottles() {
   const [query, setQuery] = useState('')
 
   // Action sheet — primary tap target
-  const [sheetBottle, setSheetBottle] = useState<Bottle | null>(null)
+  // Track by id so the action sheet always reflects the latest bottle state
+  // from the store (no stale snapshot after a charge updates the bottle).
+  const [sheetBottleId, setSheetBottleId] = useState<string | null>(null)
+  const sheetBottle = useMemo(
+    () =>
+      sheetBottleId ? bottles.find((b) => b.id === sheetBottleId) ?? null : null,
+    [bottles, sheetBottleId],
+  )
   const [logKind, setLogKind] = useState<TransactionKind | null>(null)
 
   const allTypes = useMemo(
@@ -146,7 +153,7 @@ export default function Bottles() {
               <Card key={b.id} className="!p-3">
                 <button
                   className="flex w-full items-start justify-between gap-3 text-left"
-                  onClick={() => setSheetBottle(b)}
+                  onClick={() => setSheetBottleId(b.id)}
                 >
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
@@ -199,12 +206,12 @@ export default function Bottles() {
 
       <BottleActionSheet
         bottle={sheetBottle}
-        onClose={() => setSheetBottle(null)}
+        onClose={() => setSheetBottleId(null)}
         onLog={(kind) => setLogKind(kind)}
         onEdit={() => {
           if (sheetBottle) {
             setEditing(sheetBottle)
-            setSheetBottle(null)
+            setSheetBottleId(null)
           }
         }}
       />
@@ -221,7 +228,7 @@ export default function Bottles() {
               `${transactionLabel(data.kind)} logged: ${data.amount > 0 ? `${data.amount.toFixed(2)} kg` : 'OK'}`,
             )
             setLogKind(null)
-            setSheetBottle(null)
+            setSheetBottleId(null)
           }
         }}
       />
@@ -665,7 +672,9 @@ function QuickLogModal({
                 New bottle net: <strong>{formatWeight(projectedNet, unit)}</strong>
                 {projectedAfter < bottle.tareWeight && (
                   <span className="ml-2 text-red-600 dark:text-red-300">
-                    goes below tare
+                    {kind === 'charge'
+                      ? 'more than this bottle currently has'
+                      : 'goes below tare'}
                   </span>
                 )}
                 {overDest > 0 && (
@@ -686,7 +695,7 @@ function QuickLogModal({
                     <strong>{formatWeight(projectedSourceNet, unit)}</strong>
                     {projectedSourceAfter < sourceBottle.tareWeight && (
                       <span className="ml-2 text-red-600 dark:text-red-300">
-                        source goes below tare
+                        more than the source bottle has
                       </span>
                     )}
                   </div>
