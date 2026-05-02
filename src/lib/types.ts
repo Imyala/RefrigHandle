@@ -276,20 +276,19 @@ export interface BottlePreset {
   labelKg?: string
   labelLb?: string
   tareKg: number
-  safeFillKg: number
+  // Water capacity (L). Drives refrigerant-aware safe fill (WC × FR).
+  // Required for custom presets going forward.
   waterCapacityKg?: number
+  // Optional pre-baked safe fill (legacy / custom-without-WC). When
+  // waterCapacityKg is set, the picker uses WC × FR instead.
+  safeFillKg?: number
   custom?: boolean
 }
 
-export const BOTTLE_PRESETS: BottlePreset[] = [
-  { id: '30lb',     label: '30 lb cylinder',                 labelKg: '11.9 kg cylinder',              labelLb: '30 lb cylinder',                  tareKg: 7.6,   waterCapacityKg: 11.9,  safeFillKg: safeFillFromWaterCapacity(11.9)  },
-  { id: '50lb',     label: '50 lb cylinder',                 labelKg: '21.6 kg cylinder',              labelLb: '50 lb cylinder',                  tareKg: 13.3,  waterCapacityKg: 21.6,  safeFillKg: safeFillFromWaterCapacity(21.6)  },
-  { id: '123lb',    label: '123 lb cylinder',                labelKg: '55.8 kg cylinder',              labelLb: '123 lb cylinder',                 tareKg: 26.3,  waterCapacityKg: 55.8,  safeFillKg: safeFillFromWaterCapacity(55.8)  },
-  { id: '239lb-l',  label: '239 lb cylinder (light shell)',  labelKg: '108.4 kg cylinder (light shell)', labelLb: '239 lb cylinder (light shell)', tareKg: 33.1,  waterCapacityKg: 108.4, safeFillKg: safeFillFromWaterCapacity(108.4) },
-  { id: '239lb-h',  label: '239 lb cylinder (heavy shell)',  labelKg: '108.4 kg cylinder (heavy shell)', labelLb: '239 lb cylinder (heavy shell)', tareKg: 51.3,  waterCapacityKg: 108.4, safeFillKg: safeFillFromWaterCapacity(108.4) },
-  { id: '1000lb-l', label: '1,000 lb cylinder (light shell)',labelKg: '450 kg cylinder (light shell)',   labelLb: '1,000 lb cylinder (light shell)', tareKg: 130.2, waterCapacityKg: 450,   safeFillKg: safeFillFromWaterCapacity(450)   },
-  { id: '1000lb-h', label: '1,000 lb cylinder (heavy shell)',labelKg: '450 kg cylinder (heavy shell)',   labelLb: '1,000 lb cylinder (heavy shell)', tareKg: 213.6, waterCapacityKg: 450,   safeFillKg: safeFillFromWaterCapacity(450)   },
-]
+// No built-in presets. Each tech adds the cylinders they actually use,
+// from which the picker is built. Tare comes from the cylinder stamp;
+// water capacity drives the refrigerant-aware safe fill (WC × FR).
+export const BOTTLE_PRESETS: BottlePreset[] = []
 
 export function presetLabel(p: BottlePreset, unit: WeightUnit): string {
   if (p.custom) return p.label

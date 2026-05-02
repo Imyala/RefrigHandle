@@ -94,9 +94,16 @@ export function CylinderPresetSelect({
             for a refrigerant-specific value.
           </p>
         )}
-        <div className="-mx-1 max-h-[60svh] overflow-y-auto">
-          <div className="divide-y divide-slate-200 rounded-xl border border-slate-200 dark:divide-slate-800 dark:border-slate-800">
-            {sortedPresets.map((p) => {
+        {sortedPresets.length === 0 ? (
+          <div className="rounded-xl border border-dashed border-slate-300 p-4 text-center text-sm text-slate-500 dark:border-slate-700">
+            No saved cylinders yet. Tap{' '}
+            <strong>Add custom cylinder</strong> below to save one — its tare
+            and water capacity will be remembered for next time.
+          </div>
+        ) : (
+          <div className="-mx-1 max-h-[60svh] overflow-y-auto">
+            <div className="divide-y divide-slate-200 rounded-xl border border-slate-200 dark:divide-slate-800 dark:border-slate-800">
+              {sortedPresets.map((p) => {
               const starred = favorites.includes(p.id)
               const isCustom = p.custom === true
               const isSelected = value === p.id
@@ -143,8 +150,13 @@ export function CylinderPresetSelect({
                       {formatWeight(
                         p.waterCapacityKg
                           ? safeFillKgFor(p.waterCapacityKg, refrigerantType)
-                          : p.safeFillKg,
+                          : (p.safeFillKg ?? 0),
                         unit,
+                      )}
+                      {p.waterCapacityKg && (
+                        <>
+                          {' '}· WC {formatWeight(p.waterCapacityKg, unit)}
+                        </>
                       )}
                     </div>
                   </button>
@@ -169,9 +181,10 @@ export function CylinderPresetSelect({
                   )}
                 </div>
               )
-            })}
+              })}
+            </div>
           </div>
-        </div>
+        )}
 
         <div className="mt-4">
           <Button full variant="secondary" onClick={() => setAdding(true)}>
@@ -211,26 +224,37 @@ function CustomPresetForm({
   const unit = state.unit
   const [name, setName] = useState('')
   const [tare, setTare] = useState('')
-  const [safeFill, setSafeFill] = useState('')
+  const [waterCap, setWaterCap] = useState('')
 
   const [lastOpen, setLastOpen] = useState(open)
   if (open && !lastOpen) {
     setLastOpen(true)
     setName('')
     setTare('')
-    setSafeFill('')
+    setWaterCap('')
   } else if (!open && lastOpen) {
     setLastOpen(false)
   }
 
   function submit(e: React.FormEvent) {
     e.preventDefault()
+    const wcKg = displayToKg(parseFloat(waterCap) || 0, unit)
     onSave({
       label: name.trim(),
       tareKg: displayToKg(parseFloat(tare) || 0, unit),
-      safeFillKg: displayToKg(parseFloat(safeFill) || 0, unit),
+      waterCapacityKg: wcKg,
+      // Conservative fallback for the rare case the cylinder is used
+      // without a refrigerant set — refrigerant-aware fill takes over
+      // as soon as one is selected on the bottle.
+      safeFillKg: safeFillKgFor(wcKg),
     })
   }
+
+  // Live preview of the safe fill the picker will apply once this
+  // cylinder is selected on a bottle. Uses the conservative fallback
+  // here since we don't yet know which refrigerant will be in it.
+  const wcKgPreview = displayToKg(parseFloat(waterCap) || 0, unit)
+  const safePreview = wcKgPreview > 0 ? safeFillKgFor(wcKgPreview) : 0
 
   return (
     <Modal open={open} title="Custom cylinder" onClose={onClose}>
@@ -248,7 +272,10 @@ function CustomPresetForm({
           />
         </Field>
         <div className="grid grid-cols-2 gap-3">
-          <Field label={`Tare (${unit})`}>
+          <Field
+            label={`Tare (${unit})`}
+            hint="Empty cylinder weight stamped TW"
+          >
             <TextInput
               required
               type="number"
@@ -260,31 +287,28 @@ function CustomPresetForm({
             />
           </Field>
           <Field
-            label={`Safe fill (${unit})`}
-            hint="Max refrigerant load — typically 80 % of water capacity"
+            label={`Water capacity (${unit})`}
+            hint="Stamped WC. Safe fill is calculated from this × the refrigerant's filling ratio."
           >
             <TextInput
               required
               type="number"
               inputMode="decimal"
               step="0.01"
-              value={safeFill}
-              onChange={(e) => setSafeFill(e.target.value)}
-              placeholder={unit === 'kg' ? 'e.g. 9.52' : 'e.g. 21.00'}
+              value={waterCap}
+              onChange={(e) => setWaterCap(e.target.value)}
+              placeholder={unit === 'kg' ? 'e.g. 11.90' : 'e.g. 26.20'}
             />
           </Field>
         </div>
-        {tare !== '' && safeFill !== '' && (
+        {wcKgPreview > 0 && (
           <div className="rounded-xl bg-slate-100 p-3 text-xs text-slate-600 dark:bg-slate-800 dark:text-slate-400">
-            Implied gross when full:{' '}
-            {(
-              kgToDisplay(
-                displayToKg(parseFloat(tare) || 0, unit) +
-                  displayToKg(parseFloat(safeFill) || 0, unit),
-                unit,
-              )
-            ).toFixed(2)}{' '}
-            {unit}
+            Safe fill at fallback FR (0.80, no refrigerant assumed):{' '}
+            <strong>{(kgToDisplay(safePreview, unit)).toFixed(2)} {unit}</strong>
+            <div className="mt-1">
+              When you apply this preset to a bottle, the safe fill recalculates
+              for that bottle's refrigerant (e.g. R-410A → ×0.94, R-32 → ×0.78).
+            </div>
           </div>
         )}
         <Button type="submit" full>

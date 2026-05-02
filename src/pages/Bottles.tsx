@@ -1133,7 +1133,7 @@ function BottleForm({
     // user-entered safeFillKg.
     const safeFill = preset.waterCapacityKg
       ? safeFillKgFor(preset.waterCapacityKg, refrigerantType)
-      : preset.safeFillKg
+      : (preset.safeFillKg ?? 0)
     setCapacityWeight(kgToDisplay(safeFill, unit).toFixed(2))
     setAppliedPresetId(preset.id)
   }
