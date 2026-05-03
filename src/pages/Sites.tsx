@@ -544,7 +544,7 @@ function DecommissionedUnitCard({
   )
 }
 
-function SiteForm({
+export function SiteForm({
   open,
   title,
   site,
@@ -614,7 +614,7 @@ function SiteForm({
   )
 }
 
-function UnitForm({
+export function UnitForm({
   open,
   siteId,
   title,

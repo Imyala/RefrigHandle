@@ -22,6 +22,7 @@ import {
 } from '../lib/types'
 import { useToast } from '../lib/toast'
 import { displayToKg, formatWeight, kgToDisplay } from '../lib/units'
+import { SiteForm, UnitForm } from './Sites'
 
 const kindTone: Record<
   TransactionKind,
@@ -226,7 +227,7 @@ function TransactionForm({
     notes?: string
   }) => void
 }) {
-  const { state } = useStore()
+  const { state, addSite, addUnit } = useStore()
   const { bottles, sites, technician, unit } = state
 
   const [bottleId, setBottleId] = useState(bottles[0]?.id ?? '')
@@ -241,6 +242,8 @@ function TransactionForm({
   const [equipment, setEquipment] = useState('')
   const [reason, setReason] = useState<TransactionReason | ''>('')
   const [notes, setNotes] = useState('')
+  const [addingSite, setAddingSite] = useState(false)
+  const [addingUnit, setAddingUnit] = useState(false)
 
   const siteUnits = state.units.filter(
     (u) => u.siteId === siteId && u.status === 'active',
@@ -359,36 +362,63 @@ function TransactionForm({
         {showSite && (
           <>
             <Field label="Site">
-              <Select
-                value={siteId}
-                onChange={(e) => {
-                  setSiteId(e.target.value)
-                  setUnitId('')
-                }}
-                required={kind === 'transfer'}
-              >
-                <option value="">— none —</option>
-                {sites.map((j) => (
-                  <option key={j.id} value={j.id}>
-                    {j.name}
-                  </option>
-                ))}
-              </Select>
-            </Field>
-            {(kind === 'charge' || kind === 'recover') && siteUnits.length > 0 && (
-              <Field
-                label="Unit (optional)"
-                hint="Pick the equipment this charge applies to"
-              >
-                <Select value={unitId} onChange={(e) => setUnitId(e.target.value)}>
+              <div className="flex gap-2">
+                <Select
+                  value={siteId}
+                  onChange={(e) => {
+                    setSiteId(e.target.value)
+                    setUnitId('')
+                  }}
+                  required={kind === 'transfer'}
+                  className="flex-1"
+                >
                   <option value="">— none —</option>
-                  {siteUnits.map((u) => (
-                    <option key={u.id} value={u.id}>
-                      {u.name}
-                      {u.refrigerantType ? ` (${u.refrigerantType})` : ''}
+                  {sites.map((j) => (
+                    <option key={j.id} value={j.id}>
+                      {j.name}
                     </option>
                   ))}
                 </Select>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => setAddingSite(true)}
+                >
+                  + New
+                </Button>
+              </div>
+            </Field>
+            {(kind === 'charge' || kind === 'recover') && siteId && (
+              <Field
+                label="Unit (optional)"
+                hint={
+                  siteUnits.length > 0
+                    ? 'Pick the equipment this charge applies to'
+                    : 'No units recorded at this site yet — tap + New to add one.'
+                }
+              >
+                <div className="flex gap-2">
+                  <Select
+                    value={unitId}
+                    onChange={(e) => setUnitId(e.target.value)}
+                    className="flex-1"
+                  >
+                    <option value="">— none —</option>
+                    {siteUnits.map((u) => (
+                      <option key={u.id} value={u.id}>
+                        {u.name}
+                        {u.refrigerantType ? ` (${u.refrigerantType})` : ''}
+                      </option>
+                    ))}
+                  </Select>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={() => setAddingUnit(true)}
+                  >
+                    + New
+                  </Button>
+                </div>
               </Field>
             )}
           </>
@@ -554,6 +584,32 @@ function TransactionForm({
               : 'Save'}
         </Button>
       </form>
+
+      <SiteForm
+        open={addingSite}
+        title="New site"
+        onClose={() => setAddingSite(false)}
+        onSave={(data) => {
+          const created = addSite(data)
+          setSiteId(created.id)
+          setUnitId('')
+          setAddingSite(false)
+        }}
+      />
+
+      {siteId && (
+        <UnitForm
+          open={addingUnit}
+          siteId={siteId}
+          title="New unit"
+          onClose={() => setAddingUnit(false)}
+          onSave={(data) => {
+            const created = addUnit({ ...data, siteId })
+            setUnitId(created.id)
+            setAddingUnit(false)
+          }}
+        />
+      )}
     </Modal>
   )
 }
