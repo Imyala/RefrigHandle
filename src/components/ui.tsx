@@ -95,9 +95,11 @@ export function Card({
 
 export function Pill({
   tone = 'slate',
+  title,
   children,
 }: {
   tone?: 'slate' | 'green' | 'amber' | 'red' | 'blue'
+  title?: string
   children: ReactNode
 }) {
   const tones: Record<string, string> = {
@@ -109,6 +111,7 @@ export function Pill({
   }
   return (
     <span
+      title={title}
       className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${tones[tone]}`}
     >
       {children}

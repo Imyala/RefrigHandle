@@ -15,7 +15,7 @@ interface Toast {
 }
 
 interface ToastApi {
-  show: (message: string, tone?: Toast['tone']) => void
+  show: (message: string, tone?: Toast['tone'], durationMs?: number) => void
 }
 
 const ToastContext = createContext<ToastApi | null>(null)
@@ -24,13 +24,16 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([])
   const idRef = useRef(0)
 
-  const show = useCallback<ToastApi['show']>((message, tone = 'success') => {
-    const id = ++idRef.current
-    setToasts((cur) => [...cur, { id, message, tone }])
-    setTimeout(() => {
-      setToasts((cur) => cur.filter((t) => t.id !== id))
-    }, 2500)
-  }, [])
+  const show = useCallback<ToastApi['show']>(
+    (message, tone = 'success', durationMs = 2500) => {
+      const id = ++idRef.current
+      setToasts((cur) => [...cur, { id, message, tone }])
+      setTimeout(() => {
+        setToasts((cur) => cur.filter((t) => t.id !== id))
+      }, durationMs)
+    },
+    [],
+  )
 
   return (
     <ToastContext.Provider value={{ show }}>

@@ -19,13 +19,14 @@ import {
   type Unit,
   type WeightUnit,
 } from './types'
-import { loadState, saveState, uid } from './storage'
+import { loadState, requestPersistentStorage, saveState, uid } from './storage'
 import {
   isSyncConfigured,
   pullState,
   pushState,
   subscribeToState,
 } from './sync'
+import { useToast } from './toast'
 
 interface StoreApi {
   state: AppState
@@ -50,6 +51,9 @@ interface StoreApi {
   deleteTransaction: (id: string) => void
   // settings
   setTechnician: (name: string) => void
+  setArcLicenceNumber: (n: string) => void
+  setArcAuthorisationNumber: (n: string) => void
+  setBusinessName: (n: string) => void
   setUnit: (u: WeightUnit) => void
   setTheme: (t: Theme) => void
   setSyncSettings: (s: SyncSettings) => void
@@ -69,11 +73,52 @@ interface StoreApi {
 const StoreContext = createContext<StoreApi | null>(null)
 
 export function StoreProvider({ children }: { children: ReactNode }) {
-  const [state, setState] = useState<AppState>(() => loadState())
+  const toast = useToast()
+  // Run loadState exactly once per provider mount. The lazy useState
+  // initializer is the React-blessed place to do this work; we capture
+  // the corruption flag on the side via useState rather than a ref so
+  // we never read a ref during render.
+  const [{ state: initialState, status: initialStatus }] = useState(loadState)
+  const [state, setState] = useState<AppState>(initialState)
 
+  // One-time: surface a corrupted-load to the user, request persistent
+  // storage. Both happen exactly once per app load.
   useEffect(() => {
-    saveState(state)
-  }, [state])
+    if (initialStatus === 'corrupted') {
+      toast.show(
+        'Saved data could not be read. The damaged copy is preserved — see Settings → Storage health to recover.',
+        'error',
+        12000,
+      )
+    }
+    void requestPersistentStorage()
+    // intentionally only on mount
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Quota-error toasts get throttled — one per minute is enough for a
+  // tech who's mid-form. We don't want to spam them on every keystroke.
+  const lastQuotaToastRef = useRef(0)
+  useEffect(() => {
+    const result = saveState(state)
+    if (result.ok) return
+    const now = Date.now()
+    if (now - lastQuotaToastRef.current < 60_000) return
+    lastQuotaToastRef.current = now
+    if (result.reason === 'quota') {
+      toast.show(
+        'Device storage is full — recent changes are not saved. Export a backup from Settings and free up space.',
+        'error',
+        12000,
+      )
+    } else {
+      toast.show(
+        'Could not save changes to this device — they are only in memory.',
+        'error',
+        12000,
+      )
+    }
+  }, [state, toast])
 
   const lastPushedRef = useRef<string>('')
   const remoteApplyRef = useRef(false)
@@ -267,6 +312,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         weightAfter: after,
         sourceWeightBefore: sourceBefore,
         sourceWeightAfter: sourceAfter,
+        // Stamp the ARC RHL in force at the time of the work, so the
+        // historical logbook is correct even if the licence number
+        // later changes in Settings.
+        technicianLicence:
+          t.technicianLicence ?? (s.arcLicenceNumber || undefined),
       }
       result = tx
 
@@ -325,6 +375,21 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const setTechnician = useCallback(
     (name: string) => setState((s) => ({ ...s, technician: name })),
+    [],
+  )
+
+  const setArcLicenceNumber = useCallback(
+    (n: string) => setState((s) => ({ ...s, arcLicenceNumber: n.trim() })),
+    [],
+  )
+
+  const setArcAuthorisationNumber = useCallback(
+    (n: string) => setState((s) => ({ ...s, arcAuthorisationNumber: n.trim() })),
+    [],
+  )
+
+  const setBusinessName = useCallback(
+    (n: string) => setState((s) => ({ ...s, businessName: n.trim() })),
     [],
   )
 
@@ -415,6 +480,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         customBottlePresets: [],
         favoriteBottlePresets: [],
         technician: '',
+        // Compliance identity is per-tech / per-business, not per
+        // dataset — keep it across a "wipe data" so the user doesn't
+        // have to re-enter their ARC numbers after a factory reset.
+        arcLicenceNumber: s.arcLicenceNumber,
+        arcAuthorisationNumber: s.arcAuthorisationNumber,
+        businessName: s.businessName,
         unit: s.unit,
         theme: s.theme,
         sync: s.sync,
@@ -441,6 +512,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       addTransaction,
       deleteTransaction,
       setTechnician,
+      setArcLicenceNumber,
+      setArcAuthorisationNumber,
+      setBusinessName,
       setUnit,
       setTheme,
       setSyncSettings,
@@ -469,6 +543,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       addTransaction,
       deleteTransaction,
       setTechnician,
+      setArcLicenceNumber,
+      setArcAuthorisationNumber,
+      setBusinessName,
       setUnit,
       setTheme,
       setSyncSettings,

@@ -10,10 +10,12 @@ import Transactions from './pages/Transactions'
 import Settings from './pages/Settings'
 
 export default function App() {
+  // ToastProvider sits ABOVE StoreProvider so the store can surface
+  // save/quota/corruption errors via useToast().
   return (
-    <StoreProvider>
-      <ThemeApplier />
-      <ToastProvider>
+    <ToastProvider>
+      <StoreProvider>
+        <ThemeApplier />
         <HashRouter>
           <Routes>
             <Route element={<Layout />}>
@@ -28,7 +30,7 @@ export default function App() {
             </Route>
           </Routes>
         </HashRouter>
-      </ToastProvider>
-    </StoreProvider>
+      </StoreProvider>
+    </ToastProvider>
   )
 }
