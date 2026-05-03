@@ -21,6 +21,7 @@ import {
   BOTTLE_PRESETS,
   REFRIGERANT_TYPES,
   REASON_LABELS,
+  hydroStatusFor,
   netWeight,
   overfillKg,
   safeFillKgFor,
@@ -171,6 +172,18 @@ export default function Bottles() {
                       {over > 0 && (
                         <Pill tone="amber">Overfill +{formatWeight(over, unit)}</Pill>
                       )}
+                      {(() => {
+                        const h = hydroStatusFor(b)
+                        if (h.status === 'overdue')
+                          return <Pill tone="red">Hydro overdue</Pill>
+                        if (h.status === 'due_soon')
+                          return (
+                            <Pill tone="amber">
+                              Hydro in {h.daysUntilDue}d
+                            </Pill>
+                          )
+                        return null
+                      })()}
                     </div>
                     {site && (
                       <div className="mt-1 text-sm text-slate-500">
@@ -1113,6 +1126,8 @@ function BottleForm({
   const [status, setStatus] = useState<BottleStatus>(bottle?.status ?? 'in_stock')
   const [currentSiteId, setCurrentSiteId] = useState(bottle?.currentSiteId ?? '')
   const [notes, setNotes] = useState(bottle?.notes ?? '')
+  const [lastHydro, setLastHydro] = useState(bottle?.lastHydroTestDate ?? '')
+  const [nextHydro, setNextHydro] = useState(bottle?.nextHydroTestDate ?? '')
 
   // "Manual capacity" only matters for bottles received partially used.
   // For the common case (fresh full bottle from supplier) capacity == net.
@@ -1160,6 +1175,8 @@ function BottleForm({
     setNotes(bottle?.notes ?? '')
     setCapacityWeight(initialDisplay(bottle?.initialNetWeight ?? 0))
     setAppliedPresetId('')
+    setLastHydro(bottle?.lastHydroTestDate ?? '')
+    setNextHydro(bottle?.nextHydroTestDate ?? '')
   }
 
   function submit(e: React.FormEvent) {
@@ -1182,6 +1199,8 @@ function BottleForm({
       status,
       currentSiteId: currentSiteId || undefined,
       notes: notes.trim() || undefined,
+      lastHydroTestDate: lastHydro || undefined,
+      nextHydroTestDate: nextHydro || undefined,
     })
   }
 
@@ -1304,6 +1323,33 @@ function BottleForm({
             placeholder={`e.g. ${unit === 'kg' ? '11.10' : '24.47'}`}
           />
         </Field>
+
+        <div className="rounded-xl border border-slate-200 p-3 dark:border-slate-800">
+          <div className="mb-1 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+            Cylinder test (AS 2030)
+          </div>
+          <p className="mb-2 text-xs text-slate-500">
+            Optional — copy the dates stamped on the cylinder collar.
+            We'll warn you when the next test is within 60 days or
+            overdue, so you don't take a non-compliant cylinder to a job.
+          </p>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Last test">
+              <TextInput
+                type="date"
+                value={lastHydro}
+                onChange={(e) => setLastHydro(e.target.value)}
+              />
+            </Field>
+            <Field label="Next test due">
+              <TextInput
+                type="date"
+                value={nextHydro}
+                onChange={(e) => setNextHydro(e.target.value)}
+              />
+            </Field>
+          </div>
+        </div>
 
         <Field label="Status">
           <Select

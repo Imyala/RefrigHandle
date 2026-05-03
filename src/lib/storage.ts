@@ -33,6 +33,9 @@ interface LegacyState
     | 'theme'
     | 'customBottlePresets'
     | 'favoriteBottlePresets'
+    | 'arcLicenceNumber'
+    | 'arcAuthorisationNumber'
+    | 'businessName'
   > {
   bottles?: LegacyBottle[]
   transactions?: LegacyTransaction[]
@@ -45,6 +48,9 @@ interface LegacyState
   sync?: Partial<AppState['sync']>
   customBottlePresets?: AppState['customBottlePresets']
   favoriteBottlePresets?: AppState['favoriteBottlePresets']
+  arcLicenceNumber?: string
+  arcAuthorisationNumber?: string
+  businessName?: string
 }
 
 export type LoadStatus = 'ok' | 'empty' | 'corrupted'
@@ -97,6 +103,9 @@ function normalize(parsed: LegacyState): AppState {
     customBottlePresets: parsed.customBottlePresets ?? [],
     favoriteBottlePresets: parsed.favoriteBottlePresets ?? [],
     technician: parsed.technician ?? '',
+    arcLicenceNumber: parsed.arcLicenceNumber ?? '',
+    arcAuthorisationNumber: parsed.arcAuthorisationNumber ?? '',
+    businessName: parsed.businessName ?? '',
     unit: parsed.unit === 'lb' ? 'lb' : 'kg',
     theme:
       parsed.theme === 'light' || parsed.theme === 'dark'

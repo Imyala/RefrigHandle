@@ -56,6 +56,12 @@ export interface Bottle {
   status: BottleStatus
   currentSiteId?: string
   notes?: string
+  // AS 2030 cylinder periodic test dates (ISO YYYY-MM-DD). Recovery
+  // cylinders sold in Australia are stamped with the most recent test
+  // date; periodic re-test interval is set by the cylinder's design
+  // standard (typically 10 years for refrigerant recovery cylinders).
+  lastHydroTestDate?: string
+  nextHydroTestDate?: string
   createdAt: string
   updatedAt: string
 }
@@ -180,6 +186,10 @@ export interface Transaction {
   weightAfter: number // bottle gross weight after
   date: string // ISO date
   technician?: string
+  // ARC Refrigerant Handling Licence number stamped at the time of
+  // work — frozen so a logbook printed years later still shows the
+  // licence that was in force, not what the tech happens to hold now.
+  technicianLicence?: string
   equipment?: string // free-text fallback if no Unit is picked
   reason?: TransactionReason
   notes?: string
@@ -206,6 +216,12 @@ export interface AppState {
   customBottlePresets: BottlePreset[]
   favoriteBottlePresets: string[]
   technician: string
+  // Australian compliance identity, surfaced on logbook PDFs and
+  // auto-stamped onto each new Transaction so the historical record
+  // is preserved if the licence/RTA changes later.
+  arcLicenceNumber: string // ARC Refrigerant Handling Licence (RHL), per technician
+  arcAuthorisationNumber: string // ARC Refrigerant Trading Authorisation (RTA), per business
+  businessName: string
   unit: WeightUnit
   theme: Theme
   sync: SyncSettings
@@ -221,6 +237,9 @@ export const EMPTY_STATE: AppState = {
   customBottlePresets: [],
   favoriteBottlePresets: [],
   technician: '',
+  arcLicenceNumber: '',
+  arcAuthorisationNumber: '',
+  businessName: '',
   unit: 'kg',
   theme: 'system',
   sync: { enabled: false, teamId: '' },
@@ -401,4 +420,183 @@ export function transactionLoss(t: Transaction): number {
   if (t.kind === 'charge') return Math.max(0, t.bottleAmount - t.amount)
   if (t.kind === 'recover') return Math.max(0, t.amount - t.bottleAmount)
   return 0
+}
+
+// Global Warming Potential (100-year, AR4 — IPCC Fourth Assessment).
+// AR4 is the GWP basis used by Australia's Ozone Protection and
+// Synthetic Greenhouse Gas Management Act 1989 / Regulations 1995, the
+// EU F-Gas Regulation 517/2014, and most current product compliance
+// labelling. Update to AR5/AR6 only when the regulator does — the
+// reported tonnes-CO2-e on existing equipment changes if you don't.
+//
+// Sources cross-checked: IPCC AR4 WG1 Ch 2 Table 2.14, AIRAH DA19,
+// EU F-gas Annex I/II. R1234yf/ze use AR5 values (AR4 omitted them).
+export const REFRIGERANT_GWP: Record<string, number> = {
+  // Legacy CFC / HCFC (phase-out)
+  R12: 10900,
+  R22: 1810,
+  R23: 14800,
+  R401A: 1182,
+  R402A: 2788,
+  R408A: 3152,
+  R409A: 1909,
+  R502: 4657,
+  // HFC
+  R32: 675,
+  R134A: 1430,
+  R404A: 3922,
+  R407A: 2107,
+  R407C: 1774,
+  R407F: 1824,
+  R410A: 2088,
+  // R404A / R134a replacements (lower-GWP HFC blends)
+  R448A: 1387,
+  R449A: 1397,
+  R450A: 605,
+  R452A: 2141,
+  R452B: 698,
+  R454B: 466,
+  R455A: 148,
+  R466A: 733,
+  // Refrigeration / low-temp
+  R507A: 3985,
+  R508B: 13396,
+  // Hydrocarbons (very low GWP, flammable A3)
+  R290: 3,
+  R600: 4,
+  R600A: 3,
+  R1270: 2,
+  // HFO (sub-1 GWP, AR5-listed)
+  R1234YF: 4,
+  R1234ZE: 7,
+  R1233ZD: 1,
+  // Naturals
+  R717: 0, // ammonia
+  R744: 1, // CO2
+}
+
+// Returns the GWP for a refrigerant, or `undefined` when unknown
+// (custom blend, typo, refrigerant we haven't tabulated). Callers
+// should treat undefined as "do not display tCO2-e" — silently
+// substituting a fallback would mislead the auditor.
+export function gwpFor(refrigerant?: string): number | undefined {
+  if (!refrigerant) return undefined
+  return REFRIGERANT_GWP[refrigerant.toUpperCase()]
+}
+
+// Tonnes CO2-equivalent for a given charge in kg. Returns undefined
+// when the GWP is unknown (see gwpFor).
+export function tonnesCO2eFor(
+  kg: number,
+  refrigerant?: string,
+): number | undefined {
+  const gwp = gwpFor(refrigerant)
+  if (gwp == null) return undefined
+  return (kg * gwp) / 1000
+}
+
+// --- Leak detection ---------------------------------------------------
+//
+// Australian guidance (AIRAH DA19, AREMA/AIRAH "Code of Practice for
+// the reduction of emissions of fluorocarbon refrigerants" 2018, and
+// AS/NZS 5149.2 §5.3) does not set a fixed numeric leak-rate threshold
+// the way EU F-gas does. Instead the duty is to "investigate and
+// rectify any leak detected" and to keep records of refrigerant added.
+// Repeated top-ups against the same equipment are the recognised
+// trigger for an investigation.
+//
+// We surface two soft levels rather than a single boolean — the
+// thresholds below are conservative defaults aimed at flagging
+// equipment for the technician's attention, not at making a
+// regulatory determination.
+
+export const LEAK_WATCH_FRACTION = 0.05 // 5% of charge in trailing 12 mo
+export const LEAK_SUSPECTED_FRACTION = 0.1 // 10% of charge in trailing 12 mo
+export const LEAK_TRAILING_DAYS = 365
+
+export type LeakLevel = 'ok' | 'watch' | 'suspected' | 'unknown'
+
+export interface LeakStatus {
+  level: LeakLevel
+  topUpKg: number // sum of charges in trailing window (excluding install)
+  fraction: number // topUpKg / unit.refrigerantCharge, or 0 if no charge known
+  windowDays: number
+}
+
+// Sum of charge transactions against a unit since `sinceISO`. Excludes
+// reason='install' (commissioning charge isn't a top-up).
+export function cumulativeTopUpKg(
+  unitId: string,
+  transactions: readonly Transaction[],
+  sinceISO: string,
+): number {
+  let sum = 0
+  for (const t of transactions) {
+    if (t.unitId !== unitId) continue
+    if (t.kind !== 'charge') continue
+    if (t.reason === 'install') continue
+    if (t.date < sinceISO) continue
+    sum += t.amount
+  }
+  return sum
+}
+
+// Returns the unit's leak status against the trailing 12-month window.
+// `nowISO` defaults to "today" but is injectable for tests/print views.
+export function leakStatusFor(
+  unit: Unit,
+  transactions: readonly Transaction[],
+  nowISO: string = new Date().toISOString(),
+): LeakStatus {
+  const windowDays = LEAK_TRAILING_DAYS
+  const now = new Date(nowISO)
+  const since = new Date(now.getTime() - windowDays * 86400 * 1000)
+  const sinceISO = since.toISOString()
+  const topUp = cumulativeTopUpKg(unit.id, transactions, sinceISO)
+  const charge = unit.refrigerantCharge ?? 0
+  if (charge <= 0) {
+    return {
+      level: topUp > 0 ? 'unknown' : 'ok',
+      topUpKg: topUp,
+      fraction: 0,
+      windowDays,
+    }
+  }
+  const fraction = topUp / charge
+  const level: LeakLevel =
+    fraction >= LEAK_SUSPECTED_FRACTION
+      ? 'suspected'
+      : fraction >= LEAK_WATCH_FRACTION
+        ? 'watch'
+        : 'ok'
+  return { level, topUpKg: topUp, fraction, windowDays }
+}
+
+// --- Cylinder hydrostatic test ----------------------------------------
+//
+// AS 2030 requires recovery cylinders to be periodically pressure-
+// tested. We don't enforce a specific interval — the bottle stamp is
+// authoritative — but we surface "due soon" / "overdue" so the tech
+// doesn't take a non-compliant cylinder to a job.
+
+export const HYDRO_DUE_SOON_DAYS = 60
+
+export type HydroStatus = 'unknown' | 'ok' | 'due_soon' | 'overdue'
+
+export interface HydroState {
+  status: HydroStatus
+  daysUntilDue?: number // negative if overdue
+}
+
+export function hydroStatusFor(
+  b: Bottle,
+  nowISO: string = new Date().toISOString(),
+): HydroState {
+  if (!b.nextHydroTestDate) return { status: 'unknown' }
+  const now = new Date(nowISO)
+  const due = new Date(b.nextHydroTestDate)
+  const diffDays = Math.floor((due.getTime() - now.getTime()) / 86400000)
+  if (diffDays < 0) return { status: 'overdue', daysUntilDue: diffDays }
+  if (diffDays <= HYDRO_DUE_SOON_DAYS) return { status: 'due_soon', daysUntilDue: diffDays }
+  return { status: 'ok', daysUntilDue: diffDays }
 }

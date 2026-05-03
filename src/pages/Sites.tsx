@@ -14,8 +14,15 @@ import { useStore } from '../lib/store'
 import {
   NON_REFRIGERANT_UNIT_KINDS,
   UNIT_KIND_LABELS,
+  gwpFor,
+  leakStatusFor,
   netWeight,
+  tonnesCO2eFor,
+  transactionLabel,
+  transactionLoss,
+  type LeakStatus,
   type Site,
+  type Transaction,
   type Unit,
   type UnitKind,
 } from '../lib/types'
@@ -184,6 +191,7 @@ function SiteDetail({
   const [editUnit, setEditUnit] = useState<Unit | null>(null)
   const [decommissionTarget, setDecommissionTarget] = useState<Unit | null>(null)
   const [showDecommissioned, setShowDecommissioned] = useState(true)
+  const [logbookUnit, setLogbookUnit] = useState<Unit | null>(null)
 
   const siteId = site?.id ?? ''
   const activeUnits = useMemo(
@@ -291,6 +299,7 @@ function SiteDetail({
                     u={u}
                     onEdit={() => setEditUnit(u)}
                     onDecommission={() => setDecommissionTarget(u)}
+                    onLogbook={() => setLogbookUnit(u)}
                   />
                 ))}
               </div>
@@ -398,6 +407,12 @@ function SiteDetail({
           setDecommissionTarget(null)
         }}
       />
+
+      <UnitLogbook
+        unit={logbookUnit}
+        site={site}
+        onClose={() => setLogbookUnit(null)}
+      />
     </>
   )
 }
@@ -406,18 +421,24 @@ function UnitCard({
   u,
   onEdit,
   onDecommission,
+  onLogbook,
 }: {
   u: Unit
   onEdit: () => void
   onDecommission: () => void
+  onLogbook: () => void
 }) {
   const { state } = useStore()
+  const leak = leakStatusFor(u, state.transactions)
   return (
     <Card className="!p-3">
       <div className="flex items-start justify-between gap-3">
         <button className="min-w-0 flex-1 text-left" onClick={onEdit}>
-          <div className="font-semibold text-slate-900 dark:text-slate-100">
-            {u.name}
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="font-semibold text-slate-900 dark:text-slate-100">
+              {u.name}
+            </span>
+            <LeakPill leak={leak} />
           </div>
           <div className="text-sm text-slate-600 dark:text-slate-300">
             {u.kind ? UNIT_KIND_LABELS[u.kind] : 'Unit'}
@@ -432,16 +453,46 @@ function UnitCard({
             </div>
           )}
         </button>
-        <button
-          type="button"
-          onClick={onDecommission}
-          className="shrink-0 rounded-xl bg-amber-100 px-3 py-2 text-xs font-semibold text-amber-900 hover:bg-amber-200 dark:bg-amber-900/40 dark:text-amber-100 dark:hover:bg-amber-900/60"
-          title="Mark as decommissioned"
-        >
+      </div>
+      <div className="mt-3 flex flex-wrap gap-2">
+        <Button variant="secondary" onClick={onLogbook}>
+          Logbook
+        </Button>
+        <Button variant="secondary" onClick={onDecommission}>
           Decommission
-        </button>
+        </Button>
       </div>
     </Card>
+  )
+}
+
+function LeakPill({ leak }: { leak: LeakStatus }) {
+  if (leak.level === 'ok') return null
+  if (leak.level === 'unknown') {
+    return (
+      <Pill tone="slate" title="Charge not recorded — set the factory charge to enable leak monitoring.">
+        Leak ?
+      </Pill>
+    )
+  }
+  const pct = Math.round(leak.fraction * 100)
+  if (leak.level === 'watch') {
+    return (
+      <Pill
+        tone="amber"
+        title={`Top-ups in last 12 months: ${leak.topUpKg.toFixed(2)} kg (${pct}% of charge). Investigate per AIRAH DA19.`}
+      >
+        Leak watch · {pct}%
+      </Pill>
+    )
+  }
+  return (
+    <Pill
+      tone="red"
+      title={`Top-ups in last 12 months: ${leak.topUpKg.toFixed(2)} kg (${pct}% of charge). Repeated top-ups — investigate and rectify per AIRAH DA19 / AREMA Code of Practice 2018.`}
+    >
+      Leak suspected · {pct}%
+    </Pill>
   )
 }
 
@@ -727,6 +778,261 @@ function UnitForm({
         </Button>
       </form>
     </Modal>
+  )
+}
+
+// --- Equipment logbook (AS/NZS 5149.4 + AREMA/AIRAH 2018) -------------
+//
+// Per-unit service record. Surfaces: business + ARC RTA, technician +
+// ARC RHL stamped on each row, refrigerant + GWP + tCO2-e, leak status
+// against trailing 12 months, and the full transaction history.
+//
+// "Print / Save PDF" uses the browser print stylesheet (see index.css)
+// — no PDF library, the user gets the same dialog as printing a web
+// page and can choose "Save as PDF" or send to a real printer.
+
+function UnitLogbook({
+  unit,
+  site,
+  onClose,
+}: {
+  unit: Unit | null
+  site: Site
+  onClose: () => void
+}) {
+  const { state } = useStore()
+  if (!unit) return null
+
+  const txs = state.transactions
+    .filter((t) => t.unitId === unit.id)
+    .slice()
+    .sort((a, b) => (a.date < b.date ? 1 : -1))
+  const leak = leakStatusFor(unit, state.transactions)
+  const gwp = gwpFor(unit.refrigerantType)
+  const tCO2e = unit.refrigerantCharge
+    ? tonnesCO2eFor(unit.refrigerantCharge, unit.refrigerantType)
+    : undefined
+  const totalCharged = txs
+    .filter((t) => t.kind === 'charge')
+    .reduce((s, t) => s + t.amount, 0)
+  const totalRecovered = txs
+    .filter((t) => t.kind === 'recover')
+    .reduce((s, t) => s + t.amount, 0)
+  const totalLoss = txs.reduce((s, t) => s + transactionLoss(t), 0)
+  const generatedAt = new Date().toLocaleString('en-AU')
+
+  return (
+    <Modal open onClose={onClose} title="Equipment logbook" size="lg">
+      <div className="no-print mb-3 flex flex-wrap items-center justify-end gap-2">
+        <Button variant="secondary" onClick={() => window.print()}>
+          Print / Save PDF
+        </Button>
+      </div>
+
+      <div className="print-region space-y-4 text-sm text-slate-900 dark:text-slate-100">
+        <header className="border-b border-slate-300 pb-3 dark:border-slate-700">
+          <div className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+            Refrigerant Equipment Logbook
+          </div>
+          <div className="mt-1 text-lg font-semibold">
+            {state.businessName || 'Business name not set in Settings'}
+          </div>
+          <div className="text-xs text-slate-500">
+            {state.arcAuthorisationNumber
+              ? `ARC RTA ${state.arcAuthorisationNumber}`
+              : 'ARC RTA not set in Settings'}
+          </div>
+        </header>
+
+        <section>
+          <div className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+            Equipment
+          </div>
+          <div className="mt-1 grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
+            <Kv label="Site" v={site.name} />
+            {site.client && <Kv label="Client" v={site.client} />}
+            {site.address && <Kv label="Address" v={site.address} />}
+            <Kv label="Unit" v={unit.name} />
+            {unit.kind && <Kv label="Type" v={UNIT_KIND_LABELS[unit.kind]} />}
+            {unit.manufacturer && <Kv label="Manufacturer" v={unit.manufacturer} />}
+            {unit.model && <Kv label="Model" v={unit.model} />}
+            {unit.serial && <Kv label="Serial" v={unit.serial} />}
+            {unit.installDate && (
+              <Kv
+                label="Installed"
+                v={new Date(unit.installDate).toLocaleDateString('en-AU')}
+              />
+            )}
+          </div>
+        </section>
+
+        <section>
+          <div className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+            Refrigerant
+          </div>
+          <div className="mt-1 grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
+            <Kv label="Type" v={unit.refrigerantType ?? '—'} />
+            <Kv
+              label="Factory charge"
+              v={
+                unit.refrigerantCharge
+                  ? `${unit.refrigerantCharge.toFixed(3)} kg`
+                  : '—'
+              }
+            />
+            <Kv label="GWP (AR4, 100yr)" v={gwp != null ? String(gwp) : '—'} />
+            <Kv
+              label="Charge CO₂-e"
+              v={tCO2e != null ? `${tCO2e.toFixed(3)} t` : '—'}
+            />
+          </div>
+        </section>
+
+        <section>
+          <div className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+            Trailing 12 months
+          </div>
+          <div className="mt-1 grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
+            <Kv
+              label="Top-ups (excl. install)"
+              v={`${leak.topUpKg.toFixed(3)} kg${
+                unit.refrigerantCharge
+                  ? ` (${(leak.fraction * 100).toFixed(1)}% of charge)`
+                  : ''
+              }`}
+            />
+            <Kv label="Leak status" v={leakLevelLabel(leak.level)} />
+            <Kv label="Total charged (lifetime)" v={`${totalCharged.toFixed(3)} kg`} />
+            <Kv
+              label="Total recovered (lifetime)"
+              v={`${totalRecovered.toFixed(3)} kg`}
+            />
+            {totalLoss > 0 && (
+              <Kv label="Total loss (lifetime)" v={`${totalLoss.toFixed(3)} kg`} />
+            )}
+          </div>
+        </section>
+
+        <section>
+          <div className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+            Service history ({txs.length})
+          </div>
+          {txs.length === 0 ? (
+            <p className="text-sm text-slate-500">
+              No transactions recorded against this unit yet.
+            </p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead className="border-b border-slate-300 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:border-slate-700">
+                  <tr>
+                    <th className="py-1 pr-2">Date</th>
+                    <th className="py-1 pr-2">Type</th>
+                    <th className="py-1 pr-2 text-right">Equip kg</th>
+                    <th className="py-1 pr-2 text-right">Bottle kg</th>
+                    <th className="py-1 pr-2 text-right">Loss kg</th>
+                    <th className="py-1 pr-2">Reason</th>
+                    <th className="py-1 pr-2">Tech</th>
+                    <th className="py-1 pr-2">ARC RHL</th>
+                    <th className="py-1">Notes</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {txs.map((t) => (
+                    <LogbookRow key={t.id} t={t} />
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+
+        <footer className="border-t border-slate-300 pt-3 text-[11px] text-slate-500 dark:border-slate-700">
+          <p>
+            Recorded against AS/NZS 5149.4 §6 (service records), the AREMA /
+            AIRAH "Code of Practice for the reduction of emissions of
+            fluorocarbon refrigerants" 2018, and AIRAH DA19 (refrigerant
+            selection &amp; handling). GWP values per IPCC AR4 (100-year) as
+            adopted by the Ozone Protection and Synthetic Greenhouse Gas
+            Management Regulations 1995.
+          </p>
+          <p className="mt-2">Generated {generatedAt}.</p>
+          <div className="mt-4 grid grid-cols-2 gap-6 print:mt-8">
+            <SignatureLine label="Technician signature" />
+            <SignatureLine label="Customer signature" />
+          </div>
+        </footer>
+      </div>
+    </Modal>
+  )
+}
+
+function Kv({ label, v }: { label: string; v: string }) {
+  return (
+    <div>
+      <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+        {label}
+      </div>
+      <div>{v}</div>
+    </div>
+  )
+}
+
+function SignatureLine({ label }: { label: string }) {
+  return (
+    <div>
+      <div className="border-b border-slate-400 dark:border-slate-600">
+        &nbsp;
+      </div>
+      <div className="mt-1 text-[11px] text-slate-500">{label}</div>
+    </div>
+  )
+}
+
+function leakLevelLabel(l: LeakStatus['level']): string {
+  switch (l) {
+    case 'ok':
+      return 'OK'
+    case 'watch':
+      return 'Watch — investigate (≥5% top-up)'
+    case 'suspected':
+      return 'Suspected leak — investigate & rectify (≥10% top-up)'
+    case 'unknown':
+      return 'Unknown — set factory charge to enable monitoring'
+  }
+}
+
+function LogbookRow({ t }: { t: Transaction }) {
+  const { state } = useStore()
+  const bottle = state.bottles.find((b) => b.id === t.bottleId)
+  const equipKg = t.kind === 'charge' || t.kind === 'recover' ? t.amount : 0
+  const bottleKg = t.bottleAmount ?? equipKg
+  const loss = transactionLoss(t)
+  return (
+    <tr className="border-b border-slate-200 align-top dark:border-slate-800">
+      <td className="py-1 pr-2 whitespace-nowrap">
+        {new Date(t.date).toLocaleDateString('en-AU')}
+      </td>
+      <td className="py-1 pr-2">
+        {transactionLabel(t.kind)}
+        {bottle ? (
+          <div className="text-[10px] text-slate-500">via {bottle.bottleNumber}</div>
+        ) : null}
+      </td>
+      <td className="py-1 pr-2 text-right tabular-nums">
+        {equipKg ? equipKg.toFixed(3) : ''}
+      </td>
+      <td className="py-1 pr-2 text-right tabular-nums">
+        {bottleKg ? bottleKg.toFixed(3) : ''}
+      </td>
+      <td className="py-1 pr-2 text-right tabular-nums">
+        {loss > 0 ? loss.toFixed(3) : ''}
+      </td>
+      <td className="py-1 pr-2">{t.reason ?? ''}</td>
+      <td className="py-1 pr-2">{t.technician ?? ''}</td>
+      <td className="py-1 pr-2 whitespace-nowrap">{t.technicianLicence ?? ''}</td>
+      <td className="py-1">{t.notes ?? ''}</td>
+    </tr>
   )
 }
 

@@ -1,7 +1,12 @@
 import { Link } from 'react-router-dom'
-import { Button, Card } from '../components/ui'
+import { Button, Card, Pill } from '../components/ui'
 import { useStore } from '../lib/store'
-import { netWeight, pluralize, transactionLabel } from '../lib/types'
+import {
+  hydroStatusFor,
+  netWeight,
+  pluralize,
+  transactionLabel,
+} from '../lib/types'
 import { formatWeight, kgToDisplay } from '../lib/units'
 
 export default function Dashboard() {
@@ -26,6 +31,11 @@ export default function Dashboard() {
   const empty = bottles.filter((b) => b.status === 'empty').length
 
   const recent = transactions.slice(0, 5)
+
+  const hydroAlerts = bottles
+    .map((b) => ({ b, h: hydroStatusFor(b) }))
+    .filter((x) => x.h.status === 'overdue' || x.h.status === 'due_soon')
+    .sort((a, b) => (a.h.daysUntilDue ?? 0) - (b.h.daysUntilDue ?? 0))
 
   return (
     <div className="space-y-4">
@@ -180,6 +190,48 @@ export default function Dashboard() {
           </div>
         )}
       </section>
+
+      {hydroAlerts.length > 0 && (
+        <Card className="!border-red-300 !bg-red-50 dark:!border-red-900/50 dark:!bg-red-900/20">
+          <div className="flex items-center justify-between gap-2">
+            <div className="text-sm font-semibold text-red-900 dark:text-red-200">
+              Cylinder hydrostatic test (AS 2030)
+            </div>
+            <Link
+              to="/bottles"
+              className="text-xs font-medium text-red-900 hover:underline dark:text-red-200"
+            >
+              View bottles
+            </Link>
+          </div>
+          <p className="mt-1 text-xs text-red-900/80 dark:text-red-100/80">
+            Don't take a non-compliant cylinder to a job — periodic test is
+            mandatory under AS 2030.
+          </p>
+          <ul className="mt-2 space-y-1 text-sm">
+            {hydroAlerts.slice(0, 6).map(({ b, h }) => (
+              <li
+                key={b.id}
+                className="flex items-center justify-between gap-2 text-red-900 dark:text-red-100"
+              >
+                <span>
+                  <strong>{b.bottleNumber}</strong> · {b.refrigerantType}
+                </span>
+                {h.status === 'overdue' ? (
+                  <Pill tone="red">Overdue {Math.abs(h.daysUntilDue ?? 0)}d</Pill>
+                ) : (
+                  <Pill tone="amber">In {h.daysUntilDue}d</Pill>
+                )}
+              </li>
+            ))}
+            {hydroAlerts.length > 6 && (
+              <li className="text-xs text-red-900/70 dark:text-red-100/70">
+                +{hydroAlerts.length - 6} more
+              </li>
+            )}
+          </ul>
+        </Card>
+      )}
 
       {bottles.length > 0 && sites.length === 0 && (
         <Card className="!border-amber-300 !bg-amber-50 dark:!border-amber-900/50 dark:!bg-amber-900/20">

@@ -51,6 +51,9 @@ interface StoreApi {
   deleteTransaction: (id: string) => void
   // settings
   setTechnician: (name: string) => void
+  setArcLicenceNumber: (n: string) => void
+  setArcAuthorisationNumber: (n: string) => void
+  setBusinessName: (n: string) => void
   setUnit: (u: WeightUnit) => void
   setTheme: (t: Theme) => void
   setSyncSettings: (s: SyncSettings) => void
@@ -309,6 +312,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         weightAfter: after,
         sourceWeightBefore: sourceBefore,
         sourceWeightAfter: sourceAfter,
+        // Stamp the ARC RHL in force at the time of the work, so the
+        // historical logbook is correct even if the licence number
+        // later changes in Settings.
+        technicianLicence:
+          t.technicianLicence ?? (s.arcLicenceNumber || undefined),
       }
       result = tx
 
@@ -367,6 +375,21 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const setTechnician = useCallback(
     (name: string) => setState((s) => ({ ...s, technician: name })),
+    [],
+  )
+
+  const setArcLicenceNumber = useCallback(
+    (n: string) => setState((s) => ({ ...s, arcLicenceNumber: n.trim() })),
+    [],
+  )
+
+  const setArcAuthorisationNumber = useCallback(
+    (n: string) => setState((s) => ({ ...s, arcAuthorisationNumber: n.trim() })),
+    [],
+  )
+
+  const setBusinessName = useCallback(
+    (n: string) => setState((s) => ({ ...s, businessName: n.trim() })),
     [],
   )
 
@@ -457,6 +480,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         customBottlePresets: [],
         favoriteBottlePresets: [],
         technician: '',
+        // Compliance identity is per-tech / per-business, not per
+        // dataset — keep it across a "wipe data" so the user doesn't
+        // have to re-enter their ARC numbers after a factory reset.
+        arcLicenceNumber: s.arcLicenceNumber,
+        arcAuthorisationNumber: s.arcAuthorisationNumber,
+        businessName: s.businessName,
         unit: s.unit,
         theme: s.theme,
         sync: s.sync,
@@ -483,6 +512,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       addTransaction,
       deleteTransaction,
       setTechnician,
+      setArcLicenceNumber,
+      setArcAuthorisationNumber,
+      setBusinessName,
       setUnit,
       setTheme,
       setSyncSettings,
@@ -511,6 +543,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       addTransaction,
       deleteTransaction,
       setTechnician,
+      setArcLicenceNumber,
+      setArcAuthorisationNumber,
+      setBusinessName,
       setUnit,
       setTheme,
       setSyncSettings,

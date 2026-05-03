@@ -31,6 +31,9 @@ export default function Settings() {
   const {
     state,
     setTechnician,
+    setArcLicenceNumber,
+    setArcAuthorisationNumber,
+    setBusinessName,
     setUnit,
     setTheme,
     setSyncSettings,
@@ -42,12 +45,21 @@ export default function Settings() {
   } = useStore()
   const toast = useToast()
   const [techName, setTechName] = useState(state.technician)
+  const [arcLicence, setArcLicence] = useState(state.arcLicenceNumber)
+  const [arcAuth, setArcAuth] = useState(state.arcAuthorisationNumber)
+  const [bizName, setBizName] = useState(state.businessName)
   const [newType, setNewType] = useState('')
   const [teamIdInput, setTeamIdInput] = useState(state.sync.teamId)
   const fileRef = useRef<HTMLInputElement>(null)
   const favorites = state.favoriteRefrigerants
 
   useEffect(() => setTechName(state.technician), [state.technician])
+  useEffect(() => setArcLicence(state.arcLicenceNumber), [state.arcLicenceNumber])
+  useEffect(
+    () => setArcAuth(state.arcAuthorisationNumber),
+    [state.arcAuthorisationNumber],
+  )
+  useEffect(() => setBizName(state.businessName), [state.businessName])
   useEffect(() => setTeamIdInput(state.sync.teamId), [state.sync.teamId])
 
   // --- Storage health state ---------------------------------------------
@@ -231,6 +243,85 @@ export default function Settings() {
             </Button>
           </div>
         </Field>
+      </Card>
+
+      <Card>
+        <div className="mb-1 text-sm font-semibold text-slate-700 dark:text-slate-200">
+          Compliance details (Australia)
+        </div>
+        <p className="mb-3 text-xs text-slate-500">
+          Used on logbook printouts and stamped onto every transaction at the
+          time of work, as required by the AREMA / AIRAH Code of Practice 2018
+          and AS/NZS 5149.4. Look up your numbers at{' '}
+          <a
+            href="https://www.arctick.org/"
+            target="_blank"
+            rel="noreferrer"
+            className="font-medium text-brand-600 hover:underline"
+          >
+            arctick.org
+          </a>
+          .
+        </p>
+        <div className="space-y-3">
+          <Field label="Trading / business name">
+            <div className="flex gap-2">
+              <TextInput
+                value={bizName}
+                onChange={(e) => setBizName(e.target.value)}
+                placeholder="e.g. Acme Refrigeration Pty Ltd"
+              />
+              <Button
+                onClick={() => {
+                  setBusinessName(bizName)
+                  toast.show('Saved')
+                }}
+              >
+                Save
+              </Button>
+            </div>
+          </Field>
+          <Field
+            label="ARC Refrigerant Trading Authorisation (RTA)"
+            hint="Issued by the Australian Refrigeration Council to your business — required to handle/buy/sell refrigerant."
+          >
+            <div className="flex gap-2">
+              <TextInput
+                value={arcAuth}
+                onChange={(e) => setArcAuth(e.target.value)}
+                placeholder="e.g. AU00000"
+              />
+              <Button
+                onClick={() => {
+                  setArcAuthorisationNumber(arcAuth)
+                  toast.show('Saved')
+                }}
+              >
+                Save
+              </Button>
+            </div>
+          </Field>
+          <Field
+            label="Your ARC Refrigerant Handling Licence (RHL)"
+            hint="Personal licence issued to you. Stamped onto every transaction at the time of work — change before you log work as a different tech."
+          >
+            <div className="flex gap-2">
+              <TextInput
+                value={arcLicence}
+                onChange={(e) => setArcLicence(e.target.value)}
+                placeholder="e.g. L000000"
+              />
+              <Button
+                onClick={() => {
+                  setArcLicenceNumber(arcLicence)
+                  toast.show('Saved')
+                }}
+              >
+                Save
+              </Button>
+            </div>
+          </Field>
+        </div>
       </Card>
 
       <Card>
