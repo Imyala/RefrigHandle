@@ -27,6 +27,7 @@ import {
   type UnitKind,
 } from '../lib/types'
 import { RefrigerantSelect } from '../components/RefrigerantSelect'
+import { DateInput } from '../components/DateInput'
 import { useToast } from '../lib/toast'
 import { displayToKg, formatWeight, kgToDisplay } from '../lib/units'
 
@@ -762,10 +763,10 @@ function UnitForm({
         </Field>
 
         <Field label="Install date">
-          <TextInput
-            type="date"
+          <DateInput
             value={installDate}
-            onChange={(e) => setInstallDate(e.target.value)}
+            onChange={setInstallDate}
+            ariaLabel="Install date"
           />
         </Field>
 

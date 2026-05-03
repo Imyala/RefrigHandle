@@ -32,6 +32,7 @@ import {
 import { RefrigerantSelect } from '../components/RefrigerantSelect'
 import { BottleSelect } from '../components/BottleSelect'
 import { CylinderPresetSelect } from '../components/CylinderPresetSelect'
+import { DateInput } from '../components/DateInput'
 import { useToast } from '../lib/toast'
 import { displayToKg, formatWeight, kgToDisplay } from '../lib/units'
 
@@ -1335,17 +1336,17 @@ function BottleForm({
           </p>
           <div className="grid grid-cols-2 gap-3">
             <Field label="Last test">
-              <TextInput
-                type="date"
+              <DateInput
                 value={lastHydro}
-                onChange={(e) => setLastHydro(e.target.value)}
+                onChange={setLastHydro}
+                ariaLabel="Last hydro test date"
               />
             </Field>
             <Field label="Next test due">
-              <TextInput
-                type="date"
+              <DateInput
                 value={nextHydro}
-                onChange={(e) => setNextHydro(e.target.value)}
+                onChange={setNextHydro}
+                ariaLabel="Next hydro test due date"
               />
             </Field>
           </div>
