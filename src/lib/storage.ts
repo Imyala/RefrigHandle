@@ -37,6 +37,7 @@ interface LegacyState
     | 'arcAuthorisationNumber'
     | 'businessName'
     | 'location'
+    | 'clock'
   > {
   bottles?: LegacyBottle[]
   transactions?: LegacyTransaction[]
@@ -53,6 +54,7 @@ interface LegacyState
   arcAuthorisationNumber?: string
   businessName?: string
   location?: Partial<AppState['location']>
+  clock?: string
 }
 
 export type LoadStatus = 'ok' | 'empty' | 'corrupted'
@@ -119,6 +121,7 @@ function normalize(parsed: LegacyState): AppState {
       parsed.theme === 'light' || parsed.theme === 'dark'
         ? parsed.theme
         : 'system',
+    clock: parsed.clock === '12h' ? '12h' : '24h',
     sync: {
       enabled: parsed.sync?.enabled ?? false,
       teamId: parsed.sync?.teamId ?? '',

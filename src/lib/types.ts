@@ -201,6 +201,12 @@ export type WeightUnit = 'kg' | 'lb'
 
 export type Theme = 'system' | 'light' | 'dark'
 
+// 12-hour vs 24-hour clock — affects every place we render a time of
+// day (transaction list, logbook PDFs, the time input in the
+// transaction form). Stored values are always 24-hour internally; the
+// setting only changes presentation and editing.
+export type ClockFormat = '12h' | '24h'
+
 export interface SyncSettings {
   enabled: boolean
   teamId: string
@@ -241,6 +247,7 @@ export interface AppState {
   location: LocationSettings
   unit: WeightUnit
   theme: Theme
+  clock: ClockFormat
   sync: SyncSettings
 }
 
@@ -260,6 +267,7 @@ export const EMPTY_STATE: AppState = {
   location: { country: '', region: '', city: '', timezone: '' },
   unit: 'kg',
   theme: 'system',
+  clock: '24h',
   sync: { enabled: false, teamId: '' },
 }
 

@@ -28,6 +28,7 @@ import {
 } from '../lib/types'
 import { RefrigerantSelect } from '../components/RefrigerantSelect'
 import { DateInput } from '../components/DateInput'
+import { formatDateTime } from '../lib/datetime'
 import { useToast } from '../lib/toast'
 import { displayToKg, formatWeight, kgToDisplay } from '../lib/units'
 
@@ -820,7 +821,11 @@ function UnitLogbook({
     .filter((t) => t.kind === 'recover')
     .reduce((s, t) => s + t.amount, 0)
   const totalLoss = txs.reduce((s, t) => s + transactionLoss(t), 0)
-  const generatedAt = new Date().toLocaleString('en-AU')
+  const generatedAt = formatDateTime(
+    new Date().toISOString(),
+    state.location.timezone,
+    state.clock,
+  )
 
   return (
     <Modal open onClose={onClose} title="Equipment logbook" size="lg">

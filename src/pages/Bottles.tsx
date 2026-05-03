@@ -35,6 +35,7 @@ import { CylinderPresetSelect } from '../components/CylinderPresetSelect'
 import { DateInput } from '../components/DateInput'
 import { useToast } from '../lib/toast'
 import { displayToKg, formatWeight, kgToDisplay } from '../lib/units'
+import { formatDateTime } from '../lib/datetime'
 
 const statusTone: Record<BottleStatus, 'green' | 'amber' | 'slate' | 'red'> = {
   in_stock: 'green',
@@ -376,7 +377,7 @@ function BottleActionSheet({
                         {t.amount > 0 && ` · ${formatWeight(t.amount, unit)}`}
                       </div>
                       <div className="truncate text-xs text-slate-500">
-                        {new Date(t.date).toLocaleString()}
+                        {formatDateTime(t.date, state.location.timezone, state.clock)}
                         {j ? ` · ${j.name}` : ''}
                       </div>
                     </div>

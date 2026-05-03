@@ -73,7 +73,15 @@ export function dateTimeInputToIso(input: string, tz?: string): string {
 
 // Render a stored ISO timestamp for display in the user's timezone.
 // Falls back to the browser's locale-aware default when no tz is set.
-export function formatDateTime(iso: string, tz?: string): string {
+// `clock` honours Settings → Time format ('12h' / '24h'); when omitted
+// the locale default decides — which on en-AU is 12h with am/pm, on
+// en-GB is 24h, etc. Pass it through wherever you want the user's
+// preference to win regardless of locale.
+export function formatDateTime(
+  iso: string,
+  tz?: string,
+  clock?: '12h' | '24h',
+): string {
   if (!iso) return ''
   const d = new Date(iso)
   const opts: Intl.DateTimeFormatOptions = {
@@ -81,6 +89,8 @@ export function formatDateTime(iso: string, tz?: string): string {
     timeStyle: 'short',
   }
   if (tz && isTzSupported(tz)) opts.timeZone = tz
+  if (clock === '12h') opts.hour12 = true
+  else if (clock === '24h') opts.hour12 = false
   return d.toLocaleString(undefined, opts)
 }
 

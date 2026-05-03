@@ -13,6 +13,7 @@ import {
   REFRIGERANT_TYPES,
   TIMEZONE_OPTIONS,
   transactionLoss,
+  type ClockFormat,
   type LocationSettings,
   type Theme,
   type WeightUnit,
@@ -40,6 +41,7 @@ export default function Settings() {
     setLocation,
     setUnit,
     setTheme,
+    setClock,
     setSyncSettings,
     addCustomRefrigerant,
     removeCustomRefrigerant,
@@ -470,6 +472,35 @@ export default function Settings() {
             <option value="kg">Kilograms (kg)</option>
             <option value="lb">Pounds (lb)</option>
           </Select>
+        </Field>
+      </Card>
+
+      <Card>
+        <Field
+          label="Time format"
+          hint="Applies wherever a time of day is shown — transaction list, logbook PDFs, the time field on the transaction form."
+        >
+          <div className="grid grid-cols-2 gap-2">
+            {(['24h', '12h'] as ClockFormat[]).map((c) => (
+              <button
+                key={c}
+                type="button"
+                onClick={() => {
+                  setClock(c)
+                  toast.show(
+                    c === '24h' ? '24-hour clock' : '12-hour clock (am/pm)',
+                  )
+                }}
+                className={`rounded-xl px-3 py-3 text-sm font-medium transition ${
+                  state.clock === c
+                    ? 'bg-brand-600 text-white'
+                    : 'bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-200'
+                }`}
+              >
+                {c === '24h' ? '24-hour (13:30)' : '12-hour (1:30 PM)'}
+              </button>
+            ))}
+          </div>
         </Field>
       </Card>
 

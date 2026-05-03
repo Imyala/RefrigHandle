@@ -154,7 +154,7 @@ export default function Transactions() {
                       </div>
                     )}
                     <div className="text-xs text-slate-500">
-                      {formatDateTime(t.date, state.location.timezone)}
+                      {formatDateTime(t.date, state.location.timezone, state.clock)}
                       {t.technician && ` · ${t.technician}`}
                       {t.amount > 0 && (
                         <>
@@ -236,6 +236,7 @@ function TransactionForm({
   const { state, addSite, addUnit } = useStore()
   const { bottles, sites, technician, unit } = state
   const tz = state.location.timezone
+  const clock = state.clock
 
   const [bottleId, setBottleId] = useState(bottles[0]?.id ?? '')
   const [siteId, setSiteId] = useState('')
@@ -565,6 +566,7 @@ function TransactionForm({
             value={date}
             onChange={setDate}
             timezone={tz}
+            clock={clock}
             ariaLabel="Transaction date and time"
           />
         </Field>

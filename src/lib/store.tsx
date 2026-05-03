@@ -12,6 +12,7 @@ import {
   type AppState,
   type Bottle,
   type BottlePreset,
+  type ClockFormat,
   type LocationSettings,
   type Site,
   type SyncSettings,
@@ -58,6 +59,7 @@ interface StoreApi {
   setLocation: (l: LocationSettings) => void
   setUnit: (u: WeightUnit) => void
   setTheme: (t: Theme) => void
+  setClock: (c: ClockFormat) => void
   setSyncSettings: (s: SyncSettings) => void
   addCustomRefrigerant: (name: string) => void
   removeCustomRefrigerant: (name: string) => void
@@ -410,6 +412,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     [],
   )
 
+  const setClock = useCallback(
+    (clock: ClockFormat) => setState((s) => ({ ...s, clock })),
+    [],
+  )
+
   const setSyncSettings = useCallback(
     (sync: SyncSettings) => setState((s) => ({ ...s, sync })),
     [],
@@ -496,6 +503,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         location: s.location,
         unit: s.unit,
         theme: s.theme,
+        clock: s.clock,
         sync: s.sync,
       }))
     }
@@ -526,6 +534,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setLocation,
       setUnit,
       setTheme,
+      setClock,
       setSyncSettings,
       addCustomRefrigerant,
       removeCustomRefrigerant,
@@ -558,6 +567,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setLocation,
       setUnit,
       setTheme,
+      setClock,
       setSyncSettings,
       addCustomRefrigerant,
       removeCustomRefrigerant,
