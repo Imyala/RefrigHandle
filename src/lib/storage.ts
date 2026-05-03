@@ -36,6 +36,7 @@ interface LegacyState
     | 'arcLicenceNumber'
     | 'arcAuthorisationNumber'
     | 'businessName'
+    | 'location'
   > {
   bottles?: LegacyBottle[]
   transactions?: LegacyTransaction[]
@@ -51,6 +52,7 @@ interface LegacyState
   arcLicenceNumber?: string
   arcAuthorisationNumber?: string
   businessName?: string
+  location?: Partial<AppState['location']>
 }
 
 export type LoadStatus = 'ok' | 'empty' | 'corrupted'
@@ -106,6 +108,12 @@ function normalize(parsed: LegacyState): AppState {
     arcLicenceNumber: parsed.arcLicenceNumber ?? '',
     arcAuthorisationNumber: parsed.arcAuthorisationNumber ?? '',
     businessName: parsed.businessName ?? '',
+    location: {
+      country: parsed.location?.country ?? '',
+      region: parsed.location?.region ?? '',
+      city: parsed.location?.city ?? '',
+      timezone: parsed.location?.timezone ?? '',
+    },
     unit: parsed.unit === 'lb' ? 'lb' : 'kg',
     theme:
       parsed.theme === 'light' || parsed.theme === 'dark'

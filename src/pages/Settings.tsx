@@ -9,8 +9,11 @@ import {
 } from '../components/ui'
 import { useStore } from '../lib/store'
 import {
+  AU_REGIONS,
   REFRIGERANT_TYPES,
+  TIMEZONE_OPTIONS,
   transactionLoss,
+  type LocationSettings,
   type Theme,
   type WeightUnit,
 } from '../lib/types'
@@ -34,6 +37,7 @@ export default function Settings() {
     setArcLicenceNumber,
     setArcAuthorisationNumber,
     setBusinessName,
+    setLocation,
     setUnit,
     setTheme,
     setSyncSettings,
@@ -48,6 +52,7 @@ export default function Settings() {
   const [arcLicence, setArcLicence] = useState(state.arcLicenceNumber)
   const [arcAuth, setArcAuth] = useState(state.arcAuthorisationNumber)
   const [bizName, setBizName] = useState(state.businessName)
+  const [loc, setLoc] = useState<LocationSettings>(state.location)
   const [newType, setNewType] = useState('')
   const [teamIdInput, setTeamIdInput] = useState(state.sync.teamId)
   const fileRef = useRef<HTMLInputElement>(null)
@@ -60,6 +65,7 @@ export default function Settings() {
     [state.arcAuthorisationNumber],
   )
   useEffect(() => setBizName(state.businessName), [state.businessName])
+  useEffect(() => setLoc(state.location), [state.location])
   useEffect(() => setTeamIdInput(state.sync.teamId), [state.sync.teamId])
 
   // --- Storage health state ---------------------------------------------
@@ -320,6 +326,105 @@ export default function Settings() {
                 Save
               </Button>
             </div>
+          </Field>
+        </div>
+      </Card>
+
+      <Card>
+        <div className="mb-1 flex items-center justify-between gap-2">
+          <div className="text-sm font-semibold text-slate-700 dark:text-slate-200">
+            Location
+          </div>
+          <Button
+            onClick={() => {
+              setLocation(loc)
+              toast.show('Saved')
+            }}
+          >
+            Save
+          </Button>
+        </div>
+        <p className="mb-3 text-xs text-slate-500">
+          Drives the timezone used for "now" defaults on transactions and the
+          generated-at line on logbook PDFs. Leave blank to follow this
+          device's settings.
+        </p>
+        <div className="space-y-3">
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Country">
+              <Select
+                value={loc.country}
+                onChange={(e) =>
+                  setLoc((l) => ({
+                    ...l,
+                    country: e.target.value,
+                    // Clear region when leaving Australia — the curated AU
+                    // state list doesn't apply to other countries.
+                    region: e.target.value === 'Australia' ? l.region : '',
+                  }))
+                }
+              >
+                <option value="">—</option>
+                <option>Australia</option>
+                <option>New Zealand</option>
+                <option>United Kingdom</option>
+                <option>United States</option>
+                <option>Canada</option>
+                <option>Other</option>
+              </Select>
+            </Field>
+            <Field label={loc.country === 'Australia' ? 'State / territory' : 'Region'}>
+              {loc.country === 'Australia' ? (
+                <Select
+                  value={loc.region}
+                  onChange={(e) =>
+                    setLoc((l) => ({ ...l, region: e.target.value }))
+                  }
+                >
+                  <option value="">—</option>
+                  {AU_REGIONS.map((r) => (
+                    <option key={r}>{r}</option>
+                  ))}
+                </Select>
+              ) : (
+                <TextInput
+                  value={loc.region}
+                  onChange={(e) =>
+                    setLoc((l) => ({ ...l, region: e.target.value }))
+                  }
+                  placeholder="e.g. region / state"
+                />
+              )}
+            </Field>
+          </div>
+          <Field label="City">
+            <TextInput
+              value={loc.city}
+              onChange={(e) => setLoc((l) => ({ ...l, city: e.target.value }))}
+              placeholder="e.g. Sydney"
+            />
+          </Field>
+          <Field
+            label="Timezone"
+            hint='Used for "now" defaults and timestamp display. Pick the one your work day actually runs in.'
+          >
+            <Select
+              value={loc.timezone}
+              onChange={(e) =>
+                setLoc((l) => ({ ...l, timezone: e.target.value }))
+              }
+            >
+              <option value="">— follow this device —</option>
+              {(['Australia', 'Pacific', 'World'] as const).map((g) => (
+                <optgroup key={g} label={g}>
+                  {TIMEZONE_OPTIONS.filter((tz) => tz.group === g).map((tz) => (
+                    <option key={tz.iana} value={tz.iana}>
+                      {tz.label}
+                    </option>
+                  ))}
+                </optgroup>
+              ))}
+            </Select>
           </Field>
         </div>
       </Card>

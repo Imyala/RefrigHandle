@@ -23,6 +23,12 @@ import {
 import { useToast } from '../lib/toast'
 import { displayToKg, formatWeight, kgToDisplay } from '../lib/units'
 import { SiteForm, UnitForm } from './Sites'
+import { DateTimeInput } from '../components/DateTimeInput'
+import {
+  dateTimeInputToIso,
+  formatDateTime,
+  localDateTimeInput,
+} from '../lib/datetime'
 
 const kindTone: Record<
   TransactionKind,
@@ -148,7 +154,7 @@ export default function Transactions() {
                       </div>
                     )}
                     <div className="text-xs text-slate-500">
-                      {new Date(t.date).toLocaleString()}
+                      {formatDateTime(t.date, state.location.timezone)}
                       {t.technician && ` · ${t.technician}`}
                       {t.amount > 0 && (
                         <>
@@ -229,6 +235,7 @@ function TransactionForm({
 }) {
   const { state, addSite, addUnit } = useStore()
   const { bottles, sites, technician, unit } = state
+  const tz = state.location.timezone
 
   const [bottleId, setBottleId] = useState(bottles[0]?.id ?? '')
   const [siteId, setSiteId] = useState('')
@@ -237,7 +244,7 @@ function TransactionForm({
   const [amount, setAmount] = useState('')
   const [bottleAmount, setBottleAmount] = useState('')
   const [showLoss, setShowLoss] = useState(false)
-  const [date, setDate] = useState(() => new Date().toISOString().slice(0, 16))
+  const [date, setDate] = useState(() => localDateTimeInput(new Date(), tz))
   const [tech, setTech] = useState(technician)
   const [equipment, setEquipment] = useState('')
   const [reason, setReason] = useState<TransactionReason | ''>('')
@@ -259,7 +266,7 @@ function TransactionForm({
     setAmount('')
     setBottleAmount('')
     setShowLoss(false)
-    setDate(new Date().toISOString().slice(0, 16))
+    setDate(localDateTimeInput(new Date(), tz))
     setTech(technician)
     setEquipment('')
     setReason('')
@@ -319,7 +326,7 @@ function TransactionForm({
         supportsLoss && showLoss && enteredBottle > 0
           ? Math.abs(bottleAmountKg)
           : undefined,
-      date: new Date(date).toISOString(),
+      date: dateTimeInputToIso(date, tz),
       technician: tech.trim() || undefined,
       equipment: equipment.trim() || undefined,
       reason: reason || undefined,
@@ -554,10 +561,11 @@ function TransactionForm({
         )}
 
         <Field label="Date / time">
-          <TextInput
-            type="datetime-local"
+          <DateTimeInput
             value={date}
-            onChange={(e) => setDate(e.target.value)}
+            onChange={setDate}
+            timezone={tz}
+            ariaLabel="Transaction date and time"
           />
         </Field>
 

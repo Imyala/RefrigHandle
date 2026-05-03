@@ -206,6 +206,22 @@ export interface SyncSettings {
   teamId: string
 }
 
+// Location is used for two things today:
+// 1. The IANA timezone drives "now" defaults on the Transaction form
+//    (so a tech in Sydney doesn't get a UTC default that's 10 hours
+//    off). Also used by the logbook PDF for the "generated at" line.
+// 2. Country/region/city are surfaced on the equipment logbook so
+//    audit reports carry the business's operating location.
+//
+// All four are optional — empty strings just mean "use browser
+// defaults / leave blank on PDF".
+export interface LocationSettings {
+  country: string // free text or ISO name, e.g. 'Australia'
+  region: string // state / territory / province, e.g. 'NSW'
+  city: string
+  timezone: string // IANA name, e.g. 'Australia/Sydney'
+}
+
 export interface AppState {
   bottles: Bottle[]
   sites: Site[]
@@ -222,6 +238,7 @@ export interface AppState {
   arcLicenceNumber: string // ARC Refrigerant Handling Licence (RHL), per technician
   arcAuthorisationNumber: string // ARC Refrigerant Trading Authorisation (RTA), per business
   businessName: string
+  location: LocationSettings
   unit: WeightUnit
   theme: Theme
   sync: SyncSettings
@@ -240,6 +257,7 @@ export const EMPTY_STATE: AppState = {
   arcLicenceNumber: '',
   arcAuthorisationNumber: '',
   businessName: '',
+  location: { country: '', region: '', city: '', timezone: '' },
   unit: 'kg',
   theme: 'system',
   sync: { enabled: false, teamId: '' },
@@ -571,6 +589,47 @@ export function leakStatusFor(
         : 'ok'
   return { level, topUpKg: topUp, fraction, windowDays }
 }
+
+// --- Timezones --------------------------------------------------------
+//
+// Curated short list, Australian states first since that's the
+// primary market. The "label" is what techs recognise (AEST, AWST);
+// the "iana" name is what Intl.DateTimeFormat / new Date() actually
+// understand. "(custom)" is escape-hatch for users elsewhere — they
+// type their own IANA name. Resolved against the runtime via
+// Intl.supportedValuesOf so we don't ship a stale list.
+
+export interface TimezoneOption {
+  iana: string
+  label: string
+  group: 'Australia' | 'Pacific' | 'World'
+}
+
+export const TIMEZONE_OPTIONS: readonly TimezoneOption[] = [
+  // Australia
+  { iana: 'Australia/Sydney', label: 'Sydney — AEST/AEDT (NSW, ACT, VIC)', group: 'Australia' },
+  { iana: 'Australia/Melbourne', label: 'Melbourne — AEST/AEDT', group: 'Australia' },
+  { iana: 'Australia/Hobart', label: 'Hobart — AEST/AEDT (TAS)', group: 'Australia' },
+  { iana: 'Australia/Brisbane', label: 'Brisbane — AEST (QLD, no DST)', group: 'Australia' },
+  { iana: 'Australia/Adelaide', label: 'Adelaide — ACST/ACDT (SA)', group: 'Australia' },
+  { iana: 'Australia/Darwin', label: 'Darwin — ACST (NT, no DST)', group: 'Australia' },
+  { iana: 'Australia/Perth', label: 'Perth — AWST (WA)', group: 'Australia' },
+  // Pacific
+  { iana: 'Pacific/Auckland', label: 'Auckland — NZST/NZDT', group: 'Pacific' },
+  // World — minimal, just the common anchors
+  { iana: 'UTC', label: 'UTC', group: 'World' },
+  { iana: 'Europe/London', label: 'London — GMT/BST', group: 'World' },
+  { iana: 'America/New_York', label: 'New York — EST/EDT', group: 'World' },
+  { iana: 'America/Los_Angeles', label: 'Los Angeles — PST/PDT', group: 'World' },
+  { iana: 'Asia/Singapore', label: 'Singapore', group: 'World' },
+] as const
+
+// Australian states/territories — used for the Region dropdown when
+// Country is Australia. Keeping it short avoids a 196-option country
+// dropdown for the 95% case.
+export const AU_REGIONS: readonly string[] = [
+  'NSW', 'VIC', 'QLD', 'SA', 'WA', 'TAS', 'NT', 'ACT',
+] as const
 
 // --- Cylinder hydrostatic test ----------------------------------------
 //

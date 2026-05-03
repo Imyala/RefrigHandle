@@ -12,6 +12,7 @@ import {
   type AppState,
   type Bottle,
   type BottlePreset,
+  type LocationSettings,
   type Site,
   type SyncSettings,
   type Theme,
@@ -54,6 +55,7 @@ interface StoreApi {
   setArcLicenceNumber: (n: string) => void
   setArcAuthorisationNumber: (n: string) => void
   setBusinessName: (n: string) => void
+  setLocation: (l: LocationSettings) => void
   setUnit: (u: WeightUnit) => void
   setTheme: (t: Theme) => void
   setSyncSettings: (s: SyncSettings) => void
@@ -393,6 +395,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     [],
   )
 
+  const setLocation = useCallback(
+    (location: LocationSettings) => setState((s) => ({ ...s, location })),
+    [],
+  )
+
   const setUnit = useCallback(
     (unit: WeightUnit) => setState((s) => ({ ...s, unit })),
     [],
@@ -486,6 +493,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         arcLicenceNumber: s.arcLicenceNumber,
         arcAuthorisationNumber: s.arcAuthorisationNumber,
         businessName: s.businessName,
+        location: s.location,
         unit: s.unit,
         theme: s.theme,
         sync: s.sync,
@@ -515,6 +523,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setArcLicenceNumber,
       setArcAuthorisationNumber,
       setBusinessName,
+      setLocation,
       setUnit,
       setTheme,
       setSyncSettings,
@@ -546,6 +555,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setArcLicenceNumber,
       setArcAuthorisationNumber,
       setBusinessName,
+      setLocation,
       setUnit,
       setTheme,
       setSyncSettings,
