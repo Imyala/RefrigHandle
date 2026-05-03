@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   Button,
   Card,
@@ -16,6 +16,16 @@ import {
 } from '../lib/types'
 import { useToast } from '../lib/toast'
 import { isSyncConfigured } from '../lib/sync'
+import {
+  deleteCorruptedBackup,
+  getStorageEstimate,
+  isStoragePersisted,
+  listCorruptedBackups,
+  readCorruptedBackup,
+  requestPersistentStorage,
+  type CorruptedBackup,
+  type StorageEstimate,
+} from '../lib/storage'
 
 export default function Settings() {
   const {
@@ -39,6 +49,60 @@ export default function Settings() {
 
   useEffect(() => setTechName(state.technician), [state.technician])
   useEffect(() => setTeamIdInput(state.sync.teamId), [state.sync.teamId])
+
+  // --- Storage health state ---------------------------------------------
+  const [persisted, setPersisted] = useState<boolean | null>(null)
+  const [estimate, setEstimate] = useState<StorageEstimate>({})
+  const [corrupted, setCorrupted] = useState<CorruptedBackup[]>([])
+
+  const refreshStorageHealth = useCallback(() => {
+    void Promise.all([isStoragePersisted(), getStorageEstimate()]).then(
+      ([p, e]) => {
+        setPersisted(p)
+        setEstimate(e)
+        setCorrupted(listCorruptedBackups())
+      },
+    )
+  }, [])
+
+  useEffect(() => {
+    refreshStorageHealth()
+  }, [refreshStorageHealth])
+
+  async function onRequestPersist() {
+    const granted = await requestPersistentStorage()
+    setPersisted(granted)
+    toast.show(
+      granted
+        ? 'Persistent storage granted — this device will not auto-evict your data.'
+        : 'Browser declined persistent storage. Install the app to home screen to improve your odds.',
+      granted ? 'success' : 'info',
+      6000,
+    )
+  }
+
+  function downloadCorruptedBackup(b: CorruptedBackup) {
+    const raw = readCorruptedBackup(b.key)
+    if (raw == null) {
+      toast.show('Backup is no longer available.', 'error')
+      return
+    }
+    const blob = new Blob([raw], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    const stamp = b.savedAt.replace(/[:.]/g, '-')
+    a.download = `refrighandle-corrupted-${stamp}.json`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  function discardCorruptedBackup(b: CorruptedBackup) {
+    if (!confirm('Delete this damaged backup? This cannot be undone.')) return
+    deleteCorruptedBackup(b.key)
+    setCorrupted(listCorruptedBackups())
+  }
+  // ----------------------------------------------------------------------
 
   function exportJson() {
     const blob = new Blob([JSON.stringify(state, null, 2)], {
@@ -379,6 +443,113 @@ export default function Settings() {
       </Card>
 
       <Card>
+        <div className="mb-2 flex items-center justify-between gap-2">
+          <div className="text-sm font-semibold text-slate-700 dark:text-slate-200">
+            Storage health
+          </div>
+          {persisted === true ? (
+            <Pill tone="green">Persistent</Pill>
+          ) : persisted === false ? (
+            <Pill tone="amber">Eviction risk</Pill>
+          ) : (
+            <Pill tone="slate">Checking…</Pill>
+          )}
+        </div>
+        <p className="mb-3 text-xs text-slate-500">
+          Browsers can clear app data on devices that are low on space — or, on
+          iOS Safari, after a week without use. "Persistent" storage protects
+          your bottles, sites, and transactions from that.
+        </p>
+        {persisted === false && (
+          <div className="mb-3">
+            <Button variant="secondary" onClick={onRequestPersist}>
+              Request persistent storage
+            </Button>
+            <p className="mt-2 text-xs text-slate-500">
+              On iPhone/iPad, "Add to Home Screen" first — Safari only grants
+              persistent storage to installed PWAs.
+            </p>
+          </div>
+        )}
+        {(estimate.usageBytes != null || estimate.quotaBytes != null) && (
+          <div className="mb-3">
+            <div className="mb-1 flex items-baseline justify-between text-xs text-slate-500">
+              <span>Used on this device</span>
+              <span className="tabular-nums">
+                {formatBytes(estimate.usageBytes)}
+                {estimate.quotaBytes != null && (
+                  <> / {formatBytes(estimate.quotaBytes)}</>
+                )}
+              </span>
+            </div>
+            {estimate.usageBytes != null && estimate.quotaBytes != null && (
+              <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800">
+                <div
+                  className="h-full bg-brand-600"
+                  style={{
+                    width: `${Math.min(
+                      100,
+                      Math.max(
+                        2,
+                        (estimate.usageBytes / estimate.quotaBytes) * 100,
+                      ),
+                    )}%`,
+                  }}
+                />
+              </div>
+            )}
+          </div>
+        )}
+        <div>
+          <div className="mb-1 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+            Recovered backups
+          </div>
+          {corrupted.length === 0 ? (
+            <p className="text-xs text-slate-500">
+              None. Saved data was readable on the last load.
+            </p>
+          ) : (
+            <div className="space-y-2">
+              <p className="text-xs text-amber-700 dark:text-amber-300">
+                The app could not parse a previous save. The damaged blob is
+                preserved here so you can download it for inspection or
+                recovery.
+              </p>
+              {corrupted.map((b) => (
+                <div
+                  key={b.key}
+                  className="flex items-center justify-between gap-2 rounded-lg bg-slate-100 px-3 py-2 dark:bg-slate-800"
+                >
+                  <div className="min-w-0">
+                    <div className="truncate text-sm font-medium text-slate-800 dark:text-slate-100">
+                      {new Date(b.savedAt).toLocaleString()}
+                    </div>
+                    <div className="text-xs text-slate-500 tabular-nums">
+                      {formatBytes(b.sizeBytes)}
+                    </div>
+                  </div>
+                  <div className="flex shrink-0 gap-1">
+                    <Button
+                      variant="secondary"
+                      onClick={() => downloadCorruptedBackup(b)}
+                    >
+                      Download
+                    </Button>
+                    <Button
+                      variant="danger"
+                      onClick={() => discardCorruptedBackup(b)}
+                    >
+                      Discard
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </Card>
+
+      <Card>
         <div className="mb-2 text-sm font-semibold text-red-700 dark:text-red-300">
           Danger zone
         </div>
@@ -395,6 +566,14 @@ export default function Settings() {
       </p>
     </div>
   )
+}
+
+function formatBytes(n?: number): string {
+  if (n == null) return '—'
+  if (n < 1024) return `${n} B`
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`
+  if (n < 1024 * 1024 * 1024) return `${(n / 1024 / 1024).toFixed(1)} MB`
+  return `${(n / 1024 / 1024 / 1024).toFixed(2)} GB`
 }
 
 function RefrigerantChip({
