@@ -1149,6 +1149,14 @@ function BottleForm({
   )
   const [appliedPresetId, setAppliedPresetId] = useState('')
 
+  // "Empty" status only makes sense when the bottle actually contains
+  // no refrigerant. Reverse of the addTransaction auto-empty behaviour:
+  // there we flip status to 'empty' when a transaction drains net to
+  // ~0; here we block the user from manually marking a bottle empty
+  // while the math says it has contents.
+  const statusEmptyButHasContent = status === 'empty' && liveNet > 0.01
+  const submitBlocked = tareExceedsGross || statusEmptyButHasContent
+
   // When the refrigerant changes AND a preset is applied, recompute safe
   // fill from the preset's water capacity × FR for the new refrigerant.
   // No-op if the user has manually edited tare/capacity (which clears
@@ -1183,7 +1191,7 @@ function BottleForm({
 
   function submit(e: React.FormEvent) {
     e.preventDefault()
-    if (tareExceedsGross) return
+    if (submitBlocked) return
     const tare = displayToKg(parseFloat(tareWeight) || 0, unit)
     const gross = displayToKg(parseFloat(grossWeight) || 0, unit)
     const currentNet = Math.max(0, gross - tare)
@@ -1361,9 +1369,20 @@ function BottleForm({
             <option value="in_stock">In stock</option>
             <option value="on_site">On site</option>
             <option value="returned">Returned</option>
-            <option value="empty">Empty</option>
+            <option value="empty" disabled={liveNet > 0.01}>
+              Empty{liveNet > 0.01 ? ' — bottle still has refrigerant' : ''}
+            </option>
           </Select>
         </Field>
+
+        {statusEmptyButHasContent && (
+          <div className="rounded-xl bg-red-50 p-3 text-sm text-red-900 dark:bg-red-900/20 dark:text-red-100">
+            ⛔ Status is "Empty" but the bottle still has{' '}
+            {formatWeight(liveNet, unit)} of refrigerant. Pick "In stock",
+            "On site", or "Returned" — or correct the gross weight if the
+            bottle really is empty.
+          </div>
+        )}
 
         {status === 'on_site' && (
           <Field label="Current site">
@@ -1386,8 +1405,12 @@ function BottleForm({
         </Field>
 
         <div className="flex gap-2 pt-2">
-          <Button type="submit" full disabled={tareExceedsGross}>
-            {tareExceedsGross ? 'Tare exceeds gross' : 'Save'}
+          <Button type="submit" full disabled={submitBlocked}>
+            {tareExceedsGross
+              ? 'Tare exceeds gross'
+              : statusEmptyButHasContent
+                ? 'Bottle isn’t empty'
+                : 'Save'}
           </Button>
           {onDelete && (
             <Button type="button" variant="danger" onClick={onDelete}>
