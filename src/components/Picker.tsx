@@ -24,7 +24,7 @@ interface PickerProps {
 }
 
 const triggerStyle =
-  'flex w-full items-center justify-between gap-2 rounded-xl border border-slate-300 bg-white px-3 py-3 text-base text-left text-slate-900 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/30 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100'
+  'flex w-full items-center justify-between gap-2 rounded-xl border border-slate-300 bg-white px-3 py-3 text-base text-left text-slate-900 outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-500/30 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100'
 
 export function Picker({
   value,
@@ -79,9 +79,7 @@ export function Picker({
         >
           {display}
         </span>
-        <span aria-hidden className="shrink-0 text-slate-400">
-          ▾
-        </span>
+        <ChevronDown />
       </button>
 
       {required && (
@@ -96,8 +94,8 @@ export function Picker({
       )}
 
       <Modal open={open} title={title} onClose={() => setOpen(false)}>
-        <div className="-mx-1 max-h-[60svh] overflow-y-auto">
-          <div className="divide-y divide-slate-200 overflow-hidden rounded-xl border border-slate-200 dark:divide-slate-800 dark:border-slate-800">
+        <div className="-mx-1 max-h-[65svh] overflow-y-auto">
+          <div className="flex flex-col gap-1">
             {allowEmpty && (
               <PickerRow
                 selected={value === emptyValue}
@@ -111,9 +109,9 @@ export function Picker({
             )}
 
             {groups.map(([groupName, items], gi) => (
-              <div key={groupName || `g-${gi}`}>
+              <div key={groupName || `g-${gi}`} className="flex flex-col gap-1">
                 {groupName && (
-                  <div className="bg-slate-50 px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:bg-slate-800/60 dark:text-slate-400">
+                  <div className="mt-2 px-2 pb-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500 dark:text-slate-400">
                     {groupName}
                   </div>
                 )}
@@ -163,20 +161,27 @@ function PickerRow({
     <button
       type="button"
       onClick={onClick}
-      className={`flex w-full items-center justify-between gap-3 px-3 py-3 text-left transition ${
+      aria-pressed={selected}
+      className={`group relative flex w-full items-center gap-3 overflow-hidden rounded-xl px-3.5 py-3 text-left transition active:scale-[0.99] ${
         selected
-          ? 'bg-brand-50 dark:bg-brand-900/30'
-          : 'hover:bg-slate-100 dark:hover:bg-slate-800'
+          ? 'bg-brand-50 ring-1 ring-brand-500/40 dark:bg-brand-500/15 dark:ring-brand-400/40'
+          : 'hover:bg-slate-100 dark:hover:bg-slate-800/70'
       }`}
     >
+      {selected && (
+        <span
+          aria-hidden
+          className="absolute inset-y-2 left-0 w-1 rounded-r-full bg-brand-500 dark:bg-brand-400"
+        />
+      )}
       <div className="min-w-0 flex-1">
         <div
-          className={`text-base ${
+          className={`text-[15px] leading-tight ${
             muted
               ? 'text-slate-500 dark:text-slate-400'
               : selected
-                ? 'font-medium text-slate-900 dark:text-slate-100'
-                : 'text-slate-900 dark:text-slate-100'
+                ? 'font-semibold text-brand-700 dark:text-brand-200'
+                : 'font-medium text-slate-900 dark:text-slate-100'
           }`}
         >
           {label}
@@ -187,28 +192,45 @@ function PickerRow({
           </div>
         )}
       </div>
-      <span
-        aria-hidden
-        className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 ${
-          selected
-            ? 'border-brand-500 bg-brand-500 text-white'
-            : 'border-slate-300 dark:border-slate-600'
-        }`}
-      >
-        {selected && (
-          <svg
-            viewBox="0 0 16 16"
-            className="h-3 w-3"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="3"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <path d="M3 8.5l3.5 3.5L13 5" />
-          </svg>
-        )}
-      </span>
+      {selected ? (
+        <Checkmark />
+      ) : (
+        <span aria-hidden className="h-5 w-5 shrink-0" />
+      )}
     </button>
+  )
+}
+
+function Checkmark() {
+  return (
+    <svg
+      aria-hidden
+      viewBox="0 0 24 24"
+      className="h-5 w-5 shrink-0 text-brand-600 dark:text-brand-300"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="3"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M5 12.5l4.5 4.5L19 7" />
+    </svg>
+  )
+}
+
+function ChevronDown() {
+  return (
+    <svg
+      aria-hidden
+      viewBox="0 0 24 24"
+      className="h-5 w-5 shrink-0 text-slate-400"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M6 9l6 6 6-6" />
+    </svg>
   )
 }
