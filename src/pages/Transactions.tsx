@@ -155,7 +155,6 @@ export default function Transactions() {
                     )}
                     <div className="text-xs text-slate-500">
                       {formatDateTime(t.date, state.location.timezone, state.clock)}
-                      {t.technician && ` · ${t.technician}`}
                       {t.amount > 0 && (
                         <>
                           {' · '}gross {kgToDisplay(t.weightBefore, unit).toFixed(2)} to{' '}
@@ -163,6 +162,23 @@ export default function Transactions() {
                         </>
                       )}
                     </div>
+                    {(t.technician ||
+                      t.technicianLicence ||
+                      t.businessName ||
+                      t.arcAuthorisationNumber) && (
+                      <div className="mt-1 text-xs text-slate-500">
+                        {[
+                          t.technician &&
+                            `${t.technician}${t.technicianLicence ? ` · RHL ${t.technicianLicence}` : ''}`,
+                          !t.technician && t.technicianLicence && `RHL ${t.technicianLicence}`,
+                          t.businessName &&
+                            `${t.businessName}${t.arcAuthorisationNumber ? ` · RTA ${t.arcAuthorisationNumber}` : ''}`,
+                          !t.businessName && t.arcAuthorisationNumber && `RTA ${t.arcAuthorisationNumber}`,
+                        ]
+                          .filter(Boolean)
+                          .join(' · ')}
+                      </div>
+                    )}
                     {transactionLoss(t) > 0 && (
                       <div className="text-xs font-medium text-amber-600 dark:text-amber-400">
                         Loss: {formatWeight(transactionLoss(t), unit)}
@@ -228,13 +244,15 @@ function TransactionForm({
     bottleAmount?: number
     date: string
     technician?: string
+    technicianLicence?: string
     equipment?: string
     reason?: TransactionReason
     notes?: string
   }) => void
 }) {
-  const { state, addSite, addUnit } = useStore()
-  const { bottles, sites, technician, unit } = state
+  const { state, addSite, addUnit, addTechnician, setActiveTechnicianId } =
+    useStore()
+  const { bottles, sites, unit } = state
   const tz = state.location.timezone
   const clock = state.clock
 
@@ -246,7 +264,16 @@ function TransactionForm({
   const [bottleAmount, setBottleAmount] = useState('')
   const [showLoss, setShowLoss] = useState(false)
   const [date, setDate] = useState(() => localDateTimeInput(new Date(), tz))
-  const [tech, setTech] = useState(technician)
+  // Tech selection: profile id, or '__other__' for free-text fallback.
+  // Defaults to the active profile so single-tech crews don't have to
+  // touch this control on every log.
+  const [techId, setTechId] = useState<string>(
+    state.activeTechnicianId ?? (state.technicians[0]?.id ?? '__other__'),
+  )
+  const [techOther, setTechOther] = useState(state.technician)
+  const [addingTech, setAddingTech] = useState(false)
+  const [newTechName, setNewTechName] = useState('')
+  const [newTechRhl, setNewTechRhl] = useState('')
   const [equipment, setEquipment] = useState('')
   const [reason, setReason] = useState<TransactionReason | ''>('')
   const [notes, setNotes] = useState('')
@@ -268,7 +295,14 @@ function TransactionForm({
     setBottleAmount('')
     setShowLoss(false)
     setDate(localDateTimeInput(new Date(), tz))
-    setTech(technician)
+    setTechId(
+      state.activeTechnicianId ??
+        (state.technicians[0]?.id ?? '__other__'),
+    )
+    setTechOther(state.technician)
+    setAddingTech(false)
+    setNewTechName('')
+    setNewTechRhl('')
     setEquipment('')
     setReason('')
     setNotes('')
@@ -312,6 +346,18 @@ function TransactionForm({
     !!bottle && kind === 'return' && bottle.status === 'returned'
   const submitBlocked = blockOverdraw || blockAlreadyReturned
 
+  // Resolve identity stamps from the picked profile (or the free-text
+  // "Other" field). The store still adds fallbacks on top of these for
+  // legacy single-tech state.
+  const pickedTech =
+    techId !== '__other__'
+      ? state.technicians.find((t) => t.id === techId)
+      : null
+  const stampedTechName = pickedTech
+    ? pickedTech.name
+    : techOther.trim() || undefined
+  const stampedRhl = pickedTech?.arcLicenceNumber || undefined
+
   function submit(e: React.FormEvent) {
     e.preventDefault()
     if (!bottleId) return
@@ -328,11 +374,26 @@ function TransactionForm({
           ? Math.abs(bottleAmountKg)
           : undefined,
       date: dateTimeInputToIso(date, tz),
-      technician: tech.trim() || undefined,
+      technician: stampedTechName,
+      technicianLicence: stampedRhl,
       equipment: equipment.trim() || undefined,
       reason: reason || undefined,
       notes: notes.trim() || undefined,
     })
+  }
+
+  function commitNewTech() {
+    const trimmed = newTechName.trim()
+    if (!trimmed) return
+    const created = addTechnician({
+      name: trimmed,
+      arcLicenceNumber: newTechRhl.trim(),
+    })
+    setActiveTechnicianId(created.id)
+    setTechId(created.id)
+    setAddingTech(false)
+    setNewTechName('')
+    setNewTechRhl('')
   }
 
   return (
@@ -571,9 +632,87 @@ function TransactionForm({
           />
         </Field>
 
-        <Field label="Technician">
-          <TextInput value={tech} onChange={(e) => setTech(e.target.value)} />
+        <Field
+          label="Technician"
+          hint={
+            pickedTech?.arcLicenceNumber
+              ? `Stamps RHL ${pickedTech.arcLicenceNumber} on this transaction.`
+              : pickedTech
+                ? 'No RHL on this profile — add one in Settings to stamp it.'
+                : 'Pick a profile to stamp a name + RHL, or use Other for a one-off entry.'
+          }
+        >
+          <Select
+            value={techId}
+            onChange={(e) => {
+              const v = e.target.value
+              if (v === '__add__') {
+                setAddingTech(true)
+                return
+              }
+              setTechId(v)
+              if (v !== '__other__') setActiveTechnicianId(v)
+            }}
+          >
+            {state.technicians.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.name}
+                {t.arcLicenceNumber ? ` · RHL ${t.arcLicenceNumber}` : ''}
+              </option>
+            ))}
+            <option value="__other__">Other (manual entry)</option>
+            <option value="__add__">+ Add new tech…</option>
+          </Select>
         </Field>
+
+        {techId === '__other__' && (
+          <Field label="Technician name">
+            <TextInput
+              value={techOther}
+              onChange={(e) => setTechOther(e.target.value)}
+              placeholder="One-off name (no RHL stamped)"
+            />
+          </Field>
+        )}
+
+        {addingTech && (
+          <div className="space-y-2 rounded-xl bg-slate-50 p-3 dark:bg-slate-800/50">
+            <div className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+              New tech profile
+            </div>
+            <Field label="Name">
+              <TextInput
+                autoFocus
+                value={newTechName}
+                onChange={(e) => setNewTechName(e.target.value)}
+                placeholder="e.g. Jane Smith"
+              />
+            </Field>
+            <Field label="RHL">
+              <TextInput
+                value={newTechRhl}
+                onChange={(e) => setNewTechRhl(e.target.value)}
+                placeholder="e.g. L000000"
+              />
+            </Field>
+            <div className="flex gap-2">
+              <Button type="button" onClick={commitNewTech}>
+                Save tech
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => {
+                  setAddingTech(false)
+                  setNewTechName('')
+                  setNewTechRhl('')
+                }}
+              >
+                Cancel
+              </Button>
+            </div>
+          </div>
+        )}
 
         <Field label="Notes">
           <TextArea value={notes} onChange={(e) => setNotes(e.target.value)} />

@@ -3,6 +3,7 @@ import {
   Button,
   Card,
   Field,
+  Modal,
   Pill,
   Select,
   TextInput,
@@ -15,6 +16,7 @@ import {
   transactionLoss,
   type ClockFormat,
   type LocationSettings,
+  type Technician,
   type Theme,
   type WeightUnit,
 } from '../lib/types'
@@ -34,8 +36,10 @@ import {
 export default function Settings() {
   const {
     state,
-    setTechnician,
-    setArcLicenceNumber,
+    addTechnician,
+    updateTechnician,
+    deleteTechnician,
+    setActiveTechnicianId,
     setArcAuthorisationNumber,
     setBusinessName,
     setLocation,
@@ -50,18 +54,16 @@ export default function Settings() {
     importState,
   } = useStore()
   const toast = useToast()
-  const [techName, setTechName] = useState(state.technician)
-  const [arcLicence, setArcLicence] = useState(state.arcLicenceNumber)
   const [arcAuth, setArcAuth] = useState(state.arcAuthorisationNumber)
   const [bizName, setBizName] = useState(state.businessName)
   const [loc, setLoc] = useState<LocationSettings>(state.location)
   const [newType, setNewType] = useState('')
   const [teamIdInput, setTeamIdInput] = useState(state.sync.teamId)
+  const [techModalOpen, setTechModalOpen] = useState(false)
+  const [editingTech, setEditingTech] = useState<Technician | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
   const favorites = state.favoriteRefrigerants
 
-  useEffect(() => setTechName(state.technician), [state.technician])
-  useEffect(() => setArcLicence(state.arcLicenceNumber), [state.arcLicenceNumber])
   useEffect(
     () => setArcAuth(state.arcAuthorisationNumber),
     [state.arcAuthorisationNumber],
@@ -69,6 +71,15 @@ export default function Settings() {
   useEffect(() => setBizName(state.businessName), [state.businessName])
   useEffect(() => setLoc(state.location), [state.location])
   useEffect(() => setTeamIdInput(state.sync.teamId), [state.sync.teamId])
+
+  function openAddTech() {
+    setEditingTech(null)
+    setTechModalOpen(true)
+  }
+  function openEditTech(t: Technician) {
+    setEditingTech(t)
+    setTechModalOpen(true)
+  }
 
   // --- Storage health state ---------------------------------------------
   const [persisted, setPersisted] = useState<boolean | null>(null)
@@ -234,23 +245,70 @@ export default function Settings() {
       </h2>
 
       <Card>
-        <Field label="Default technician name">
-          <div className="flex gap-2">
-            <TextInput
-              value={techName}
-              onChange={(e) => setTechName(e.target.value)}
-              placeholder="Your name"
-            />
-            <Button
-              onClick={() => {
-                setTechnician(techName)
-                toast.show('Saved')
-              }}
-            >
-              Save
-            </Button>
+        <div className="mb-1 flex items-center justify-between gap-2">
+          <div className="text-sm font-semibold text-slate-700 dark:text-slate-200">
+            Technicians
           </div>
-        </Field>
+          <Button onClick={openAddTech}>+ Add tech</Button>
+        </div>
+        <p className="mb-3 text-xs text-slate-500">
+          Each profile carries a name and an ARC Refrigerant Handling Licence
+          (RHL). Pick the active tech here — every transaction logged is
+          stamped with that profile's name and RHL, frozen so the historical
+          record is preserved if a tech later changes their licence.
+        </p>
+        {state.technicians.length === 0 ? (
+          <p className="text-sm text-slate-500">
+            No tech profiles yet. Add one so transactions can be attributed for
+            audits.
+          </p>
+        ) : (
+          <div className="space-y-2">
+            {state.technicians.map((t) => {
+              const isActive = state.activeTechnicianId === t.id
+              return (
+                <div
+                  key={t.id}
+                  className={`flex items-center justify-between gap-2 rounded-lg px-3 py-2 ${
+                    isActive
+                      ? 'bg-brand-50 dark:bg-brand-900/20'
+                      : 'bg-slate-100 dark:bg-slate-800'
+                  }`}
+                >
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="truncate font-medium text-slate-900 dark:text-slate-100">
+                        {t.name || '(unnamed)'}
+                      </span>
+                      {isActive && <Pill tone="green">Active</Pill>}
+                    </div>
+                    <div className="text-xs text-slate-500">
+                      {t.arcLicenceNumber
+                        ? `RHL ${t.arcLicenceNumber}`
+                        : 'No RHL recorded'}
+                    </div>
+                  </div>
+                  <div className="flex shrink-0 gap-1">
+                    {!isActive && (
+                      <Button
+                        variant="secondary"
+                        onClick={() => {
+                          setActiveTechnicianId(t.id)
+                          toast.show(`Active tech: ${t.name}`)
+                        }}
+                      >
+                        Use
+                      </Button>
+                    )}
+                    <Button variant="ghost" onClick={() => openEditTech(t)}>
+                      Edit
+                    </Button>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
       </Card>
 
       <Card>
@@ -309,26 +367,11 @@ export default function Settings() {
               </Button>
             </div>
           </Field>
-          <Field
-            label="Your ARC Refrigerant Handling Licence (RHL)"
-            hint="Personal licence issued to you. Stamped onto every transaction at the time of work — change before you log work as a different tech."
-          >
-            <div className="flex gap-2">
-              <TextInput
-                value={arcLicence}
-                onChange={(e) => setArcLicence(e.target.value)}
-                placeholder="e.g. L000000"
-              />
-              <Button
-                onClick={() => {
-                  setArcLicenceNumber(arcLicence)
-                  toast.show('Saved')
-                }}
-              >
-                Save
-              </Button>
-            </div>
-          </Field>
+          <p className="text-xs text-slate-500">
+            Each tech's RHL lives on their profile in the Technicians card
+            above — that's how a multi-tech crew gets their own licence
+            stamped on each transaction.
+          </p>
         </div>
       </Card>
 
@@ -791,7 +834,104 @@ export default function Settings() {
       <p className="px-1 text-center text-xs text-slate-400">
         RefrigHandle · data stored locally on this device
       </p>
+
+      <TechnicianModal
+        open={techModalOpen}
+        editing={editingTech}
+        onClose={() => setTechModalOpen(false)}
+        onSave={(data) => {
+          if (editingTech) {
+            updateTechnician(editingTech.id, data)
+            toast.show('Tech updated')
+          } else {
+            const created = addTechnician(data)
+            setActiveTechnicianId(created.id)
+            toast.show(`${created.name} added`)
+          }
+          setTechModalOpen(false)
+        }}
+        onDelete={
+          editingTech
+            ? () => {
+                if (confirm(`Remove ${editingTech.name}?`)) {
+                  deleteTechnician(editingTech.id)
+                  toast.show('Tech removed', 'info')
+                  setTechModalOpen(false)
+                }
+              }
+            : undefined
+        }
+      />
     </div>
+  )
+}
+
+function TechnicianModal({
+  open,
+  editing,
+  onClose,
+  onSave,
+  onDelete,
+}: {
+  open: boolean
+  editing: Technician | null
+  onClose: () => void
+  onSave: (data: { name: string; arcLicenceNumber: string }) => void
+  onDelete?: () => void
+}) {
+  const [name, setName] = useState('')
+  const [rhl, setRhl] = useState('')
+  const key = editing?.id ?? 'new'
+  const [seenKey, setSeenKey] = useState('')
+  if (open && seenKey !== key) {
+    setSeenKey(key)
+    setName(editing?.name ?? '')
+    setRhl(editing?.arcLicenceNumber ?? '')
+  }
+  if (!open && seenKey !== '') {
+    setSeenKey('')
+  }
+
+  function submit(e: React.FormEvent) {
+    e.preventDefault()
+    if (!name.trim()) return
+    onSave({ name: name.trim(), arcLicenceNumber: rhl.trim() })
+  }
+
+  return (
+    <Modal open={open} onClose={onClose} title={editing ? 'Edit tech' : 'Add tech'}>
+      <form onSubmit={submit} className="space-y-3">
+        <Field label="Name">
+          <TextInput
+            required
+            autoFocus
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="e.g. Jane Smith"
+          />
+        </Field>
+        <Field
+          label="ARC Refrigerant Handling Licence (RHL)"
+          hint="Personal licence — stamped onto every transaction this tech logs."
+        >
+          <TextInput
+            value={rhl}
+            onChange={(e) => setRhl(e.target.value)}
+            placeholder="e.g. L000000"
+          />
+        </Field>
+        <div className="flex gap-2">
+          <Button type="submit" full>
+            {editing ? 'Save changes' : 'Add tech'}
+          </Button>
+          {onDelete && (
+            <Button type="button" variant="danger" onClick={onDelete}>
+              Remove
+            </Button>
+          )}
+        </div>
+      </form>
+    </Modal>
   )
 }
 

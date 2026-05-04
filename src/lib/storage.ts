@@ -3,6 +3,7 @@ import {
   type AppState,
   type Bottle,
   type Site,
+  type Technician,
   type Transaction,
 } from './types'
 
@@ -38,6 +39,8 @@ interface LegacyState
     | 'businessName'
     | 'location'
     | 'clock'
+    | 'technicians'
+    | 'activeTechnicianId'
   > {
   bottles?: LegacyBottle[]
   transactions?: LegacyTransaction[]
@@ -55,6 +58,8 @@ interface LegacyState
   businessName?: string
   location?: Partial<AppState['location']>
   clock?: string
+  technicians?: Technician[]
+  activeTechnicianId?: string
 }
 
 export type LoadStatus = 'ok' | 'empty' | 'corrupted'
@@ -95,6 +100,34 @@ function normalize(parsed: LegacyState): AppState {
     return { ...u, kind } as AppState['units'][number]
   })
 
+  // Seed a tech profile from the legacy single-tech fields when the
+  // user has data but no profile list yet — keeps logged transactions
+  // attributable after the upgrade without any manual step.
+  const legacyTechName = (parsed.technician ?? '').trim()
+  const legacyRhl = (parsed.arcLicenceNumber ?? '').trim()
+  const existingTechnicians = parsed.technicians ?? []
+  let technicians: Technician[] = existingTechnicians
+  let activeTechnicianId: string | undefined = parsed.activeTechnicianId
+  if (
+    existingTechnicians.length === 0 &&
+    (legacyTechName || legacyRhl)
+  ) {
+    const seeded: Technician = {
+      id: uid(),
+      name: legacyTechName || 'Technician',
+      arcLicenceNumber: legacyRhl,
+      createdAt: new Date().toISOString(),
+    }
+    technicians = [seeded]
+    activeTechnicianId = seeded.id
+  }
+  if (
+    activeTechnicianId &&
+    !technicians.some((t) => t.id === activeTechnicianId)
+  ) {
+    activeTechnicianId = technicians[0]?.id
+  }
+
   return {
     ...EMPTY_STATE,
     ...parsed,
@@ -106,6 +139,8 @@ function normalize(parsed: LegacyState): AppState {
     favoriteRefrigerants: parsed.favoriteRefrigerants ?? [],
     customBottlePresets: parsed.customBottlePresets ?? [],
     favoriteBottlePresets: parsed.favoriteBottlePresets ?? [],
+    technicians,
+    activeTechnicianId,
     technician: parsed.technician ?? '',
     arcLicenceNumber: parsed.arcLicenceNumber ?? '',
     arcAuthorisationNumber: parsed.arcAuthorisationNumber ?? '',

@@ -938,8 +938,7 @@ function UnitLogbook({
                     <th className="py-1 pr-2 text-right">Bottle kg</th>
                     <th className="py-1 pr-2 text-right">Loss kg</th>
                     <th className="py-1 pr-2">Reason</th>
-                    <th className="py-1 pr-2">Tech</th>
-                    <th className="py-1 pr-2">ARC RHL</th>
+                    <th className="py-1 pr-2">Operator</th>
                     <th className="py-1">Notes</th>
                   </tr>
                 </thead>
@@ -1035,8 +1034,18 @@ function LogbookRow({ t }: { t: Transaction }) {
         {loss > 0 ? loss.toFixed(3) : ''}
       </td>
       <td className="py-1 pr-2">{t.reason ?? ''}</td>
-      <td className="py-1 pr-2">{t.technician ?? ''}</td>
-      <td className="py-1 pr-2 whitespace-nowrap">{t.technicianLicence ?? ''}</td>
+      <td className="py-1 pr-2 whitespace-nowrap">
+        {t.technician && <div>{t.technician}</div>}
+        {t.technicianLicence && (
+          <div className="text-[10px] text-slate-500">RHL {t.technicianLicence}</div>
+        )}
+        {t.businessName && <div>{t.businessName}</div>}
+        {t.arcAuthorisationNumber && (
+          <div className="text-[10px] text-slate-500">
+            RTA {t.arcAuthorisationNumber}
+          </div>
+        )}
+      </td>
       <td className="py-1">{t.notes ?? ''}</td>
     </tr>
   )

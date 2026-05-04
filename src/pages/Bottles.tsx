@@ -566,7 +566,10 @@ function QuickLogModal({
           ? Math.abs(bottleAmountKg)
           : undefined,
       date: new Date(date).toISOString(),
-      technician: state.technician || undefined,
+      // Tech name + RHL come from the active profile via the store's
+      // stamping fallback. The bottle quick-log form doesn't expose a
+      // tech picker — for crews that need to switch techs per job, log
+      // from the Activity tab where the picker lives.
       equipment: equipment.trim() || undefined,
       reason: reason || undefined,
       notes: notes.trim() || undefined,

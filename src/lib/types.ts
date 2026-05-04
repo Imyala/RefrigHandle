@@ -190,6 +190,12 @@ export interface Transaction {
   // work — frozen so a logbook printed years later still shows the
   // licence that was in force, not what the tech happens to hold now.
   technicianLicence?: string
+  // Business trading name and ARC Refrigerant Trading Authorisation
+  // (RTA) frozen at the time of work for the same reason as the RHL
+  // above — an audit needs to see the operator that was in force when
+  // the transaction happened, not whoever owns the licence today.
+  businessName?: string
+  arcAuthorisationNumber?: string
   equipment?: string // free-text fallback if no Unit is picked
   reason?: TransactionReason
   notes?: string
@@ -228,6 +234,17 @@ export interface LocationSettings {
   timezone: string // IANA name, e.g. 'Australia/Sydney'
 }
 
+// A technician profile carries the per-person identity that gets
+// stamped onto every transaction the tech logs. Multiple profiles let
+// a multi-tech crew use the same device (or, once cloud sync is real,
+// the same business account) without overwriting each other's RHL.
+export interface Technician {
+  id: string
+  name: string
+  arcLicenceNumber: string // ARC RHL — personal licence, per tech
+  createdAt: string
+}
+
 export interface AppState {
   bottles: Bottle[]
   sites: Site[]
@@ -237,11 +254,22 @@ export interface AppState {
   favoriteRefrigerants: string[]
   customBottlePresets: BottlePreset[]
   favoriteBottlePresets: string[]
+  // Per-tech profiles. Each profile carries a name + ARC RHL. When a
+  // transaction is logged we stamp from the active profile.
+  technicians: Technician[]
+  // Which profile is currently in the seat on this device. Stored on
+  // the shared state today (pre-auth) so a single-tech business gets
+  // sticky behaviour; will move to per-device once we have real auth.
+  activeTechnicianId?: string
+  // Legacy single-tech fallback. Pre-profile installs only had one
+  // tech name + RHL on the global state. We keep these around so an
+  // old export still imports cleanly and migration into a profile is
+  // lossless. New installs leave them empty.
   technician: string
+  arcLicenceNumber: string
   // Australian compliance identity, surfaced on logbook PDFs and
   // auto-stamped onto each new Transaction so the historical record
   // is preserved if the licence/RTA changes later.
-  arcLicenceNumber: string // ARC Refrigerant Handling Licence (RHL), per technician
   arcAuthorisationNumber: string // ARC Refrigerant Trading Authorisation (RTA), per business
   businessName: string
   location: LocationSettings
@@ -260,6 +288,8 @@ export const EMPTY_STATE: AppState = {
   favoriteRefrigerants: [],
   customBottlePresets: [],
   favoriteBottlePresets: [],
+  technicians: [],
+  activeTechnicianId: undefined,
   technician: '',
   arcLicenceNumber: '',
   arcAuthorisationNumber: '',

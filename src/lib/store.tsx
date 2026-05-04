@@ -16,6 +16,7 @@ import {
   type LocationSettings,
   type Site,
   type SyncSettings,
+  type Technician,
   type Theme,
   type Transaction,
   type Unit,
@@ -51,6 +52,11 @@ interface StoreApi {
     t: Omit<Transaction, 'id' | 'weightBefore' | 'weightAfter'>,
   ) => Transaction | null
   deleteTransaction: (id: string) => void
+  // technician profiles
+  addTechnician: (t: Omit<Technician, 'id' | 'createdAt'>) => Technician
+  updateTechnician: (id: string, patch: Partial<Technician>) => void
+  deleteTechnician: (id: string) => void
+  setActiveTechnicianId: (id: string | undefined) => void
   // settings
   setTechnician: (name: string) => void
   setArcLicenceNumber: (n: string) => void
@@ -309,6 +315,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           ? Math.max(0, Math.round((sourceBottle.grossWeight - t.amount) * 1000) / 1000)
           : undefined
 
+      // Resolve identity stamps from (in order): explicit values on
+      // the incoming transaction → the active tech profile → legacy
+      // single-tech state → undefined. This keeps existing call sites
+      // working while letting the form pass profile-derived values
+      // explicitly when a profile is picked.
+      const activeTech = s.technicians.find(
+        (x) => x.id === s.activeTechnicianId,
+      )
       const tx: Transaction = {
         ...t,
         id: uid(),
@@ -316,11 +330,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         weightAfter: after,
         sourceWeightBefore: sourceBefore,
         sourceWeightAfter: sourceAfter,
-        // Stamp the ARC RHL in force at the time of the work, so the
-        // historical logbook is correct even if the licence number
-        // later changes in Settings.
+        technician: t.technician ?? activeTech?.name ?? (s.technician || undefined),
         technicianLicence:
-          t.technicianLicence ?? (s.arcLicenceNumber || undefined),
+          t.technicianLicence ??
+          (activeTech?.arcLicenceNumber || undefined) ??
+          (s.arcLicenceNumber || undefined),
+        businessName: t.businessName ?? (s.businessName || undefined),
+        arcAuthorisationNumber:
+          t.arcAuthorisationNumber ?? (s.arcAuthorisationNumber || undefined),
       }
       result = tx
 
@@ -376,6 +393,63 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       transactions: s.transactions.filter((t) => t.id !== id),
     }))
   }, [])
+
+  const addTechnician: StoreApi['addTechnician'] = useCallback((t) => {
+    const tech: Technician = {
+      ...t,
+      name: t.name.trim(),
+      arcLicenceNumber: t.arcLicenceNumber.trim(),
+      id: uid(),
+      createdAt: new Date().toISOString(),
+    }
+    setState((s) => ({
+      ...s,
+      technicians: [...s.technicians, tech],
+      // First profile added becomes active automatically — saves a tap
+      // for single-tech businesses, which is the common case today.
+      activeTechnicianId: s.activeTechnicianId ?? tech.id,
+    }))
+    return tech
+  }, [])
+
+  const updateTechnician: StoreApi['updateTechnician'] = useCallback(
+    (id, patch) => {
+      setState((s) => ({
+        ...s,
+        technicians: s.technicians.map((t) =>
+          t.id === id
+            ? {
+                ...t,
+                ...patch,
+                name: (patch.name ?? t.name).trim(),
+                arcLicenceNumber: (
+                  patch.arcLicenceNumber ?? t.arcLicenceNumber
+                ).trim(),
+              }
+            : t,
+        ),
+      }))
+    },
+    [],
+  )
+
+  const deleteTechnician: StoreApi['deleteTechnician'] = useCallback((id) => {
+    setState((s) => {
+      const remaining = s.technicians.filter((t) => t.id !== id)
+      const nextActive =
+        s.activeTechnicianId === id ? remaining[0]?.id : s.activeTechnicianId
+      return {
+        ...s,
+        technicians: remaining,
+        activeTechnicianId: nextActive,
+      }
+    })
+  }, [])
+
+  const setActiveTechnicianId: StoreApi['setActiveTechnicianId'] = useCallback(
+    (id) => setState((s) => ({ ...s, activeTechnicianId: id })),
+    [],
+  )
 
   const setTechnician = useCallback(
     (name: string) => setState((s) => ({ ...s, technician: name })),
@@ -496,7 +570,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         technician: '',
         // Compliance identity is per-tech / per-business, not per
         // dataset — keep it across a "wipe data" so the user doesn't
-        // have to re-enter their ARC numbers after a factory reset.
+        // have to re-enter their ARC numbers (or rebuild their tech
+        // roster) after a factory reset.
+        technicians: s.technicians,
+        activeTechnicianId: s.activeTechnicianId,
         arcLicenceNumber: s.arcLicenceNumber,
         arcAuthorisationNumber: s.arcAuthorisationNumber,
         businessName: s.businessName,
@@ -527,6 +604,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       reactivateUnit,
       addTransaction,
       deleteTransaction,
+      addTechnician,
+      updateTechnician,
+      deleteTechnician,
+      setActiveTechnicianId,
       setTechnician,
       setArcLicenceNumber,
       setArcAuthorisationNumber,
@@ -560,6 +641,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       reactivateUnit,
       addTransaction,
       deleteTransaction,
+      addTechnician,
+      updateTechnician,
+      deleteTechnician,
+      setActiveTechnicianId,
       setTechnician,
       setArcLicenceNumber,
       setArcAuthorisationNumber,
