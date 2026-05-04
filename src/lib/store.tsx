@@ -51,7 +51,12 @@ interface StoreApi {
   addTransaction: (
     t: Omit<Transaction, 'id' | 'weightBefore' | 'weightAfter'>,
   ) => Transaction | null
-  deleteTransaction: (id: string) => void
+  // Soft-delete: hides the row from normal views but keeps it in
+  // storage so an admin / business owner can audit what was removed
+  // and restore it if the deletion was a mistake. Bottle weight is
+  // NOT reverted (matches the previous hard-delete behaviour).
+  deleteTransaction: (id: string, reason?: string) => void
+  restoreTransaction: (id: string) => void
   // technician profiles
   addTechnician: (t: Omit<Technician, 'id' | 'createdAt'>) => Technician
   updateTechnician: (id: string, patch: Partial<Technician>) => void
@@ -387,12 +392,55 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     return result
   }, [])
 
-  const deleteTransaction: StoreApi['deleteTransaction'] = useCallback((id) => {
-    setState((s) => ({
-      ...s,
-      transactions: s.transactions.filter((t) => t.id !== id),
-    }))
-  }, [])
+  const deleteTransaction: StoreApi['deleteTransaction'] = useCallback(
+    (id, reason) => {
+      setState((s) => {
+        const activeTech = s.technicians.find(
+          (x) => x.id === s.activeTechnicianId,
+        )
+        const now = new Date().toISOString()
+        return {
+          ...s,
+          transactions: s.transactions.map((t) =>
+            t.id === id
+              ? {
+                  ...t,
+                  deletedAt: now,
+                  deletedBy:
+                    activeTech?.name || s.technician || undefined,
+                  deletedByLicence:
+                    activeTech?.arcLicenceNumber ||
+                    s.arcLicenceNumber ||
+                    undefined,
+                  deletedReason: reason?.trim() || undefined,
+                }
+              : t,
+          ),
+        }
+      })
+    },
+    [],
+  )
+
+  const restoreTransaction: StoreApi['restoreTransaction'] = useCallback(
+    (id) => {
+      setState((s) => ({
+        ...s,
+        transactions: s.transactions.map((t) =>
+          t.id === id
+            ? {
+                ...t,
+                deletedAt: undefined,
+                deletedBy: undefined,
+                deletedByLicence: undefined,
+                deletedReason: undefined,
+              }
+            : t,
+        ),
+      }))
+    },
+    [],
+  )
 
   const addTechnician: StoreApi['addTechnician'] = useCallback((t) => {
     const tech: Technician = {
@@ -604,6 +652,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       reactivateUnit,
       addTransaction,
       deleteTransaction,
+      restoreTransaction,
       addTechnician,
       updateTechnician,
       deleteTechnician,
@@ -641,6 +690,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       reactivateUnit,
       addTransaction,
       deleteTransaction,
+      restoreTransaction,
       addTechnician,
       updateTechnician,
       deleteTechnician,

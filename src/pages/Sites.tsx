@@ -807,6 +807,10 @@ function UnitLogbook({
 
   const txs = state.transactions
     .filter((t) => t.unitId === unit.id)
+    // Soft-deleted rows aren't part of the equipment's working
+    // history — they're audit-only and surfaced separately under
+    // Settings → Deleted transactions.
+    .filter((t) => !t.deletedAt)
     .slice()
     .sort((a, b) => (a.date < b.date ? 1 : -1))
   const leak = leakStatusFor(unit, state.transactions)

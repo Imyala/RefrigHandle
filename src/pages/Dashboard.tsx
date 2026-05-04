@@ -30,7 +30,8 @@ export default function Dashboard() {
   const returned = bottles.filter((b) => b.status === 'returned').length
   const empty = bottles.filter((b) => b.status === 'empty').length
 
-  const recent = transactions.slice(0, 5)
+  const liveTransactions = transactions.filter((t) => !t.deletedAt)
+  const recent = liveTransactions.slice(0, 5)
 
   const hydroAlerts = bottles
     .map((b) => ({ b, h: hydroStatusFor(b) }))
@@ -148,7 +149,7 @@ export default function Dashboard() {
           <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
             Recent activity
           </h2>
-          {transactions.length > 5 && (
+          {liveTransactions.length > 5 && (
             <Link
               to="/transactions"
               className="text-sm font-medium text-brand-600 hover:underline"

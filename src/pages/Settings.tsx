@@ -13,6 +13,7 @@ import {
   AU_REGIONS,
   REFRIGERANT_TYPES,
   TIMEZONE_OPTIONS,
+  transactionLabel,
   transactionLoss,
   type ClockFormat,
   type LocationSettings,
@@ -20,6 +21,8 @@ import {
   type Theme,
   type WeightUnit,
 } from '../lib/types'
+import { formatDateTime } from '../lib/datetime'
+import { formatWeight } from '../lib/units'
 import { useToast } from '../lib/toast'
 import { isSyncConfigured } from '../lib/sync'
 import {
@@ -40,6 +43,7 @@ export default function Settings() {
     updateTechnician,
     deleteTechnician,
     setActiveTechnicianId,
+    restoreTransaction,
     setArcAuthorisationNumber,
     setBusinessName,
     setLocation,
@@ -169,6 +173,13 @@ export default function Settings() {
         'reason',
         'returnDestination',
         'technician',
+        'technicianLicence',
+        'businessName',
+        'arcAuthorisationNumber',
+        'deletedAt',
+        'deletedBy',
+        'deletedByLicence',
+        'deletedReason',
         'notes',
       ],
       ...state.transactions.map((t) => {
@@ -199,6 +210,13 @@ export default function Settings() {
           t.reason ?? '',
           t.returnDestination ?? '',
           t.technician ?? '',
+          t.technicianLicence ?? '',
+          t.businessName ?? '',
+          t.arcAuthorisationNumber ?? '',
+          t.deletedAt ?? '',
+          t.deletedBy ?? '',
+          t.deletedByLicence ?? '',
+          (t.deletedReason ?? '').replace(/[\r\n]+/g, ' '),
           (t.notes ?? '').replace(/[\r\n]+/g, ' '),
         ]
       }),
@@ -680,6 +698,8 @@ export default function Settings() {
         )}
       </Card>
 
+      <DeletedTransactionsCard onRestore={restoreTransaction} />
+
       <Card>
         <div className="mb-3 text-sm font-semibold text-slate-700 dark:text-slate-200">
           Backup &amp; export
@@ -932,6 +952,115 @@ function TechnicianModal({
         </div>
       </form>
     </Modal>
+  )
+}
+
+// Deleted transactions stay in storage for the audit trail. This card
+// is the only place an admin can review what was removed (with who /
+// when / why) and put it back if the deletion was a mistake. Live
+// transactions never appear here — only soft-deleted ones.
+function DeletedTransactionsCard({
+  onRestore,
+}: {
+  onRestore: (id: string) => void
+}) {
+  const { state } = useStore()
+  const toast = useToast()
+  const tz = state.location.timezone
+  const clock = state.clock
+
+  const deleted = state.transactions
+    .filter((t) => t.deletedAt)
+    .slice()
+    .sort((a, b) =>
+      (b.deletedAt ?? '').localeCompare(a.deletedAt ?? ''),
+    )
+
+  return (
+    <Card>
+      <div className="mb-1 flex items-center justify-between gap-2">
+        <div className="text-sm font-semibold text-slate-700 dark:text-slate-200">
+          Deleted transactions
+        </div>
+        <Pill tone={deleted.length > 0 ? 'amber' : 'slate'}>
+          {deleted.length}
+        </Pill>
+      </div>
+      <p className="mb-3 text-xs text-slate-500">
+        Transactions removed from the activity log are kept here so
+        business owners can audit what was deleted, by whom, and why.
+        Use Restore to put a row back into the live log if the
+        deletion was a mistake.
+      </p>
+      {deleted.length === 0 ? (
+        <p className="text-sm text-slate-500">
+          Nothing deleted. Deleted transactions appear here with the
+          tech who removed them and an optional reason.
+        </p>
+      ) : (
+        <div className="space-y-2">
+          {deleted.map((t) => {
+            const bottle = state.bottles.find((b) => b.id === t.bottleId)
+            const site = state.sites.find((j) => j.id === t.siteId)
+            const txUnit = state.units.find((u) => u.id === t.unitId)
+            return (
+              <div
+                key={t.id}
+                className="rounded-lg bg-slate-100 px-3 py-2 dark:bg-slate-800"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2 text-sm font-medium text-slate-900 dark:text-slate-100">
+                      <span>{transactionLabel(t.kind)}</span>
+                      {t.amount > 0 && (
+                        <span className="tabular-nums">
+                          {formatWeight(t.amount, state.unit)}
+                        </span>
+                      )}
+                      <span className="text-xs font-normal text-slate-500">
+                        {bottle?.refrigerantType ?? '?'}
+                      </span>
+                    </div>
+                    <div className="mt-0.5 text-xs text-slate-600 dark:text-slate-400">
+                      {bottle?.bottleNumber ?? '(deleted bottle)'}
+                      {site ? ` · ${site.name}` : ''}
+                      {txUnit ? ` · ${txUnit.name}` : ''}
+                    </div>
+                    <div className="mt-0.5 text-xs text-slate-500">
+                      Logged{' '}
+                      {formatDateTime(t.date, tz, clock)}
+                      {t.technician && ` by ${t.technician}`}
+                    </div>
+                    <div className="mt-1 text-xs text-red-700 dark:text-red-300">
+                      Deleted{' '}
+                      {t.deletedAt
+                        ? formatDateTime(t.deletedAt, tz, clock)
+                        : ''}
+                      {t.deletedBy && ` by ${t.deletedBy}`}
+                      {t.deletedByLicence && ` · RHL ${t.deletedByLicence}`}
+                    </div>
+                    {t.deletedReason && (
+                      <div className="mt-0.5 text-xs italic text-slate-500">
+                        Reason: “{t.deletedReason}”
+                      </div>
+                    )}
+                  </div>
+                  <Button
+                    variant="secondary"
+                    onClick={() => {
+                      onRestore(t.id)
+                      toast.show('Transaction restored')
+                    }}
+                  >
+                    Restore
+                  </Button>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </Card>
   )
 }
 

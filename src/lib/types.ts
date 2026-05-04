@@ -201,6 +201,17 @@ export interface Transaction {
   notes?: string
   // Where the bottle was returned (store / supplier) — only for 'return' kind
   returnDestination?: string
+  // Soft-delete fields. A row with deletedAt set is hidden from the
+  // normal activity log, dashboard, and equipment logbook, and is
+  // excluded from cumulative calcs (leak top-ups, totals). It stays
+  // in storage so business owners / auditors can see what was
+  // removed and restore it if the deletion was accidental. Bottle
+  // weight is NOT reverted on soft-delete — the historical weight
+  // chain is preserved as it was at the time of work.
+  deletedAt?: string
+  deletedBy?: string // technician name who soft-deleted
+  deletedByLicence?: string // RHL of the technician who soft-deleted
+  deletedReason?: string
 }
 
 export type WeightUnit = 'kg' | 'lb'
@@ -592,6 +603,7 @@ export function cumulativeTopUpKg(
     if (t.kind !== 'charge') continue
     if (t.reason === 'install') continue
     if (t.date < sinceISO) continue
+    if (t.deletedAt) continue
     sum += t.amount
   }
   return sum

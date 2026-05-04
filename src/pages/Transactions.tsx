@@ -52,6 +52,10 @@ export default function Transactions() {
   const sorted = useMemo(
     () =>
       [...transactions]
+        // Soft-deleted rows are kept in storage for the audit trail
+        // but hidden from the working activity log. Admins can review
+        // and restore them from Settings → Deleted transactions.
+        .filter((t) => !t.deletedAt)
         .filter((t) => filterKind === 'all' || t.kind === filterKind)
         .sort((a, b) => b.date.localeCompare(a.date)),
     [transactions, filterKind],
@@ -192,14 +196,21 @@ export default function Transactions() {
                   </div>
                   <button
                     onClick={() => {
-                      if (
-                        confirm(
-                          'Delete this transaction? Bottle weight will NOT auto-revert.',
-                        )
-                      ) {
-                        deleteTransaction(t.id)
-                        toast.show('Transaction deleted', 'info')
-                      }
+                      const reason = prompt(
+                        'Delete this transaction?\n\n' +
+                          'It will be hidden from the activity log but kept in storage so an admin can review or restore it from Settings → Deleted transactions.\n\n' +
+                          'Reason (optional):',
+                        '',
+                      )
+                      // prompt() returns null on Cancel — only proceed
+                      // when the user actually confirmed (returned a
+                      // string, even if empty).
+                      if (reason === null) return
+                      deleteTransaction(t.id, reason)
+                      toast.show(
+                        'Transaction deleted — recoverable in Settings',
+                        'info',
+                      )
                     }}
                     className="shrink-0 rounded-lg px-2 py-1 text-xs font-medium text-slate-500 hover:bg-slate-100 hover:text-red-600 dark:hover:bg-slate-800"
                     aria-label="Delete transaction"
