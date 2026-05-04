@@ -1,13 +1,13 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Button,
   Card,
   Field,
   Modal,
   Pill,
-  Select,
   TextInput,
 } from '../components/ui'
+import { Picker } from '../components/Picker'
 import { useStore } from '../lib/store'
 import {
   AU_REGIONS,
@@ -35,6 +35,26 @@ import {
   type CorruptedBackup,
   type StorageEstimate,
 } from '../lib/storage'
+import type { PickerOption } from '../components/Picker'
+
+const COUNTRY_OPTIONS: readonly PickerOption[] = [
+  { value: 'Australia', label: 'Australia' },
+  { value: 'New Zealand', label: 'New Zealand' },
+  { value: 'United Kingdom', label: 'United Kingdom' },
+  { value: 'United States', label: 'United States' },
+  { value: 'Canada', label: 'Canada' },
+  { value: 'Other', label: 'Other' },
+]
+
+const AU_REGION_OPTIONS: readonly PickerOption[] = AU_REGIONS.map((r) => ({
+  value: r,
+  label: r,
+}))
+
+const WEIGHT_UNIT_OPTIONS: readonly PickerOption[] = [
+  { value: 'kg', label: 'Kilograms (kg)' },
+  { value: 'lb', label: 'Pounds (lb)' },
+]
 
 export default function Settings() {
   const {
@@ -67,6 +87,16 @@ export default function Settings() {
   const [editingTech, setEditingTech] = useState<Technician | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
   const favorites = state.favoriteRefrigerants
+
+  const timezoneOptions = useMemo<PickerOption[]>(
+    () =>
+      TIMEZONE_OPTIONS.map((tz) => ({
+        value: tz.iana,
+        label: tz.label,
+        group: tz.group,
+      })),
+    [],
+  )
 
   useEffect(
     () => setArcAuth(state.arcAuthorisationNumber),
@@ -415,40 +445,33 @@ export default function Settings() {
         <div className="space-y-3">
           <div className="grid grid-cols-2 gap-3">
             <Field label="Country">
-              <Select
+              <Picker
+                title="Country"
                 value={loc.country}
-                onChange={(e) =>
+                onChange={(v) =>
                   setLoc((l) => ({
                     ...l,
-                    country: e.target.value,
+                    country: v,
                     // Clear region when leaving Australia — the curated AU
                     // state list doesn't apply to other countries.
-                    region: e.target.value === 'Australia' ? l.region : '',
+                    region: v === 'Australia' ? l.region : '',
                   }))
                 }
-              >
-                <option value="">—</option>
-                <option>Australia</option>
-                <option>New Zealand</option>
-                <option>United Kingdom</option>
-                <option>United States</option>
-                <option>Canada</option>
-                <option>Other</option>
-              </Select>
+                emptyLabel="—"
+                options={COUNTRY_OPTIONS}
+              />
             </Field>
             <Field label={loc.country === 'Australia' ? 'State / territory' : 'Region'}>
               {loc.country === 'Australia' ? (
-                <Select
+                <Picker
+                  title="State / territory"
                   value={loc.region}
-                  onChange={(e) =>
-                    setLoc((l) => ({ ...l, region: e.target.value }))
+                  onChange={(v) =>
+                    setLoc((l) => ({ ...l, region: v }))
                   }
-                >
-                  <option value="">—</option>
-                  {AU_REGIONS.map((r) => (
-                    <option key={r}>{r}</option>
-                  ))}
-                </Select>
+                  emptyLabel="—"
+                  options={AU_REGION_OPTIONS}
+                />
               ) : (
                 <TextInput
                   value={loc.region}
@@ -471,23 +494,15 @@ export default function Settings() {
             label="Timezone"
             hint='Used for "now" defaults and timestamp display. Pick the one your work day actually runs in.'
           >
-            <Select
+            <Picker
+              title="Timezone"
               value={loc.timezone}
-              onChange={(e) =>
-                setLoc((l) => ({ ...l, timezone: e.target.value }))
+              onChange={(v) =>
+                setLoc((l) => ({ ...l, timezone: v }))
               }
-            >
-              <option value="">— follow this device —</option>
-              {(['Australia', 'Pacific', 'World'] as const).map((g) => (
-                <optgroup key={g} label={g}>
-                  {TIMEZONE_OPTIONS.filter((tz) => tz.group === g).map((tz) => (
-                    <option key={tz.iana} value={tz.iana}>
-                      {tz.label}
-                    </option>
-                  ))}
-                </optgroup>
-              ))}
-            </Select>
+              emptyLabel="— follow this device —"
+              options={timezoneOptions}
+            />
           </Field>
         </div>
       </Card>
@@ -523,16 +538,15 @@ export default function Settings() {
 
       <Card>
         <Field label="Weight units" hint="Display only — data is always stored in kg internally">
-          <Select
+          <Picker
+            title="Weight units"
             value={state.unit}
-            onChange={(e) => {
-              setUnit(e.target.value as WeightUnit)
-              toast.show(`Switched to ${e.target.value}`)
+            onChange={(v) => {
+              setUnit(v as WeightUnit)
+              toast.show(`Switched to ${v}`)
             }}
-          >
-            <option value="kg">Kilograms (kg)</option>
-            <option value="lb">Pounds (lb)</option>
-          </Select>
+            options={WEIGHT_UNIT_OPTIONS}
+          />
         </Field>
       </Card>
 

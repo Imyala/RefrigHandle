@@ -6,10 +6,10 @@ import {
   Field,
   Modal,
   Pill,
-  Select,
   TextArea,
   TextInput,
 } from '../components/ui'
+import { Picker } from '../components/Picker'
 import { useStore } from '../lib/store'
 import {
   NON_REFRIGERANT_UNIT_KINDS,
@@ -702,17 +702,16 @@ export function UnitForm({
         </Field>
 
         <Field label="Equipment type">
-          <Select
+          <Picker
+            title="Equipment type"
             value={kind}
-            onChange={(e) => setKind(e.target.value as UnitKind | '')}
-          >
-            <option value="">— pick a type —</option>
-            {(Object.keys(UNIT_KIND_LABELS) as UnitKind[]).map((k) => (
-              <option key={k} value={k}>
-                {UNIT_KIND_LABELS[k]}
-              </option>
-            ))}
-          </Select>
+            onChange={(v) => setKind(v as UnitKind | '')}
+            placeholder="— pick a type —"
+            options={(Object.keys(UNIT_KIND_LABELS) as UnitKind[]).map((k) => ({
+              value: k,
+              label: UNIT_KIND_LABELS[k],
+            }))}
+          />
         </Field>
 
         {kind && NON_REFRIGERANT_UNIT_KINDS.has(kind) && (

@@ -6,10 +6,10 @@ import {
   Field,
   Modal,
   Pill,
-  Select,
   TextArea,
   TextInput,
 } from '../components/ui'
+import { Picker, type PickerOption } from '../components/Picker'
 import { useStore } from '../lib/store'
 import {
   type TransactionKind,
@@ -29,6 +29,14 @@ import {
   formatDateTime,
   localDateTimeInput,
 } from '../lib/datetime'
+
+const KIND_OPTIONS: readonly PickerOption[] = [
+  { value: 'charge', label: 'Charge', hint: 'into equipment (bottle weight decreases)' },
+  { value: 'recover', label: 'Recover', hint: 'from equipment (bottle weight increases)' },
+  { value: 'transfer', label: 'Transfer bottle to a site' },
+  { value: 'return', label: 'Return bottle to stock/supplier' },
+  { value: 'adjust', label: 'Manual adjust (signed)' },
+]
 
 const kindTone: Record<
   TransactionKind,
@@ -411,54 +419,47 @@ function TransactionForm({
     <Modal open={open} title="Log transaction" onClose={onClose}>
       <form onSubmit={submit} className="space-y-3">
         <Field label="What happened?">
-          <Select
+          <Picker
+            title="What happened?"
             value={kind}
-            onChange={(e) => setKind(e.target.value as TransactionKind)}
-          >
-            <option value="charge">Charge — into equipment (bottle weight decreases)</option>
-            <option value="recover">Recover — from equipment (bottle weight increases)</option>
-            <option value="transfer">Transfer bottle to a site</option>
-            <option value="return">Return bottle to stock/supplier</option>
-            <option value="adjust">Manual adjust (signed)</option>
-          </Select>
+            onChange={(v) => setKind(v as TransactionKind)}
+            options={KIND_OPTIONS}
+          />
         </Field>
 
         <Field label="Bottle">
-          <Select
+          <Picker
             required
+            title="Pick a bottle"
             value={bottleId}
-            onChange={(e) => setBottleId(e.target.value)}
-          >
-            <option value="">— pick a bottle —</option>
-            {bottles.map((b) => (
-              <option key={b.id} value={b.id}>
-                {b.bottleNumber} · {b.refrigerantType} ·{' '}
-                {formatWeight(b.grossWeight, unit)} gross
-              </option>
-            ))}
-          </Select>
+            onChange={setBottleId}
+            placeholder="— pick a bottle —"
+            options={bottles.map((b) => ({
+              value: b.id,
+              label: `${b.bottleNumber} · ${b.refrigerantType}`,
+              hint: `${formatWeight(b.grossWeight, unit)} gross`,
+            }))}
+          />
         </Field>
 
         {showSite && (
           <>
             <Field label="Site">
               <div className="flex gap-2">
-                <Select
-                  value={siteId}
-                  onChange={(e) => {
-                    setSiteId(e.target.value)
-                    setUnitId('')
-                  }}
-                  required={kind === 'transfer'}
-                  className="flex-1"
-                >
-                  <option value="">— none —</option>
-                  {sites.map((j) => (
-                    <option key={j.id} value={j.id}>
-                      {j.name}
-                    </option>
-                  ))}
-                </Select>
+                <div className="min-w-0 flex-1">
+                  <Picker
+                    title="Site"
+                    value={siteId}
+                    onChange={(v) => {
+                      setSiteId(v)
+                      setUnitId('')
+                    }}
+                    required={kind === 'transfer'}
+                    emptyLabel="— none —"
+                    placeholder="— none —"
+                    options={sites.map((j) => ({ value: j.id, label: j.name }))}
+                  />
+                </div>
                 <Button
                   type="button"
                   variant="secondary"
@@ -478,19 +479,20 @@ function TransactionForm({
                 }
               >
                 <div className="flex gap-2">
-                  <Select
-                    value={unitId}
-                    onChange={(e) => setUnitId(e.target.value)}
-                    className="flex-1"
-                  >
-                    <option value="">— none —</option>
-                    {siteUnits.map((u) => (
-                      <option key={u.id} value={u.id}>
-                        {u.name}
-                        {u.refrigerantType ? ` (${u.refrigerantType})` : ''}
-                      </option>
-                    ))}
-                  </Select>
+                  <div className="min-w-0 flex-1">
+                    <Picker
+                      title="Unit"
+                      value={unitId}
+                      onChange={setUnitId}
+                      emptyLabel="— none —"
+                      placeholder="— none —"
+                      options={siteUnits.map((u) => ({
+                        value: u.id,
+                        label: u.name,
+                        hint: u.refrigerantType || undefined,
+                      }))}
+                    />
+                  </div>
                   <Button
                     type="button"
                     variant="secondary"
@@ -616,19 +618,15 @@ function TransactionForm({
               </Field>
             )}
             <Field label="Reason">
-              <Select
+              <Picker
+                title="Reason"
                 value={reason}
-                onChange={(e) =>
-                  setReason(e.target.value as TransactionReason | '')
-                }
-              >
-                <option value="">— pick reason —</option>
-                {(Object.keys(REASON_LABELS) as TransactionReason[]).map((r) => (
-                  <option key={r} value={r}>
-                    {REASON_LABELS[r]}
-                  </option>
-                ))}
-              </Select>
+                onChange={(v) => setReason(v as TransactionReason | '')}
+                placeholder="— pick reason —"
+                options={(Object.keys(REASON_LABELS) as TransactionReason[]).map(
+                  (r) => ({ value: r, label: REASON_LABELS[r] }),
+                )}
+              />
             </Field>
           </>
         )}
@@ -653,10 +651,10 @@ function TransactionForm({
                 : 'Pick a profile to stamp a name + RHL, or use Other for a one-off entry.'
           }
         >
-          <Select
+          <Picker
+            title="Technician"
             value={techId}
-            onChange={(e) => {
-              const v = e.target.value
+            onChange={(v) => {
               if (v === '__add__') {
                 setAddingTech(true)
                 return
@@ -664,16 +662,18 @@ function TransactionForm({
               setTechId(v)
               if (v !== '__other__') setActiveTechnicianId(v)
             }}
-          >
-            {state.technicians.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.name}
-                {t.arcLicenceNumber ? ` · RHL ${t.arcLicenceNumber}` : ''}
-              </option>
-            ))}
-            <option value="__other__">Other (manual entry)</option>
-            <option value="__add__">+ Add new tech…</option>
-          </Select>
+            options={[
+              ...state.technicians.map((t) => ({
+                value: t.id,
+                label: t.name,
+                hint: t.arcLicenceNumber
+                  ? `RHL ${t.arcLicenceNumber}`
+                  : undefined,
+              })),
+              { value: '__other__', label: 'Other (manual entry)' },
+              { value: '__add__', label: '+ Add new tech…' },
+            ]}
+          />
         </Field>
 
         {techId === '__other__' && (

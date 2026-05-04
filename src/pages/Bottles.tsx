@@ -6,10 +6,10 @@ import {
   Field,
   Modal,
   Pill,
-  Select,
   TextArea,
   TextInput,
 } from '../components/ui'
+import { Picker } from '../components/Picker'
 import { useStore } from '../lib/store'
 import {
   type Bottle,
@@ -782,40 +782,42 @@ function QuickLogModal({
           {showSite && (
             <>
               <Field label="Site">
-                <Select
+                <Picker
+                  title="Site"
                   value={siteId}
-                  onChange={(e) => {
-                    setSiteId(e.target.value)
+                  onChange={(v) => {
+                    setSiteId(v)
                     setUnitId('')
                   }}
                   required={kind === 'transfer'}
-                >
-                  <option value="">— none —</option>
-                  {state.sites.map((j) => (
-                    <option key={j.id} value={j.id}>
-                      {j.name}
-                    </option>
-                  ))}
-                </Select>
+                  emptyLabel="— none —"
+                  placeholder="— none —"
+                  options={state.sites.map((j) => ({
+                    value: j.id,
+                    label: j.name,
+                  }))}
+                />
               </Field>
               {(kind === 'charge' || kind === 'recover') && siteId && (
                 <Field
                   label="Unit (optional)"
                   hint="Pick the equipment this charge applies to"
                 >
-                  <Select
+                  <Picker
+                    title="Unit"
                     value={unitId}
-                    onChange={(e) => handleUnitChange(e.target.value)}
-                  >
-                    <option value="">— none —</option>
-                    {siteUnits.map((u) => (
-                      <option key={u.id} value={u.id}>
-                        {u.name}
-                        {u.refrigerantType ? ` (${u.refrigerantType})` : ''}
-                      </option>
-                    ))}
-                    <option value="__new__">+ Add new unit at this site…</option>
-                  </Select>
+                    onChange={handleUnitChange}
+                    emptyLabel="— none —"
+                    placeholder="— none —"
+                    options={[
+                      ...siteUnits.map((u) => ({
+                        value: u.id,
+                        label: u.name,
+                        hint: u.refrigerantType || undefined,
+                      })),
+                      { value: '__new__', label: '+ Add new unit at this site…' },
+                    ]}
+                  />
                 </Field>
               )}
             </>
@@ -836,19 +838,15 @@ function QuickLogModal({
                 </Field>
               )}
               <Field label="Reason">
-                <Select
+                <Picker
+                  title="Reason"
                   value={reason}
-                  onChange={(e) =>
-                    setReason(e.target.value as TransactionReason | '')
-                  }
-                >
-                  <option value="">— pick reason —</option>
-                  {(Object.keys(REASON_LABELS) as TransactionReason[]).map((r) => (
-                    <option key={r} value={r}>
-                      {REASON_LABELS[r]}
-                    </option>
-                  ))}
-                </Select>
+                  onChange={(v) => setReason(v as TransactionReason | '')}
+                  placeholder="— pick reason —"
+                  options={(Object.keys(REASON_LABELS) as TransactionReason[]).map(
+                    (r) => ({ value: r, label: REASON_LABELS[r] }),
+                  )}
+                />
               </Field>
             </>
           )}
@@ -1365,17 +1363,27 @@ function BottleForm({
         </div>
 
         <Field label="Status">
-          <Select
+          <Picker
+            title="Status"
             value={status}
-            onChange={(e) => setStatus(e.target.value as BottleStatus)}
-          >
-            <option value="in_stock">In stock</option>
-            <option value="on_site">On site</option>
-            <option value="returned">Returned</option>
-            <option value="empty" disabled={liveNet > 0.01}>
-              Empty{liveNet > 0.01 ? ' — bottle still has refrigerant' : ''}
-            </option>
-          </Select>
+            onChange={(v) => {
+              if (v === 'empty' && liveNet > 0.01) return
+              setStatus(v as BottleStatus)
+            }}
+            options={[
+              { value: 'in_stock', label: 'In stock' },
+              { value: 'on_site', label: 'On site' },
+              { value: 'returned', label: 'Returned' },
+              {
+                value: 'empty',
+                label: 'Empty',
+                hint:
+                  liveNet > 0.01
+                    ? 'Bottle still has refrigerant — clear gross weight first'
+                    : undefined,
+              },
+            ]}
+          />
         </Field>
 
         {statusEmptyButHasContent && (
@@ -1389,17 +1397,16 @@ function BottleForm({
 
         {status === 'on_site' && (
           <Field label="Current site">
-            <Select
+            <Picker
+              title="Current site"
               value={currentSiteId}
-              onChange={(e) => setCurrentSiteId(e.target.value)}
-            >
-              <option value="">— pick a site —</option>
-              {state.sites.map((j) => (
-                <option key={j.id} value={j.id}>
-                  {j.name}
-                </option>
-              ))}
-            </Select>
+              onChange={setCurrentSiteId}
+              placeholder="— pick a site —"
+              options={state.sites.map((j) => ({
+                value: j.id,
+                label: j.name,
+              }))}
+            />
           </Field>
         )}
 
