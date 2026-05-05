@@ -14,9 +14,13 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.svg'],
       manifest: {
-        name: 'RefrigHandle',
-        short_name: 'RefrigHandle',
-        description: 'Refrigerant bottle and inventory tracker for HVAC/R technicians',
+        name: 'Refrigerant Handling — tracking & audit log',
+        // Short name surfaces under the home-screen icon, so keep it
+        // tight enough to fit Android/iOS launcher labels (~12 chars
+        // before truncation).
+        short_name: 'Refrigerant',
+        description:
+          'Refrigerant bottle, site, and transaction tracker for HVAC/R technicians — built for compliance and auditing.',
         theme_color: '#0f172a',
         background_color: '#0f172a',
         display: 'standalone',

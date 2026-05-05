@@ -313,7 +313,7 @@ export default function Settings() {
       const data = JSON.parse(text)
       if (!data || !Array.isArray(data.bottles)) {
         toast.show(
-          'That file does not look like a RefrigHandle export.',
+          'That file does not look like a Refrigerant Handling export.',
           'error',
         )
         return
@@ -934,7 +934,7 @@ export default function Settings() {
       </Card>
 
       <p className="px-1 text-center text-xs text-slate-400">
-        RefrigHandle · data stored locally on this device
+        Refrigerant Handling · data stored locally on this device
       </p>
 
       <TechnicianModal
