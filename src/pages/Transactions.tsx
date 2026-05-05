@@ -58,6 +58,12 @@ export default function Transactions() {
 
   const [adding, setAdding] = useState(false)
   const [filterKind, setFilterKind] = useState<'all' | TransactionKind>('all')
+  // Replace native prompt() with an in-app Modal so the delete flow
+  // looks consistent with the rest of the UI. Tracks the transaction
+  // being deleted + the typed reason; null means closed.
+  const [deleting, setDeleting] = useState<{ id: string; reason: string } | null>(
+    null,
+  )
 
   const sorted = useMemo(
     () =>
@@ -213,23 +219,7 @@ export default function Transactions() {
                     )}
                   </div>
                   <button
-                    onClick={() => {
-                      const reason = prompt(
-                        'Delete this transaction?\n\n' +
-                          'It will be hidden from the activity log but kept in storage so an admin can review or restore it from Settings → Deleted transactions.\n\n' +
-                          'Reason (optional):',
-                        '',
-                      )
-                      // prompt() returns null on Cancel — only proceed
-                      // when the user actually confirmed (returned a
-                      // string, even if empty).
-                      if (reason === null) return
-                      deleteTransaction(t.id, reason)
-                      toast.show(
-                        'Transaction deleted — recoverable in Settings',
-                        'info',
-                      )
-                    }}
+                    onClick={() => setDeleting({ id: t.id, reason: '' })}
                     className="shrink-0 rounded-lg px-2 py-1 text-xs font-medium text-slate-500 hover:bg-slate-100 hover:text-red-600 dark:hover:bg-slate-800"
                     aria-label="Delete transaction"
                   >
@@ -253,6 +243,52 @@ export default function Transactions() {
           }
         }}
       />
+
+      <Modal
+        open={!!deleting}
+        title="Delete this transaction?"
+        onClose={() => setDeleting(null)}
+      >
+        <p className="text-sm text-slate-600 dark:text-slate-300">
+          It will be hidden from the activity log but kept in storage so an
+          admin can review or restore it from{' '}
+          <span className="font-medium">Settings → Deleted transactions</span>.
+        </p>
+        <Field label="Reason (optional)">
+          <TextInput
+            autoFocus
+            value={deleting?.reason ?? ''}
+            onChange={(e) =>
+              setDeleting((d) => (d ? { ...d, reason: e.target.value } : d))
+            }
+            placeholder="e.g. duplicate entry, wrong bottle"
+          />
+        </Field>
+        <div className="mt-4 flex gap-2">
+          <Button
+            variant="secondary"
+            full
+            onClick={() => setDeleting(null)}
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="danger"
+            full
+            onClick={() => {
+              if (!deleting) return
+              deleteTransaction(deleting.id, deleting.reason)
+              setDeleting(null)
+              toast.show(
+                'Transaction deleted — recoverable in Settings',
+                'info',
+              )
+            }}
+          >
+            Delete
+          </Button>
+        </div>
+      </Modal>
     </div>
   )
 }
