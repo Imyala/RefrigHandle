@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Button, Field, Modal, TextInput } from './ui'
 import { useStore } from '../lib/store'
+import { useConfirm } from '../lib/confirm'
 import {
   BOTTLE_PRESETS,
   FALLBACK_FR,
@@ -31,6 +32,7 @@ export function CylinderPresetSelect({
     removeCustomBottlePreset,
     toggleFavoriteBottlePreset,
   } = useStore()
+  const confirm = useConfirm()
   const unit = state.unit
   const favorites = state.favoriteBottlePresets
 
@@ -163,12 +165,15 @@ export function CylinderPresetSelect({
                   {isCustom && (
                     <button
                       type="button"
-                      onClick={() => {
-                        if (
-                          confirm(
-                            `Remove "${display}" from your custom cylinders?`,
-                          )
-                        ) {
+                      onClick={async () => {
+                        const ok = await confirm({
+                          title: `Remove "${display}"?`,
+                          message:
+                            'It will disappear from your custom cylinder list. Bottles already using these dimensions stay untouched.',
+                          confirmLabel: 'Remove',
+                          danger: true,
+                        })
+                        if (ok) {
                           removeCustomBottlePreset(p.id)
                         }
                       }}

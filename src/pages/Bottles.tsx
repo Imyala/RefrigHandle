@@ -35,6 +35,7 @@ import { CylinderPresetSelect } from '../components/CylinderPresetSelect'
 import { DateInput } from '../components/DateInput'
 import { SiteForm } from './Sites'
 import { useToast } from '../lib/toast'
+import { useConfirm } from '../lib/confirm'
 import { displayToKg, formatWeight, kgToDisplay } from '../lib/units'
 import { formatDateTime } from '../lib/datetime'
 
@@ -54,6 +55,7 @@ export default function Bottles() {
     useStore()
   const { bottles, sites, customRefrigerants, unit } = state
   const toast = useToast()
+  const confirm = useConfirm()
 
   const [editing, setEditing] = useState<Bottle | null>(null)
   const [adding, setAdding] = useState(false)
@@ -358,8 +360,15 @@ export default function Bottles() {
         }}
         onDelete={
           editing
-            ? () => {
-                if (confirm('Delete this bottle and all its transactions?')) {
+            ? async () => {
+                const ok = await confirm({
+                  title: 'Delete this bottle?',
+                  message:
+                    'The bottle and all of its transactions will be removed from the record. This cannot be undone.',
+                  confirmLabel: 'Delete bottle',
+                  danger: true,
+                })
+                if (ok) {
                   deleteBottle(editing.id)
                   setEditing(null)
                   toast.show('Bottle deleted', 'info')

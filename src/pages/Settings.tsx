@@ -24,6 +24,7 @@ import {
 import { formatDateTime } from '../lib/datetime'
 import { formatWeight } from '../lib/units'
 import { useToast } from '../lib/toast'
+import { useConfirm } from '../lib/confirm'
 import { isSyncConfigured } from '../lib/sync'
 import {
   deleteCorruptedBackup,
@@ -78,6 +79,7 @@ export default function Settings() {
     importState,
   } = useStore()
   const toast = useToast()
+  const confirm = useConfirm()
   const [arcAuth, setArcAuth] = useState(state.arcAuthorisationNumber)
   const [bizName, setBizName] = useState(state.businessName)
   const [loc, setLoc] = useState<LocationSettings>(state.location)
@@ -162,8 +164,14 @@ export default function Settings() {
     URL.revokeObjectURL(url)
   }
 
-  function discardCorruptedBackup(b: CorruptedBackup) {
-    if (!confirm('Delete this damaged backup? This cannot be undone.')) return
+  async function discardCorruptedBackup(b: CorruptedBackup) {
+    const ok = await confirm({
+      title: 'Delete damaged backup?',
+      message: 'This cannot be undone.',
+      confirmLabel: 'Delete',
+      danger: true,
+    })
+    if (!ok) return
     deleteCorruptedBackup(b.key)
     setCorrupted(listCorruptedBackups())
   }
@@ -275,14 +283,24 @@ export default function Settings() {
       const text = await file.text()
       const data = JSON.parse(text)
       if (!data || !Array.isArray(data.bottles)) {
-        alert('That file does not look like a RefrigHandle export.')
+        toast.show(
+          'That file does not look like a RefrigHandle export.',
+          'error',
+        )
         return
       }
-      if (confirm('Replace ALL current data with this file?')) {
+      const ok = await confirm({
+        title: 'Replace all current data?',
+        message:
+          'This will overwrite every bottle, site, unit, and transaction on this device with the contents of the imported file.',
+        confirmLabel: 'Replace',
+        danger: true,
+      })
+      if (ok) {
         importState(data)
       }
     } catch {
-      alert('Could not read that file.')
+      toast.show('Could not read that file.', 'error')
     }
   }
 
@@ -617,9 +635,15 @@ export default function Settings() {
                 name={t}
                 starred={favorites.includes(t)}
                 onToggleStar={() => toggleFavoriteRefrigerant(t)}
-                onRemove={() => {
-                  if (confirm(`Remove ${t} from the list?`))
-                    removeCustomRefrigerant(t)
+                onRemove={async () => {
+                  const ok = await confirm({
+                    title: `Remove ${t}?`,
+                    message:
+                      'It will disappear from the refrigerant pickers. Bottles and transactions already using it stay untouched.',
+                    confirmLabel: 'Remove',
+                    danger: true,
+                  })
+                  if (ok) removeCustomRefrigerant(t)
                 }}
               />
             ))}
@@ -860,7 +884,22 @@ export default function Settings() {
         <p className="mb-3 text-sm text-slate-600 dark:text-slate-400">
           Erase every bottle, site, unit, and transaction stored on this device. Export first if you want a backup.
         </p>
-        <Button variant="danger" onClick={resetAll}>
+        <Button
+          variant="danger"
+          onClick={async () => {
+            const ok = await confirm({
+              title: 'Erase all data?',
+              message:
+                'This deletes every bottle, site, unit, and transaction on this device. Tech profiles, ARC numbers, and app preferences are kept. This cannot be undone.',
+              confirmLabel: 'Erase everything',
+              danger: true,
+            })
+            if (ok) {
+              resetAll()
+              toast.show('Data erased', 'info')
+            }
+          }}
+        >
           Erase all data
         </Button>
       </Card>
@@ -886,8 +925,15 @@ export default function Settings() {
         }}
         onDelete={
           editingTech
-            ? () => {
-                if (confirm(`Remove ${editingTech.name}?`)) {
+            ? async () => {
+                const ok = await confirm({
+                  title: `Remove ${editingTech.name}?`,
+                  message:
+                    'They will be removed from the active tech list. Past transactions stamped with their name + RHL stay frozen on the record.',
+                  confirmLabel: 'Remove',
+                  danger: true,
+                })
+                if (ok) {
                   deleteTechnician(editingTech.id)
                   toast.show('Tech removed', 'info')
                   setTechModalOpen(false)

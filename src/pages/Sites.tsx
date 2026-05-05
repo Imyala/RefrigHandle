@@ -30,6 +30,7 @@ import { RefrigerantSelect } from '../components/RefrigerantSelect'
 import { DateInput } from '../components/DateInput'
 import { formatDateTime } from '../lib/datetime'
 import { useToast } from '../lib/toast'
+import { useConfirm } from '../lib/confirm'
 import { displayToKg, formatWeight, kgToDisplay } from '../lib/units'
 
 export default function Sites() {
@@ -187,6 +188,7 @@ function SiteDetail({
     reactivateUnit,
   } = useStore()
   const toast = useToast()
+  const confirm = useConfirm()
 
   const [editing, setEditing] = useState(false)
   const [addingUnit, setAddingUnit] = useState(false)
@@ -246,12 +248,15 @@ function SiteDetail({
               </Button>
               <Button
                 variant="danger"
-                onClick={() => {
-                  if (
-                    confirm(
-                      'Delete this site, all its units, and unassign related bottles? This cannot be undone.',
-                    )
-                  ) {
+                onClick={async () => {
+                  const ok = await confirm({
+                    title: 'Delete this site?',
+                    message:
+                      'All units at this site will be deleted, and any bottles currently assigned to it will be unassigned. This cannot be undone.',
+                    confirmLabel: 'Delete site',
+                    danger: true,
+                  })
+                  if (ok) {
                     deleteSite(site.id)
                     toast.show('Site deleted', 'info')
                     onClose()
@@ -328,22 +333,27 @@ function SiteDetail({
                     <DecommissionedUnitCard
                       key={u.id}
                       u={u}
-                      onReactivate={() => {
-                        if (
-                          confirm(
-                            `Move "${u.name}" back to the active list?`,
-                          )
-                        ) {
+                      onReactivate={async () => {
+                        const ok = await confirm({
+                          title: `Reactivate "${u.name}"?`,
+                          message:
+                            'It will move back to the active equipment list at this site.',
+                          confirmLabel: 'Reactivate',
+                        })
+                        if (ok) {
                           reactivateUnit(u.id)
                           toast.show('Unit reactivated')
                         }
                       }}
-                      onDelete={() => {
-                        if (
-                          confirm(
-                            `Permanently delete "${u.name}" from the record? This cannot be undone.`,
-                          )
-                        ) {
+                      onDelete={async () => {
+                        const ok = await confirm({
+                          title: `Permanently delete "${u.name}"?`,
+                          message:
+                            'The unit will be removed from the record entirely. Past transactions referencing it stay in the log but lose their unit link. This cannot be undone.',
+                          confirmLabel: 'Delete',
+                          danger: true,
+                        })
+                        if (ok) {
                           deleteUnit(u.id)
                           toast.show('Unit deleted', 'info')
                         }

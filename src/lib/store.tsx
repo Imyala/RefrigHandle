@@ -619,37 +619,33 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const resetAll = useCallback(() => {
-    if (
-      confirm(
-        'Erase ALL bottles, sites, units, and transactions? This cannot be undone.',
-      )
-    ) {
-      setState((s) => ({
-        bottles: [],
-        sites: [],
-        units: [],
-        transactions: [],
-        customRefrigerants: [],
-        favoriteRefrigerants: [],
-        customBottlePresets: [],
-        favoriteBottlePresets: [],
-        technician: '',
-        // Compliance identity is per-tech / per-business, not per
-        // dataset — keep it across a "wipe data" so the user doesn't
-        // have to re-enter their ARC numbers (or rebuild their tech
-        // roster) after a factory reset.
-        technicians: s.technicians,
-        activeTechnicianId: s.activeTechnicianId,
-        arcLicenceNumber: s.arcLicenceNumber,
-        arcAuthorisationNumber: s.arcAuthorisationNumber,
-        businessName: s.businessName,
-        location: s.location,
-        unit: s.unit,
-        theme: s.theme,
-        clock: s.clock,
-        sync: s.sync,
-      }))
-    }
+    // Confirmation lives at the call site (Settings page) so the
+    // dialog matches the rest of the app's themed Modal flow.
+    setState((s) => ({
+      bottles: [],
+      sites: [],
+      units: [],
+      transactions: [],
+      customRefrigerants: [],
+      favoriteRefrigerants: [],
+      customBottlePresets: [],
+      favoriteBottlePresets: [],
+      technician: '',
+      // Compliance identity is per-tech / per-business, not per
+      // dataset — keep it across a "wipe data" so the user doesn't
+      // have to re-enter their ARC numbers (or rebuild their tech
+      // roster) after a factory reset.
+      technicians: s.technicians,
+      activeTechnicianId: s.activeTechnicianId,
+      arcLicenceNumber: s.arcLicenceNumber,
+      arcAuthorisationNumber: s.arcAuthorisationNumber,
+      businessName: s.businessName,
+      location: s.location,
+      unit: s.unit,
+      theme: s.theme,
+      clock: s.clock,
+      sync: s.sync,
+    }))
   }, [])
 
   const importState = useCallback((s: AppState) => setState(s), [])
