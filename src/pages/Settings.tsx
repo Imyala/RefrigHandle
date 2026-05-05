@@ -190,78 +190,107 @@ export default function Settings() {
   }
 
   function exportCsv() {
-    const rows = [
-      [
-        'date',
-        'kind',
-        'bottleNumber',
-        'sourceBottleNumber',
-        'refrigerantType',
-        'amount_into_equipment_kg',
-        'amount_from_bottle_kg',
-        'loss_kg',
-        'weightBefore_kg',
-        'weightAfter_kg',
-        'sourceWeightBefore_kg',
-        'sourceWeightAfter_kg',
-        'site',
-        'client',
-        'unit',
-        'equipment',
-        'reason',
-        'returnDestination',
-        'technician',
-        'technicianLicence',
-        'businessName',
-        'arcAuthorisationNumber',
-        'deletedAt',
-        'deletedBy',
-        'deletedByLicence',
-        'deletedReason',
-        'notes',
-      ],
-      ...state.transactions.map((t) => {
-        const b = state.bottles.find((x) => x.id === t.bottleId)
-        const sb = t.sourceBottleId
-          ? state.bottles.find((x) => x.id === t.sourceBottleId)
-          : null
-        const s = state.sites.find((x) => x.id === t.siteId)
-        const u = state.units.find((x) => x.id === t.unitId)
-        const loss = transactionLoss(t)
-        return [
-          t.date,
-          t.kind,
-          b?.bottleNumber ?? '',
-          sb?.bottleNumber ?? '',
-          b?.refrigerantType ?? '',
-          t.amount.toFixed(3),
-          (t.bottleAmount ?? t.amount).toFixed(3),
-          loss.toFixed(3),
-          t.weightBefore.toFixed(3),
-          t.weightAfter.toFixed(3),
-          t.sourceWeightBefore?.toFixed(3) ?? '',
-          t.sourceWeightAfter?.toFixed(3) ?? '',
-          s?.name ?? '',
-          s?.client ?? '',
-          u?.name ?? '',
-          t.equipment ?? '',
-          t.reason ?? '',
-          t.returnDestination ?? '',
-          t.technician ?? '',
-          t.technicianLicence ?? '',
-          t.businessName ?? '',
-          t.arcAuthorisationNumber ?? '',
+    // Two sections in one file: live transactions first, then a
+    // separator row + a "Deleted transactions (audit trail)" header,
+    // then every soft-deleted transaction. Auditors comparing the
+    // live ledger against the deleted-row list don't have to filter
+    // by a deletedAt column. Deleted-only columns (deletedAt etc.)
+    // appear only in the second section's header.
+    const liveHeader = [
+      'date',
+      'kind',
+      'bottleNumber',
+      'sourceBottleNumber',
+      'refrigerantType',
+      'amount_into_equipment_kg',
+      'amount_from_bottle_kg',
+      'loss_kg',
+      'weightBefore_kg',
+      'weightAfter_kg',
+      'sourceWeightBefore_kg',
+      'sourceWeightAfter_kg',
+      'site',
+      'client',
+      'unit',
+      'equipment',
+      'reason',
+      'returnDestination',
+      'technician',
+      'technicianLicence',
+      'businessName',
+      'arcAuthorisationNumber',
+      'notes',
+    ]
+    const deletedHeader = [
+      ...liveHeader,
+      'deletedAt',
+      'deletedBy',
+      'deletedByLicence',
+      'deletedReason',
+    ]
+    function rowFor(t: (typeof state.transactions)[number]): string[] {
+      const b = state.bottles.find((x) => x.id === t.bottleId)
+      const sb = t.sourceBottleId
+        ? state.bottles.find((x) => x.id === t.sourceBottleId)
+        : null
+      const s = state.sites.find((x) => x.id === t.siteId)
+      const u = state.units.find((x) => x.id === t.unitId)
+      const loss = transactionLoss(t)
+      return [
+        t.date,
+        t.kind,
+        b?.bottleNumber ?? '',
+        sb?.bottleNumber ?? '',
+        b?.refrigerantType ?? '',
+        t.amount.toFixed(3),
+        (t.bottleAmount ?? t.amount).toFixed(3),
+        loss.toFixed(3),
+        t.weightBefore.toFixed(3),
+        t.weightAfter.toFixed(3),
+        t.sourceWeightBefore?.toFixed(3) ?? '',
+        t.sourceWeightAfter?.toFixed(3) ?? '',
+        s?.name ?? '',
+        s?.client ?? '',
+        u?.name ?? '',
+        t.equipment ?? '',
+        t.reason ?? '',
+        t.returnDestination ?? '',
+        t.technician ?? '',
+        t.technicianLicence ?? '',
+        t.businessName ?? '',
+        t.arcAuthorisationNumber ?? '',
+        (t.notes ?? '').replace(/[\r\n]+/g, ' '),
+      ]
+    }
+    const liveTxs = state.transactions.filter((t) => !t.deletedAt)
+    const deletedTxs = state.transactions
+      .filter((t) => !!t.deletedAt)
+      .slice()
+      .sort((a, b) =>
+        (b.deletedAt ?? '').localeCompare(a.deletedAt ?? ''),
+      )
+    const rows: (string[] | string)[] = [
+      ['ACTIVE TRANSACTIONS'],
+      liveHeader,
+      ...liveTxs.map((t) => rowFor(t)),
+    ]
+    if (deletedTxs.length > 0) {
+      rows.push([])
+      rows.push([`DELETED TRANSACTIONS (audit trail · ${deletedTxs.length})`])
+      rows.push(deletedHeader)
+      for (const t of deletedTxs) {
+        rows.push([
+          ...rowFor(t),
           t.deletedAt ?? '',
           t.deletedBy ?? '',
           t.deletedByLicence ?? '',
           (t.deletedReason ?? '').replace(/[\r\n]+/g, ' '),
-          (t.notes ?? '').replace(/[\r\n]+/g, ' '),
-        ]
-      }),
-    ]
+        ])
+      }
+    }
     const csv = rows
       .map((r) =>
-        r
+        (Array.isArray(r) ? r : [r])
           .map((cell) => {
             const s = String(cell ?? '')
             return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
@@ -1019,6 +1048,13 @@ function TechnicianModal({
 // is the only place an admin can review what was removed (with who /
 // when / why) and put it back if the deletion was a mistake. Live
 // transactions never appear here — only soft-deleted ones.
+//
+// To stop the Settings page filling with old soft-deleted rows, the
+// card is collapsed by default and only renders the 5 most recent
+// when expanded. Older deletions stay in storage (and in the CSV /
+// JSON export) so the audit trail is preserved.
+const VISIBLE_DELETED_LIMIT = 5
+
 function DeletedTransactionsCard({
   onRestore,
 }: {
@@ -1028,6 +1064,7 @@ function DeletedTransactionsCard({
   const toast = useToast()
   const tz = state.location.timezone
   const clock = state.clock
+  const [expanded, setExpanded] = useState(false)
 
   const deleted = state.transactions
     .filter((t) => t.deletedAt)
@@ -1035,90 +1072,120 @@ function DeletedTransactionsCard({
     .sort((a, b) =>
       (b.deletedAt ?? '').localeCompare(a.deletedAt ?? ''),
     )
+  const visible = deleted.slice(0, VISIBLE_DELETED_LIMIT)
+  const hidden = Math.max(0, deleted.length - visible.length)
 
   return (
     <Card>
-      <div className="mb-1 flex items-center justify-between gap-2">
-        <div className="text-sm font-semibold text-slate-700 dark:text-slate-200">
-          Deleted transactions
+      <button
+        type="button"
+        onClick={() => setExpanded((v) => !v)}
+        className="-m-1 flex w-full items-center justify-between gap-2 rounded-lg p-1 text-left"
+        aria-expanded={expanded}
+      >
+        <div className="flex items-center gap-2">
+          <div className="text-sm font-semibold text-slate-700 dark:text-slate-200">
+            Deleted transactions
+          </div>
+          <Pill tone={deleted.length > 0 ? 'amber' : 'slate'}>
+            {deleted.length}
+          </Pill>
         </div>
-        <Pill tone={deleted.length > 0 ? 'amber' : 'slate'}>
-          {deleted.length}
-        </Pill>
-      </div>
-      <p className="mb-3 text-xs text-slate-500">
-        Transactions removed from the activity log are kept here so
-        business owners can audit what was deleted, by whom, and why.
-        Use Restore to put a row back into the live log if the
-        deletion was a mistake.
-      </p>
-      {deleted.length === 0 ? (
-        <p className="text-sm text-slate-500">
-          Nothing deleted. Deleted transactions appear here with the
-          tech who removed them and an optional reason.
-        </p>
-      ) : (
-        <div className="space-y-2">
-          {deleted.map((t) => {
-            const bottle = state.bottles.find((b) => b.id === t.bottleId)
-            const site = state.sites.find((j) => j.id === t.siteId)
-            const txUnit = state.units.find((u) => u.id === t.unitId)
-            return (
-              <div
-                key={t.id}
-                className="rounded-lg bg-slate-100 px-3 py-2 dark:bg-slate-800"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-2 text-sm font-medium text-slate-900 dark:text-slate-100">
-                      <span>{transactionLabel(t.kind)}</span>
-                      {t.amount > 0 && (
-                        <span className="tabular-nums">
-                          {formatWeight(t.amount, state.unit)}
-                        </span>
-                      )}
-                      <span className="text-xs font-normal text-slate-500">
-                        {bottle?.refrigerantType ?? '?'}
-                      </span>
-                    </div>
-                    <div className="mt-0.5 text-xs text-slate-600 dark:text-slate-400">
-                      {bottle?.bottleNumber ?? '(deleted bottle)'}
-                      {site ? ` · ${site.name}` : ''}
-                      {txUnit ? ` · ${txUnit.name}` : ''}
-                    </div>
-                    <div className="mt-0.5 text-xs text-slate-500">
-                      Logged{' '}
-                      {formatDateTime(t.date, tz, clock)}
-                      {t.technician && ` by ${t.technician}`}
-                    </div>
-                    <div className="mt-1 text-xs text-red-700 dark:text-red-300">
-                      Deleted{' '}
-                      {t.deletedAt
-                        ? formatDateTime(t.deletedAt, tz, clock)
-                        : ''}
-                      {t.deletedBy && ` by ${t.deletedBy}`}
-                      {t.deletedByLicence && ` · RHL ${t.deletedByLicence}`}
-                    </div>
-                    {t.deletedReason && (
-                      <div className="mt-0.5 text-xs italic text-slate-500">
-                        Reason: “{t.deletedReason}”
-                      </div>
-                    )}
-                  </div>
-                  <Button
-                    variant="secondary"
-                    onClick={() => {
-                      onRestore(t.id)
-                      toast.show('Transaction restored')
-                    }}
+        <span
+          aria-hidden
+          className={`text-slate-400 transition-transform ${
+            expanded ? 'rotate-180' : ''
+          }`}
+        >
+          ▾
+        </span>
+      </button>
+      {expanded && (
+        <>
+          <p className="mb-3 mt-2 text-xs text-slate-500">
+            Transactions removed from the activity log are kept here so
+            business owners can audit what was deleted, by whom, and why.
+            Use Restore to put a row back into the live log if the
+            deletion was a mistake. Showing the {VISIBLE_DELETED_LIMIT}{' '}
+            most recent — every deletion (including hidden ones) is in
+            the JSON / CSV export.
+          </p>
+          {deleted.length === 0 ? (
+            <p className="text-sm text-slate-500">
+              Nothing deleted. Deleted transactions appear here with the
+              tech who removed them and an optional reason.
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {visible.map((t) => {
+                const bottle = state.bottles.find((b) => b.id === t.bottleId)
+                const site = state.sites.find((j) => j.id === t.siteId)
+                const txUnit = state.units.find((u) => u.id === t.unitId)
+                return (
+                  <div
+                    key={t.id}
+                    className="rounded-lg bg-slate-100 px-3 py-2 dark:bg-slate-800"
                   >
-                    Restore
-                  </Button>
-                </div>
-              </div>
-            )
-          })}
-        </div>
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2 text-sm font-medium text-slate-900 dark:text-slate-100">
+                          <span>{transactionLabel(t.kind)}</span>
+                          {t.amount > 0 && (
+                            <span className="tabular-nums">
+                              {formatWeight(t.amount, state.unit)}
+                            </span>
+                          )}
+                          <span className="text-xs font-normal text-slate-500">
+                            {bottle?.refrigerantType ?? '?'}
+                          </span>
+                        </div>
+                        <div className="mt-0.5 text-xs text-slate-600 dark:text-slate-400">
+                          {bottle?.bottleNumber ?? '(deleted bottle)'}
+                          {site ? ` · ${site.name}` : ''}
+                          {txUnit ? ` · ${txUnit.name}` : ''}
+                        </div>
+                        <div className="mt-0.5 text-xs text-slate-500">
+                          Logged{' '}
+                          {formatDateTime(t.date, tz, clock)}
+                          {t.technician && ` by ${t.technician}`}
+                        </div>
+                        <div className="mt-1 text-xs text-red-700 dark:text-red-300">
+                          Deleted{' '}
+                          {t.deletedAt
+                            ? formatDateTime(t.deletedAt, tz, clock)
+                            : ''}
+                          {t.deletedBy && ` by ${t.deletedBy}`}
+                          {t.deletedByLicence && ` · RHL ${t.deletedByLicence}`}
+                        </div>
+                        {t.deletedReason && (
+                          <div className="mt-0.5 text-xs italic text-slate-500">
+                            Reason: “{t.deletedReason}”
+                          </div>
+                        )}
+                      </div>
+                      <Button
+                        variant="secondary"
+                        onClick={() => {
+                          onRestore(t.id)
+                          toast.show('Transaction restored')
+                        }}
+                      >
+                        Restore
+                      </Button>
+                    </div>
+                  </div>
+                )
+              })}
+              {hidden > 0 && (
+                <p className="rounded-lg border border-dashed border-slate-300 px-3 py-2 text-xs text-slate-500 dark:border-slate-700">
+                  +{hidden} older deletion{hidden === 1 ? '' : 's'} hidden
+                  here. They're still on file for the audit trail — export
+                  CSV or JSON to see every record.
+                </p>
+              )}
+            </div>
+          )}
+        </>
       )}
     </Card>
   )
