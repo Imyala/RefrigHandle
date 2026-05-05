@@ -316,7 +316,43 @@ export default function Bottles() {
         bottle={editing ?? undefined}
         onClose={() => setEditing(null)}
         onSave={(data) => {
-          if (editing) updateBottle(editing.id, data)
+          if (editing) {
+            // Detect a meaningful site/status change so the activity
+            // log gets a transaction record (otherwise a tech editing
+            // a bottle to "At facility — Site 1" leaves no audit
+            // trail of the move).
+            const prevStatus = editing.status
+            const prevSite = editing.currentSiteId ?? ''
+            const newStatus = data.status
+            const newSite = data.currentSiteId ?? ''
+            const siteOrStatusChanged =
+              prevStatus !== newStatus || prevSite !== newSite
+            if (siteOrStatusChanged) {
+              if (
+                (newStatus === 'on_site' || newStatus === 'stationed') &&
+                newSite
+              ) {
+                addTransaction({
+                  bottleId: editing.id,
+                  kind: newStatus === 'stationed' ? 'station' : 'transfer',
+                  siteId: newSite,
+                  amount: 0,
+                  date: new Date().toISOString(),
+                })
+              } else if (
+                newStatus === 'returned' &&
+                prevStatus !== 'returned'
+              ) {
+                addTransaction({
+                  bottleId: editing.id,
+                  kind: 'return',
+                  amount: 0,
+                  date: new Date().toISOString(),
+                })
+              }
+            }
+            updateBottle(editing.id, data)
+          }
           setEditing(null)
           toast.show('Bottle updated')
         }}
@@ -653,6 +689,7 @@ function QuickLogModal({
     charge: 'Charge into equipment',
     recover: 'Recover refrigerant',
     transfer: 'Transfer bottle to a site',
+    station: 'Station at facility',
     return: 'Return bottle to store',
     adjust: 'Manual adjustment',
   }
@@ -860,7 +897,7 @@ function QuickLogModal({
                         setSiteId(v)
                         setUnitId('')
                       }}
-                      required={kind === 'transfer'}
+                      required={kind === 'transfer' || kind === 'station'}
                       emptyLabel="— none —"
                       placeholder="— none —"
                       options={state.sites.map((j) => ({

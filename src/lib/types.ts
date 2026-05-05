@@ -152,6 +152,7 @@ export type TransactionKind =
   | 'charge' // refrigerant put INTO equipment, removed from bottle
   | 'recover' // refrigerant pulled OUT of equipment, added to bottle
   | 'transfer' // bottle moved to a site (no weight change)
+  | 'station' // bottle stationed/parked at a facility (no weight change)
   | 'return' // bottle returned to stock / supplier
   | 'adjust' // manual correction
 
@@ -493,6 +494,8 @@ export function transactionLabel(k: TransactionKind): string {
       return 'Recover'
     case 'transfer':
       return 'Transfer'
+    case 'station':
+      return 'Stationed'
     case 'return':
       return 'Return'
     case 'adjust':

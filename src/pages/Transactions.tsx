@@ -34,6 +34,7 @@ const KIND_OPTIONS: readonly PickerOption[] = [
   { value: 'charge', label: 'Charge', hint: 'into equipment (bottle weight decreases)' },
   { value: 'recover', label: 'Recover', hint: 'from equipment (bottle weight increases)' },
   { value: 'transfer', label: 'Transfer bottle to a site' },
+  { value: 'station', label: 'Station at facility', hint: 'parked long-term, no weight change' },
   { value: 'return', label: 'Return bottle to stock/supplier' },
   { value: 'adjust', label: 'Manual adjust (signed)' },
 ]
@@ -45,6 +46,7 @@ const kindTone: Record<
   charge: 'amber',
   recover: 'green',
   transfer: 'blue',
+  station: 'blue',
   return: 'slate',
   adjust: 'red',
 }
@@ -82,7 +84,7 @@ export default function Transactions() {
 
       {transactions.length > 0 && (
         <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
-          {(['all', 'charge', 'recover', 'transfer', 'return', 'adjust'] as const).map(
+          {(['all', 'charge', 'recover', 'transfer', 'station', 'return', 'adjust'] as const).map(
             (k) => (
               <button
                 key={k}
@@ -358,7 +360,7 @@ function TransactionForm({
     else if (kind === 'adjust') projectedAfter = bottle.grossWeight + amountKg
   }
 
-  const showAmount = kind !== 'transfer' && kind !== 'return'
+  const showAmount = kind !== 'transfer' && kind !== 'return' && kind !== 'station'
   const showSite = kind !== 'adjust'
   const showCompliance = kind === 'charge' || kind === 'recover'
   const supportsLoss = kind === 'charge' || kind === 'recover'
@@ -486,7 +488,7 @@ function TransactionForm({
                       setSiteId(v)
                       setUnitId('')
                     }}
-                    required={kind === 'transfer'}
+                    required={kind === 'transfer' || kind === 'station'}
                     emptyLabel="— none —"
                     placeholder="— none —"
                     options={sites.map((j) => ({ value: j.id, label: j.name }))}

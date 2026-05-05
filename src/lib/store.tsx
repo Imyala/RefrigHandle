@@ -370,6 +370,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (t.kind === 'transfer' && t.siteId) {
         updatedBottle.currentSiteId = t.siteId
         updatedBottle.status = 'on_site'
+      } else if (t.kind === 'station' && t.siteId) {
+        updatedBottle.currentSiteId = t.siteId
+        updatedBottle.status = 'stationed'
       } else if (t.kind === 'return') {
         updatedBottle.currentSiteId = undefined
         updatedBottle.status = 'returned'
