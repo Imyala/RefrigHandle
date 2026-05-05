@@ -1279,7 +1279,26 @@ function BottleForm({
   const [grossWeight, setGrossWeight] = useState(
     initialDisplay(bottle?.grossWeight ?? 0),
   )
-  const [status, setStatus] = useState<BottleStatus>(bottle?.status ?? 'in_stock')
+  // Sanitize a saved status against the current weights — a bottle
+  // whose stored status is 'empty' but whose math now says net > 0
+  // (e.g. someone corrected the gross weight after marking it empty)
+  // should not display 'Empty'. Snap to 'in_stock' so the form never
+  // shows a self-contradictory state.
+  const sanitizeStatus = (
+    s: BottleStatus | undefined,
+    grossKg: number,
+    tareKg: number,
+  ): BottleStatus => {
+    if (s === 'empty' && Math.max(0, grossKg - tareKg) > 0.01) return 'in_stock'
+    return s ?? 'in_stock'
+  }
+  const [status, setStatus] = useState<BottleStatus>(
+    sanitizeStatus(
+      bottle?.status,
+      bottle?.grossWeight ?? 0,
+      bottle?.tareWeight ?? 0,
+    ),
+  )
   const [currentSiteId, setCurrentSiteId] = useState(bottle?.currentSiteId ?? '')
   const [notes, setNotes] = useState(bottle?.notes ?? '')
   const [lastHydro, setLastHydro] = useState(bottle?.lastHydroTestDate ?? '')
@@ -1335,7 +1354,13 @@ function BottleForm({
     setRefrigerantType(bottle?.refrigerantType ?? types[0] ?? 'R410A')
     setTareWeight(initialDisplay(bottle?.tareWeight ?? 0))
     setGrossWeight(initialDisplay(bottle?.grossWeight ?? 0))
-    setStatus(bottle?.status ?? 'in_stock')
+    setStatus(
+      sanitizeStatus(
+        bottle?.status,
+        bottle?.grossWeight ?? 0,
+        bottle?.tareWeight ?? 0,
+      ),
+    )
     setCurrentSiteId(bottle?.currentSiteId ?? '')
     setNotes(bottle?.notes ?? '')
     setCapacityWeight(initialDisplay(bottle?.initialNetWeight ?? 0))
@@ -1343,6 +1368,14 @@ function BottleForm({
     setLastHydro(bottle?.lastHydroTestDate ?? '')
     setNextHydro(bottle?.nextHydroTestDate ?? '')
   }
+
+  // Reactive snap: if the user is editing weights and the bottle's
+  // net rises above ~zero while the status field is still Empty,
+  // flip the status. This stops a user from holding the form in a
+  // contradictory state while they correct the gross weight.
+  useEffect(() => {
+    if (status === 'empty' && liveNet > 0.01) setStatus('in_stock')
+  }, [status, liveNet])
 
   function submit(e: React.FormEvent) {
     e.preventDefault()
