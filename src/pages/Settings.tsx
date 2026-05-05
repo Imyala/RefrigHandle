@@ -8,6 +8,7 @@ import {
   TextInput,
 } from '../components/ui'
 import { Picker } from '../components/Picker'
+import { InstallAppButton } from '../components/InstallAppButton'
 import { useStore } from '../lib/store'
 import {
   AU_REGIONS,
@@ -766,6 +767,21 @@ export default function Settings() {
       </Card>
 
       <DeletedTransactionsCard onRestore={restoreTransaction} />
+
+      <Card>
+        <div className="mb-1 flex items-center justify-between gap-2">
+          <div className="text-sm font-semibold text-slate-700 dark:text-slate-200">
+            Install on this device
+          </div>
+        </div>
+        <p className="mb-3 text-xs text-slate-500">
+          Add Refrigerant Handling to your home screen so it opens like
+          a normal app and keeps working without internet — every page,
+          every bottle, every transaction is stored locally on the
+          device.
+        </p>
+        <InstallAppButton variant="full" />
+      </Card>
 
       <Card>
         <div className="mb-3 text-sm font-semibold text-slate-700 dark:text-slate-200">

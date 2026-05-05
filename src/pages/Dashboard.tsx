@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
 import { Button, Card, Pill } from '../components/ui'
+import { CollapsibleSection } from '../components/CollapsibleSection'
 import { useStore } from '../lib/store'
 import {
   hydroStatusFor,
@@ -106,10 +107,10 @@ export default function Dashboard() {
         </Link>
       </div>
 
-      <section>
-        <h2 className="mb-2 px-1 text-sm font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-          By refrigerant type
-        </h2>
+      <CollapsibleSection
+        title="By refrigerant type"
+        storageKey="dashboard.byType"
+      >
         {sortedTypes.length === 0 ? (
           <Card>
             <p className="text-sm text-slate-500">
@@ -148,22 +149,22 @@ export default function Dashboard() {
             ))}
           </div>
         )}
-      </section>
+      </CollapsibleSection>
 
-      <section>
-        <div className="mb-2 flex items-center justify-between px-1">
-          <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-            Recent activity
-          </h2>
-          {liveTransactions.length > 5 && (
+      <CollapsibleSection
+        title="Recent activity"
+        storageKey="dashboard.recent"
+        trailing={
+          liveTransactions.length > 5 ? (
             <Link
               to="/transactions"
               className="text-sm font-medium text-brand-600 hover:underline"
             >
               View all
             </Link>
-          )}
-        </div>
+          ) : undefined
+        }
+      >
         {recent.length === 0 ? (
           <Card>
             <p className="text-sm text-slate-500">No transactions yet.</p>
@@ -196,7 +197,7 @@ export default function Dashboard() {
             })}
           </div>
         )}
-      </section>
+      </CollapsibleSection>
 
       {hydroAlerts.length > 0 && (
         <Card className="!border-red-300 !bg-red-50 dark:!border-red-900/50 dark:!bg-red-900/20">
