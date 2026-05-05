@@ -39,6 +39,14 @@ jobs:
         run: npm run build
 
       - uses: actions/configure-pages@v5
+        # Auto-create / re-attach the Pages site if it isn't currently
+        # configured to build from GitHub Actions. Without this, flipping
+        # the repo private and back (or any other event that detaches
+        # Pages) leaves the next deploy failing with HTTP 404 on
+        # "Get Pages site". The workflow already has `pages: write`,
+        # which is all this needs.
+        with:
+          enablement: true
 
       - uses: actions/upload-pages-artifact@v3
         with:
