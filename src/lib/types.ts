@@ -63,6 +63,12 @@ export interface Bottle {
   lastHydroTestDate?: string
   nextHydroTestDate?: string
   createdAt: string
+  // Tech name + RHL frozen at the time the bottle was added to the
+  // system. Useful when a crew shares a device — anyone glancing at
+  // the Bottles list can tell who entered each cylinder. Optional
+  // because bottles created before this field existed won't have it.
+  createdBy?: string
+  createdByLicence?: string
   updatedAt: string
 }
 

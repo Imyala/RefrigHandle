@@ -176,8 +176,23 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const addBottle: StoreApi['addBottle'] = useCallback((b) => {
     const now = new Date().toISOString()
-    const bottle: Bottle = { ...b, id: uid(), createdAt: now, updatedAt: now }
-    setState((s) => ({ ...s, bottles: [...s.bottles, bottle] }))
+    let bottle: Bottle = { ...b, id: uid(), createdAt: now, updatedAt: now }
+    setState((s) => {
+      // Stamp the active technician onto the bottle at creation time
+      // so the Bottles list can show "who added this". Frozen — even
+      // if the tech profile is later renamed or deleted, the bottle
+      // keeps the name + RHL that were in force when it was entered.
+      const activeTech = s.technicians.find(
+        (x) => x.id === s.activeTechnicianId,
+      )
+      bottle = {
+        ...bottle,
+        createdBy: bottle.createdBy ?? activeTech?.name,
+        createdByLicence:
+          bottle.createdByLicence ?? activeTech?.arcLicenceNumber,
+      }
+      return { ...s, bottles: [...s.bottles, bottle] }
+    })
     return bottle
   }, [])
 

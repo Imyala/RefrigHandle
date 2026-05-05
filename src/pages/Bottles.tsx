@@ -52,7 +52,27 @@ export default function Bottles() {
 
   const [editing, setEditing] = useState<Bottle | null>(null)
   const [adding, setAdding] = useState(false)
-  const [filter, setFilter] = useState<'all' | BottleStatus>('all')
+  // Persist the active status filter across tab navigation. The page
+  // unmounts when the tech jumps to Sites/Log/Settings, so plain
+  // useState would reset the filter every time they came back.
+  // sessionStorage scopes it to the current browser tab — survives
+  // navigation, clears on tab close.
+  const [filter, setFilter] = useState<'all' | BottleStatus>(() => {
+    const saved = sessionStorage.getItem('bottles.filter')
+    if (
+      saved === 'all' ||
+      saved === 'in_stock' ||
+      saved === 'on_site' ||
+      saved === 'returned' ||
+      saved === 'empty'
+    ) {
+      return saved
+    }
+    return 'all'
+  })
+  useEffect(() => {
+    sessionStorage.setItem('bottles.filter', filter)
+  }, [filter])
   const [query, setQuery] = useState('')
 
   // Action sheet — primary tap target
@@ -192,6 +212,27 @@ export default function Bottles() {
                         {site.name}
                       </div>
                     )}
+                    <div className="mt-1 text-xs text-slate-500">
+                      Added{' '}
+                      {new Date(b.createdAt).toLocaleDateString(undefined, {
+                        day: 'numeric',
+                        month: 'short',
+                        year: 'numeric',
+                      })}
+                      {b.createdBy && (
+                        <>
+                          {' · by '}
+                          <span className="text-slate-600 dark:text-slate-400">
+                            {b.createdBy}
+                          </span>
+                          {b.createdByLicence && (
+                            <span className="text-slate-500">
+                              {' '}· RHL {b.createdByLicence}
+                            </span>
+                          )}
+                        </>
+                      )}
+                    </div>
                     {initialNet > 0 && (
                       <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800">
                         <div
