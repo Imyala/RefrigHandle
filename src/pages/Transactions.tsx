@@ -354,6 +354,20 @@ function TransactionForm({
   const showCompliance = kind === 'charge' || kind === 'recover'
   const supportsLoss = kind === 'charge' || kind === 'recover'
 
+  // Bottle-vs-unit refrigerant mismatch — charging R410A into a unit
+  // labelled R32 (or vice-versa) is almost always a wrong-bottle mistake
+  // and the resulting blend can damage the equipment. Warn loudly but
+  // don't auto-block; the tech may be intentionally retrofitting.
+  const selectedUnit = unitId
+    ? siteUnits.find((u) => u.id === unitId)
+    : undefined
+  const unitRefrigerantMismatch =
+    !!bottle &&
+    (kind === 'charge' || kind === 'recover') &&
+    !!selectedUnit?.refrigerantType &&
+    selectedUnit.refrigerantType.toUpperCase() !==
+      bottle.refrigerantType.toUpperCase()
+
   // Block over-draw on charge: can't take more refrigerant than the bottle
   // currently holds. Adjust is a manual signed correction — left unblocked.
   const currentNet = bottle ? netWeight(bottle) : 0
@@ -502,6 +516,21 @@ function TransactionForm({
                   </Button>
                 </div>
               </Field>
+            )}
+            {unitRefrigerantMismatch && bottle && selectedUnit && (
+              <div className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-600 dark:bg-amber-900/20 dark:text-amber-100">
+                <div className="font-semibold">
+                  ⚠ Refrigerant mismatch — bottle and unit don't match
+                </div>
+                <div className="mt-1 text-xs">
+                  Bottle is{' '}
+                  <strong>{bottle.refrigerantType}</strong>, unit{' '}
+                  <strong>{selectedUnit.name}</strong> is set up for{' '}
+                  <strong>{selectedUnit.refrigerantType}</strong>. Double-check
+                  you've grabbed the right bottle — mixing types can damage
+                  the equipment and invalidates the charge record.
+                </div>
+              </div>
             )}
           </>
         )}
