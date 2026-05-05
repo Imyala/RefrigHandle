@@ -33,6 +33,7 @@ import { RefrigerantSelect } from '../components/RefrigerantSelect'
 import { BottleSelect } from '../components/BottleSelect'
 import { CylinderPresetSelect } from '../components/CylinderPresetSelect'
 import { DateInput } from '../components/DateInput'
+import { SiteForm } from './Sites'
 import { useToast } from '../lib/toast'
 import { displayToKg, formatWeight, kgToDisplay } from '../lib/units'
 import { formatDateTime } from '../lib/datetime'
@@ -466,7 +467,8 @@ function QuickLogModal({
     refrigerantMismatch?: { bottleType: string; unitType: string }
   }) => void
 }) {
-  const { state, addBottle, addUnit, addCustomRefrigerant } = useStore()
+  const { state, addBottle, addSite, addUnit, addCustomRefrigerant } =
+    useStore()
   const unit = state.unit
   const allRefrigerantTypes = useMemo(
     () =>
@@ -494,6 +496,7 @@ function QuickLogModal({
 
   // Quick-add modals
   const [quickAddBottleOpen, setQuickAddBottleOpen] = useState(false)
+  const [quickAddSiteOpen, setQuickAddSiteOpen] = useState(false)
   const [quickAddUnitOpen, setQuickAddUnitOpen] = useState(false)
 
   const lastKey = `${bottle?.id}-${kind}-${open}`
@@ -848,21 +851,32 @@ function QuickLogModal({
           {showSite && (
             <>
               <Field label="Site">
-                <Picker
-                  title="Site"
-                  value={siteId}
-                  onChange={(v) => {
-                    setSiteId(v)
-                    setUnitId('')
-                  }}
-                  required={kind === 'transfer'}
-                  emptyLabel="— none —"
-                  placeholder="— none —"
-                  options={state.sites.map((j) => ({
-                    value: j.id,
-                    label: j.name,
-                  }))}
-                />
+                <div className="flex gap-2">
+                  <div className="min-w-0 flex-1">
+                    <Picker
+                      title="Site"
+                      value={siteId}
+                      onChange={(v) => {
+                        setSiteId(v)
+                        setUnitId('')
+                      }}
+                      required={kind === 'transfer'}
+                      emptyLabel="— none —"
+                      placeholder="— none —"
+                      options={state.sites.map((j) => ({
+                        value: j.id,
+                        label: j.name,
+                      }))}
+                    />
+                  </div>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={() => setQuickAddSiteOpen(true)}
+                  >
+                    + New
+                  </Button>
+                </div>
               </Field>
               {(kind === 'charge' || kind === 'recover') && siteId && (
                 <Field
@@ -995,6 +1009,18 @@ function QuickLogModal({
           const created = addUnit({ ...data, siteId })
           setUnitId(created.id)
           setQuickAddUnitOpen(false)
+        }}
+      />
+
+      <SiteForm
+        open={quickAddSiteOpen}
+        title="New site"
+        onClose={() => setQuickAddSiteOpen(false)}
+        onSave={(data) => {
+          const created = addSite(data)
+          setSiteId(created.id)
+          setUnitId('')
+          setQuickAddSiteOpen(false)
         }}
       />
     </>
@@ -1194,7 +1220,7 @@ function BottleForm({
   onSave: (data: Omit<Bottle, 'id' | 'createdAt' | 'updatedAt'>) => void
   onDelete?: () => void
 }) {
-  const { state } = useStore()
+  const { state, addSite } = useStore()
   const unit = state.unit
   const initialDisplay = (kg: number) =>
     kg ? kgToDisplay(kg, unit).toFixed(2) : ''
@@ -1212,6 +1238,7 @@ function BottleForm({
   const [notes, setNotes] = useState(bottle?.notes ?? '')
   const [lastHydro, setLastHydro] = useState(bottle?.lastHydroTestDate ?? '')
   const [nextHydro, setNextHydro] = useState(bottle?.nextHydroTestDate ?? '')
+  const [addingSite, setAddingSite] = useState(false)
 
   // "Manual capacity" only matters for bottles received partially used.
   // For the common case (fresh full bottle from supplier) capacity == net.
@@ -1494,18 +1521,29 @@ function BottleForm({
                 : undefined
             }
           >
-            <Picker
-              title={
-                status === 'stationed' ? 'Facility / site' : 'Current site'
-              }
-              value={currentSiteId}
-              onChange={setCurrentSiteId}
-              placeholder="— pick a site —"
-              options={state.sites.map((j) => ({
-                value: j.id,
-                label: j.name,
-              }))}
-            />
+            <div className="flex gap-2">
+              <div className="min-w-0 flex-1">
+                <Picker
+                  title={
+                    status === 'stationed' ? 'Facility / site' : 'Current site'
+                  }
+                  value={currentSiteId}
+                  onChange={setCurrentSiteId}
+                  placeholder="— pick a site —"
+                  options={state.sites.map((j) => ({
+                    value: j.id,
+                    label: j.name,
+                  }))}
+                />
+              </div>
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => setAddingSite(true)}
+              >
+                + New
+              </Button>
+            </div>
           </Field>
         )}
 
@@ -1528,6 +1566,17 @@ function BottleForm({
           )}
         </div>
       </form>
+
+      <SiteForm
+        open={addingSite}
+        title="New site"
+        onClose={() => setAddingSite(false)}
+        onSave={(data) => {
+          const created = addSite(data)
+          setCurrentSiteId(created.id)
+          setAddingSite(false)
+        }}
+      />
     </Modal>
   )
 }
