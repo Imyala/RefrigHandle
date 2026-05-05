@@ -1049,7 +1049,16 @@ function LogbookRow({ t }: { t: Transaction }) {
           </div>
         )}
       </td>
-      <td className="py-1">{t.notes ?? ''}</td>
+      <td className="py-1">
+        {t.refrigerantMismatch && (
+          <div className="text-[11px] font-medium text-amber-700 dark:text-amber-300">
+            ⚠ Refrigerant mismatch: bottle{' '}
+            {t.refrigerantMismatch.bottleType} into unit set up for{' '}
+            {t.refrigerantMismatch.unitType}
+          </div>
+        )}
+        {t.notes ?? ''}
+      </td>
     </tr>
   )
 }

@@ -201,6 +201,15 @@ export interface Transaction {
   notes?: string
   // Where the bottle was returned (store / supplier) — only for 'return' kind
   returnDestination?: string
+  // Stamped when the tech proceeded with a charge/recover where the
+  // bottle's refrigerant didn't match the unit's. Frozen at the time
+  // of work — even if the unit's refrigerantType is later edited, the
+  // logbook still shows the mismatch that was acknowledged when the
+  // transaction happened.
+  refrigerantMismatch?: {
+    bottleType: string
+    unitType: string
+  }
   // Soft-delete fields. A row with deletedAt set is hidden from the
   // normal activity log, dashboard, and equipment logbook, and is
   // excluded from cumulative calcs (leak top-ups, totals). It stays

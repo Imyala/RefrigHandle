@@ -417,6 +417,7 @@ function QuickLogModal({
     reason?: TransactionReason
     notes?: string
     returnDestination?: string
+    refrigerantMismatch?: { bottleType: string; unitType: string }
   }) => void
 }) {
   const { state, addBottle, addUnit, addCustomRefrigerant } = useStore()
@@ -588,6 +589,13 @@ function QuickLogModal({
       returnDestination:
         kind === 'return' && returnDestination.trim()
           ? returnDestination.trim()
+          : undefined,
+      refrigerantMismatch:
+        unitRefrigerantMismatch && selectedUnit?.refrigerantType
+          ? {
+              bottleType: bottle.refrigerantType,
+              unitType: selectedUnit.refrigerantType,
+            }
           : undefined,
     })
   }

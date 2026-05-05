@@ -196,6 +196,14 @@ export default function Transactions() {
                         Loss: {formatWeight(transactionLoss(t), unit)}
                       </div>
                     )}
+                    {t.refrigerantMismatch && (
+                      <div className="mt-1 rounded-lg border border-amber-300 bg-amber-50 px-2 py-1 text-xs font-medium text-amber-900 dark:border-amber-600 dark:bg-amber-900/20 dark:text-amber-100">
+                        ⚠ Refrigerant mismatch acknowledged — bottle{' '}
+                        <strong>{t.refrigerantMismatch.bottleType}</strong> into
+                        unit set up for{' '}
+                        <strong>{t.refrigerantMismatch.unitType}</strong>
+                      </div>
+                    )}
                     {t.notes && (
                       <div className="mt-1 text-xs italic text-slate-500">
                         “{t.notes}”
@@ -267,6 +275,7 @@ function TransactionForm({
     equipment?: string
     reason?: TransactionReason
     notes?: string
+    refrigerantMismatch?: { bottleType: string; unitType: string }
   }) => void
 }) {
   const { state, addSite, addUnit, addTechnician, setActiveTechnicianId } =
@@ -412,6 +421,15 @@ function TransactionForm({
       equipment: equipment.trim() || undefined,
       reason: reason || undefined,
       notes: notes.trim() || undefined,
+      refrigerantMismatch:
+        unitRefrigerantMismatch &&
+        bottle &&
+        selectedUnit?.refrigerantType
+          ? {
+              bottleType: bottle.refrigerantType,
+              unitType: selectedUnit.refrigerantType,
+            }
+          : undefined,
     })
   }
 
