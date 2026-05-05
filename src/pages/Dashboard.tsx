@@ -27,6 +27,7 @@ export default function Dashboard() {
   const totalNet = bottles.reduce((sum, b) => sum + netWeight(b), 0)
   const inStock = bottles.filter((b) => b.status === 'in_stock').length
   const onSite = bottles.filter((b) => b.status === 'on_site').length
+  const stationed = bottles.filter((b) => b.status === 'stationed').length
   const returned = bottles.filter((b) => b.status === 'returned').length
   const empty = bottles.filter((b) => b.status === 'empty').length
 
@@ -62,6 +63,11 @@ export default function Dashboard() {
           {onSite > 0 && (
             <span className="inline-flex items-center rounded-full bg-amber-400/25 px-2.5 py-0.5 text-xs font-medium text-amber-50">
               {onSite} on site
+            </span>
+          )}
+          {stationed > 0 && (
+            <span className="inline-flex items-center rounded-full bg-sky-400/25 px-2.5 py-0.5 text-xs font-medium text-sky-50">
+              {stationed} at facility
             </span>
           )}
           {returned > 0 && (

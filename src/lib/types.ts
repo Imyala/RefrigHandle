@@ -44,7 +44,12 @@ export const REFRIGERANT_TYPES = [
 
 export type RefrigerantType = (typeof REFRIGERANT_TYPES)[number] | string
 
-export type BottleStatus = 'in_stock' | 'on_site' | 'returned' | 'empty'
+export type BottleStatus =
+  | 'in_stock'
+  | 'on_site'
+  | 'stationed'
+  | 'returned'
+  | 'empty'
 
 export interface Bottle {
   id: string
@@ -471,6 +476,8 @@ export function statusLabel(s: BottleStatus): string {
       return 'In stock'
     case 'on_site':
       return 'On site'
+    case 'stationed':
+      return 'At facility'
     case 'returned':
       return 'Returned'
     case 'empty':

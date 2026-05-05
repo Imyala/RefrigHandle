@@ -37,9 +37,13 @@ import { useToast } from '../lib/toast'
 import { displayToKg, formatWeight, kgToDisplay } from '../lib/units'
 import { formatDateTime } from '../lib/datetime'
 
-const statusTone: Record<BottleStatus, 'green' | 'amber' | 'slate' | 'red'> = {
+const statusTone: Record<
+  BottleStatus,
+  'green' | 'amber' | 'slate' | 'red' | 'blue'
+> = {
   in_stock: 'green',
   on_site: 'amber',
+  stationed: 'blue',
   returned: 'slate',
   empty: 'red',
 }
@@ -63,6 +67,7 @@ export default function Bottles() {
       saved === 'all' ||
       saved === 'in_stock' ||
       saved === 'on_site' ||
+      saved === 'stationed' ||
       saved === 'returned' ||
       saved === 'empty'
     ) {
@@ -128,7 +133,7 @@ export default function Bottles() {
       )}
 
       <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
-        {(['all', 'in_stock', 'on_site', 'returned', 'empty'] as const).map(
+        {(['all', 'in_stock', 'on_site', 'stationed', 'returned', 'empty'] as const).map(
           (f) => {
             const count =
               f === 'all'
@@ -1448,7 +1453,16 @@ function BottleForm({
             }}
             options={[
               { value: 'in_stock', label: 'In stock' },
-              { value: 'on_site', label: 'On site' },
+              {
+                value: 'on_site',
+                label: 'On site',
+                hint: 'Currently in use on a job',
+              },
+              {
+                value: 'stationed',
+                label: 'At facility',
+                hint: 'Left at a customer site / building long-term',
+              },
               { value: 'returned', label: 'Returned' },
               {
                 value: 'empty',
@@ -1466,15 +1480,24 @@ function BottleForm({
           <div className="rounded-xl bg-red-50 p-3 text-sm text-red-900 dark:bg-red-900/20 dark:text-red-100">
             ⛔ Status is "Empty" but the bottle still has{' '}
             {formatWeight(liveNet, unit)} of refrigerant. Pick "In stock",
-            "On site", or "Returned" — or correct the gross weight if the
-            bottle really is empty.
+            "On site", "At facility", or "Returned" — or correct the gross
+            weight if the bottle really is empty.
           </div>
         )}
 
-        {status === 'on_site' && (
-          <Field label="Current site">
+        {(status === 'on_site' || status === 'stationed') && (
+          <Field
+            label={status === 'stationed' ? 'Facility / site' : 'Current site'}
+            hint={
+              status === 'stationed'
+                ? 'Where the bottle is parked long-term'
+                : undefined
+            }
+          >
             <Picker
-              title="Current site"
+              title={
+                status === 'stationed' ? 'Facility / site' : 'Current site'
+              }
               value={currentSiteId}
               onChange={setCurrentSiteId}
               placeholder="— pick a site —"
