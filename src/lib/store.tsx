@@ -47,6 +47,11 @@ interface StoreApi {
   deleteUnit: (id: string) => void
   decommissionUnit: (id: string, reason?: string) => void
   reactivateUnit: (id: string) => void
+  // Stamp the unit with a "leak repaired" marker. Resets the trailing
+  // 12-month leak detection so prior top-ups stop triggering the
+  // watch / suspected pill.
+  markLeakRepaired: (id: string, notes?: string) => void
+  clearLeakRepaired: (id: string) => void
   // transactions
   addTransaction: (
     t: Omit<Transaction, 'id' | 'weightBefore' | 'weightAfter'>,
@@ -306,6 +311,56 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       ),
     }))
   }, [])
+
+  const markLeakRepaired: StoreApi['markLeakRepaired'] = useCallback(
+    (id, notes) => {
+      setState((s) => {
+        const activeTech = s.technicians.find(
+          (x) => x.id === s.activeTechnicianId,
+        )
+        const now = new Date().toISOString()
+        return {
+          ...s,
+          units: s.units.map((u) =>
+            u.id === id
+              ? {
+                  ...u,
+                  leakRepairedAt: now,
+                  leakRepairedBy:
+                    activeTech?.name || s.technician || undefined,
+                  leakRepairedByLicence:
+                    activeTech?.arcLicenceNumber ||
+                    s.arcLicenceNumber ||
+                    undefined,
+                  leakRepairedNotes: notes?.trim() || undefined,
+                }
+              : u,
+          ),
+        }
+      })
+    },
+    [],
+  )
+
+  const clearLeakRepaired: StoreApi['clearLeakRepaired'] = useCallback(
+    (id) => {
+      setState((s) => ({
+        ...s,
+        units: s.units.map((u) =>
+          u.id === id
+            ? {
+                ...u,
+                leakRepairedAt: undefined,
+                leakRepairedBy: undefined,
+                leakRepairedByLicence: undefined,
+                leakRepairedNotes: undefined,
+              }
+            : u,
+        ),
+      }))
+    },
+    [],
+  )
 
   const addTransaction: StoreApi['addTransaction'] = useCallback((t) => {
     let result: Transaction | null = null
@@ -664,6 +719,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       deleteUnit,
       decommissionUnit,
       reactivateUnit,
+      markLeakRepaired,
+      clearLeakRepaired,
       addTransaction,
       deleteTransaction,
       restoreTransaction,
@@ -702,6 +759,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       deleteUnit,
       decommissionUnit,
       reactivateUnit,
+      markLeakRepaired,
+      clearLeakRepaired,
       addTransaction,
       deleteTransaction,
       restoreTransaction,

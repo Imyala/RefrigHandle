@@ -440,8 +440,13 @@ function UnitCard({
   onDecommission: () => void
   onLogbook: () => void
 }) {
-  const { state } = useStore()
+  const { state, markLeakRepaired, clearLeakRepaired } = useStore()
+  const toast = useToast()
+  const confirm = useConfirm()
   const leak = leakStatusFor(u, state.transactions)
+  const showMarkRepaired =
+    leak.level === 'watch' || leak.level === 'suspected'
+  const showUndoRepaired = leak.level === 'repaired'
   return (
     <Card className="!p-3">
       <div className="flex items-start justify-between gap-3">
@@ -470,6 +475,47 @@ function UnitCard({
         <Button variant="secondary" onClick={onLogbook}>
           Logbook
         </Button>
+        {showMarkRepaired && (
+          <Button
+            variant="secondary"
+            onClick={async () => {
+              const reason = await confirm({
+                title: `Mark leak repaired on "${u.name}"?`,
+                message:
+                  'Resets the trailing 12-month leak detection. Past top-ups stop counting toward the watch / suspected thresholds, and the equipment will show "Leak repaired" until new top-ups push it back over the limit.',
+                confirmLabel: 'Mark repaired',
+                withReason: true,
+                reasonLabel: 'Repair notes (optional)',
+                reasonPlaceholder: 'e.g. brazed flare on suction line',
+              })
+              if (reason !== null) {
+                markLeakRepaired(u.id, typeof reason === 'string' ? reason : undefined)
+                toast.show('Leak marked repaired')
+              }
+            }}
+          >
+            Mark leak repaired
+          </Button>
+        )}
+        {showUndoRepaired && (
+          <Button
+            variant="ghost"
+            onClick={async () => {
+              const ok = await confirm({
+                title: `Undo "leak repaired" on "${u.name}"?`,
+                message:
+                  'Re-enables prior top-ups in the leak detection window. Use this if the repair was logged in error.',
+                confirmLabel: 'Undo',
+              })
+              if (ok) {
+                clearLeakRepaired(u.id)
+                toast.show('Leak repair cleared', 'info')
+              }
+            }}
+          >
+            Undo repair
+          </Button>
+        )}
         <Button variant="secondary" onClick={onDecommission}>
           Decommission
         </Button>
@@ -484,6 +530,19 @@ function LeakPill({ leak }: { leak: LeakStatus }) {
     return (
       <Pill tone="slate" title="Charge not recorded — set the factory charge to enable leak monitoring.">
         Leak ?
+      </Pill>
+    )
+  }
+  if (leak.level === 'repaired') {
+    const when = leak.repairedAt
+      ? new Date(leak.repairedAt).toLocaleDateString('en-AU')
+      : ''
+    return (
+      <Pill
+        tone="green"
+        title={`Leak marked repaired${when ? ` on ${when}` : ''}. Trailing 12-month detection has been reset — new top-ups will start counting again.`}
+      >
+        Leak repaired
       </Pill>
     )
   }
@@ -921,6 +980,20 @@ function UnitLogbook({
               }`}
             />
             <Kv label="Leak status" v={leakLevelLabel(leak.level)} />
+            {unit.leakRepairedAt && (
+              <Kv
+                label="Leak repaired"
+                v={`${new Date(unit.leakRepairedAt).toLocaleDateString('en-AU')}${
+                  unit.leakRepairedBy ? ` · ${unit.leakRepairedBy}` : ''
+                }${
+                  unit.leakRepairedByLicence
+                    ? ` (RHL ${unit.leakRepairedByLicence})`
+                    : ''
+                }${
+                  unit.leakRepairedNotes ? ` — ${unit.leakRepairedNotes}` : ''
+                }`}
+              />
+            )}
             <Kv label="Total charged (lifetime)" v={`${totalCharged.toFixed(3)} kg`} />
             <Kv
               label="Total recovered (lifetime)"
@@ -1017,6 +1090,8 @@ function leakLevelLabel(l: LeakStatus['level']): string {
       return 'Suspected leak — investigate & rectify (≥10% top-up)'
     case 'unknown':
       return 'Unknown — set factory charge to enable monitoring'
+    case 'repaired':
+      return 'Leak repaired — detection reset'
   }
 }
 

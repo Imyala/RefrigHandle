@@ -144,6 +144,16 @@ export interface Unit {
   status: UnitStatus
   decommissionedAt?: string // ISO timestamp
   decommissionedReason?: string
+  // Set when a tech marks the unit's leak as repaired. Resets the
+  // trailing-12-month leak detection so prior top-ups stop counting
+  // toward the watch / suspected thresholds — the unit then shows
+  // a "Leak repaired" pill instead of "Leak suspected" until either
+  // the repair drops out of the trailing window or new top-ups push
+  // it back over the threshold.
+  leakRepairedAt?: string // ISO timestamp
+  leakRepairedBy?: string // technician name
+  leakRepairedByLicence?: string // RHL of the technician
+  leakRepairedNotes?: string
   notes?: string
   createdAt: string
 }
@@ -606,13 +616,16 @@ export const LEAK_WATCH_FRACTION = 0.05 // 5% of charge in trailing 12 mo
 export const LEAK_SUSPECTED_FRACTION = 0.1 // 10% of charge in trailing 12 mo
 export const LEAK_TRAILING_DAYS = 365
 
-export type LeakLevel = 'ok' | 'watch' | 'suspected' | 'unknown'
+export type LeakLevel = 'ok' | 'watch' | 'suspected' | 'unknown' | 'repaired'
 
 export interface LeakStatus {
   level: LeakLevel
   topUpKg: number // sum of charges in trailing window (excluding install)
   fraction: number // topUpKg / unit.refrigerantCharge, or 0 if no charge known
   windowDays: number
+  // ISO timestamp of the most recent leak repair, if it falls within
+  // the trailing window. Drives the "Leak repaired" pill.
+  repairedAt?: string
 }
 
 // Sum of charge transactions against a unit since `sinceISO`. Excludes
@@ -636,6 +649,13 @@ export function cumulativeTopUpKg(
 
 // Returns the unit's leak status against the trailing 12-month window.
 // `nowISO` defaults to "today" but is injectable for tests/print views.
+//
+// If the unit has been marked "leak repaired" within the trailing
+// window, top-ups before the repair are excluded — the repair is
+// treated as a fresh start for the detection window. The status then
+// reports as 'repaired' (instead of 'ok') until either the repair
+// timestamp drops out of the window or new top-ups push the unit back
+// into watch / suspected.
 export function leakStatusFor(
   unit: Unit,
   transactions: readonly Transaction[],
@@ -643,26 +663,36 @@ export function leakStatusFor(
 ): LeakStatus {
   const windowDays = LEAK_TRAILING_DAYS
   const now = new Date(nowISO)
-  const since = new Date(now.getTime() - windowDays * 86400 * 1000)
-  const sinceISO = since.toISOString()
+  const windowStartISO = new Date(
+    now.getTime() - windowDays * 86400 * 1000,
+  ).toISOString()
+  const repairedAt =
+    unit.leakRepairedAt && unit.leakRepairedAt > windowStartISO
+      ? unit.leakRepairedAt
+      : undefined
+  const sinceISO = repairedAt && repairedAt > windowStartISO
+    ? repairedAt
+    : windowStartISO
   const topUp = cumulativeTopUpKg(unit.id, transactions, sinceISO)
   const charge = unit.refrigerantCharge ?? 0
   if (charge <= 0) {
     return {
-      level: topUp > 0 ? 'unknown' : 'ok',
+      level: topUp > 0 ? 'unknown' : repairedAt ? 'repaired' : 'ok',
       topUpKg: topUp,
       fraction: 0,
       windowDays,
+      repairedAt,
     }
   }
   const fraction = topUp / charge
-  const level: LeakLevel =
+  let level: LeakLevel =
     fraction >= LEAK_SUSPECTED_FRACTION
       ? 'suspected'
       : fraction >= LEAK_WATCH_FRACTION
         ? 'watch'
         : 'ok'
-  return { level, topUpKg: topUp, fraction, windowDays }
+  if (level === 'ok' && repairedAt) level = 'repaired'
+  return { level, topUpKg: topUp, fraction, windowDays, repairedAt }
 }
 
 // --- Timezones --------------------------------------------------------
