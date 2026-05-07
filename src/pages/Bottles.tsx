@@ -1506,7 +1506,7 @@ function BottleForm({
         })()}
 
         <Field
-          label={`Safe fill / cylinder capacity (${unit})`}
+          label={`W.C (${unit})`}
           hint="Auto-set when you pick a cylinder preset and a refrigerant. Edit to override. Used for the % remaining bar and the overfill warning."
         >
           <TextInput

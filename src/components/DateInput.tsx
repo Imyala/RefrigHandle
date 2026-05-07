@@ -191,6 +191,7 @@ function CalendarPopover({
     (min ? ymdFromIso(min) : null) ??
     todayYmd()
   const [view, setView] = useState({ y: initialYmd.y, m: initialYmd.m })
+  const [mode, setMode] = useState<'days' | 'years'>('days')
 
   // Position below the anchor using fixed coords (anchor is inside a
   // portaled modal that scrolls; the popover lives in its own portal
@@ -251,6 +252,12 @@ function CalendarPopover({
     setView({ y, m })
   }
 
+  // Year picker shows a 4×3 grid centred on the current view year.
+  const YEAR_PAGE = 12
+  const yearPageStart = view.y - 5
+  const minYear = min ? (ymdFromIso(min)?.y ?? -Infinity) : -Infinity
+  const maxYear = max ? (ymdFromIso(max)?.y ?? Infinity) : Infinity
+
   return createPortal(
     <div
       ref={ref}
@@ -262,8 +269,10 @@ function CalendarPopover({
       <div className="flex items-center justify-between gap-1 border-b border-slate-100 px-2 py-2 dark:border-slate-800">
         <button
           type="button"
-          onClick={() => shiftMonth(-12)}
-          aria-label="Previous year"
+          onClick={() =>
+            mode === 'years' ? setView({ ...view, y: view.y - YEAR_PAGE }) : shiftMonth(-12)
+          }
+          aria-label={mode === 'years' ? 'Previous years' : 'Previous year'}
           className="flex h-9 w-9 items-center justify-center rounded-full text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"
         >
           «
@@ -272,64 +281,104 @@ function CalendarPopover({
           type="button"
           onClick={() => shiftMonth(-1)}
           aria-label="Previous month"
-          className="flex h-9 w-9 items-center justify-center rounded-full text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"
+          disabled={mode === 'years'}
+          className="flex h-9 w-9 items-center justify-center rounded-full text-slate-500 hover:bg-slate-100 disabled:opacity-30 disabled:hover:bg-transparent dark:hover:bg-slate-800"
         >
           ‹
         </button>
-        <div className="min-w-0 flex-1 text-center text-sm font-semibold text-slate-800 dark:text-slate-100">
-          {monthName(view.m)} {view.y}
-        </div>
+        <button
+          type="button"
+          onClick={() => setMode((m) => (m === 'years' ? 'days' : 'years'))}
+          aria-label={mode === 'years' ? 'Back to days' : 'Pick a year'}
+          aria-expanded={mode === 'years'}
+          className="min-w-0 flex-1 rounded-md px-2 py-1 text-center text-sm font-semibold text-slate-800 hover:bg-slate-100 dark:text-slate-100 dark:hover:bg-slate-800"
+        >
+          {mode === 'years'
+            ? `${yearPageStart} – ${yearPageStart + YEAR_PAGE - 1}`
+            : `${monthName(view.m)} ${view.y}`}
+        </button>
         <button
           type="button"
           onClick={() => shiftMonth(1)}
           aria-label="Next month"
-          className="flex h-9 w-9 items-center justify-center rounded-full text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"
+          disabled={mode === 'years'}
+          className="flex h-9 w-9 items-center justify-center rounded-full text-slate-500 hover:bg-slate-100 disabled:opacity-30 disabled:hover:bg-transparent dark:hover:bg-slate-800"
         >
           ›
         </button>
         <button
           type="button"
-          onClick={() => shiftMonth(12)}
-          aria-label="Next year"
+          onClick={() =>
+            mode === 'years' ? setView({ ...view, y: view.y + YEAR_PAGE }) : shiftMonth(12)
+          }
+          aria-label={mode === 'years' ? 'Next years' : 'Next year'}
           className="flex h-9 w-9 items-center justify-center rounded-full text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"
         >
           »
         </button>
       </div>
-      <div className="grid grid-cols-7 gap-0.5 px-2 pt-2 text-center text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-        {WEEKDAY_LABELS.map((d) => (
-          <div key={d} className="py-1">
-            {d}
+      {mode === 'years' ? (
+        <div className="grid grid-cols-4 gap-1 px-2 py-3">
+          {Array.from({ length: YEAR_PAGE }, (_, i) => yearPageStart + i).map((y) => {
+            const yDisabled = y < minYear || y > maxYear
+            const isViewYear = y === view.y
+            const isSelectedYear =
+              !!selected && ymdFromIso(selected)?.y === y
+            const isThisYear = y === today.y
+            return (
+              <button
+                key={y}
+                type="button"
+                disabled={yDisabled}
+                onClick={() => {
+                  setView({ y, m: view.m })
+                  setMode('days')
+                }}
+                className={yearCellClass(isSelectedYear, isViewYear, isThisYear, yDisabled)}
+              >
+                {y}
+              </button>
+            )
+          })}
+        </div>
+      ) : (
+        <>
+          <div className="grid grid-cols-7 gap-0.5 px-2 pt-2 text-center text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+            {WEEKDAY_LABELS.map((d) => (
+              <div key={d} className="py-1">
+                {d}
+              </div>
+            ))}
           </div>
-        ))}
-      </div>
-      <div className="grid grid-cols-7 gap-0.5 px-2 pb-2">
-        {cells.map((c) => {
-          const iso = isoFromYmd(c.y, c.m, c.d)
-          const disabled =
-            (min != null && iso < min) || (max != null && iso > max)
-          const isSelected = !!selected && selected === iso
-          const isToday = iso === todayIso
-          const inMonth = c.m === view.m
-          return (
-            <button
-              key={iso}
-              type="button"
-              onClick={() => {
-                if (disabled) return
-                onPick(iso)
-              }}
-              disabled={disabled}
-              className={cellClass(isSelected, isToday, inMonth, disabled)}
-              aria-label={`${c.d} ${monthName(c.m)} ${c.y}`}
-              aria-current={isToday ? 'date' : undefined}
-              aria-selected={isSelected || undefined}
-            >
-              {c.d}
-            </button>
-          )
-        })}
-      </div>
+          <div className="grid grid-cols-7 gap-0.5 px-2 pb-2">
+            {cells.map((c) => {
+              const iso = isoFromYmd(c.y, c.m, c.d)
+              const disabled =
+                (min != null && iso < min) || (max != null && iso > max)
+              const isSelected = !!selected && selected === iso
+              const isToday = iso === todayIso
+              const inMonth = c.m === view.m
+              return (
+                <button
+                  key={iso}
+                  type="button"
+                  onClick={() => {
+                    if (disabled) return
+                    onPick(iso)
+                  }}
+                  disabled={disabled}
+                  className={cellClass(isSelected, isToday, inMonth, disabled)}
+                  aria-label={`${c.d} ${monthName(c.m)} ${c.y}`}
+                  aria-current={isToday ? 'date' : undefined}
+                  aria-selected={isSelected || undefined}
+                >
+                  {c.d}
+                </button>
+              )
+            })}
+          </div>
+        </>
+      )}
       <div className="flex items-center justify-between gap-2 border-t border-slate-100 px-3 py-2 dark:border-slate-800">
         <button
           type="button"
@@ -367,6 +416,25 @@ function cellClass(
     return `${base} font-semibold text-brand-700 ring-1 ring-inset ring-brand-500 hover:bg-brand-50 dark:text-brand-300 dark:hover:bg-brand-900/30`
   if (!inMonth)
     return `${base} text-slate-400 hover:bg-slate-100 dark:text-slate-600 dark:hover:bg-slate-800`
+  return `${base} text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800`
+}
+
+function yearCellClass(
+  selected: boolean,
+  viewYear: boolean,
+  thisYear: boolean,
+  disabled: boolean,
+): string {
+  const base =
+    'flex h-10 items-center justify-center rounded-lg text-sm tabular-nums transition'
+  if (disabled)
+    return `${base} cursor-not-allowed text-slate-300 dark:text-slate-700`
+  if (selected)
+    return `${base} bg-brand-600 font-semibold text-white shadow`
+  if (viewYear)
+    return `${base} font-semibold text-brand-700 ring-1 ring-inset ring-brand-500 hover:bg-brand-50 dark:text-brand-300 dark:hover:bg-brand-900/30`
+  if (thisYear)
+    return `${base} font-semibold text-brand-700 hover:bg-slate-100 dark:text-brand-300 dark:hover:bg-slate-800`
   return `${base} text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800`
 }
 
