@@ -29,6 +29,8 @@ import {
   formatDateTime,
   localDateTimeInput,
 } from '../lib/datetime'
+import { PasswordPromptModal } from '../components/PasswordPromptModal'
+import type { Technician } from '../lib/types'
 
 const KIND_OPTIONS: readonly PickerOption[] = [
   { value: 'charge', label: 'Charge', hint: 'into equipment (bottle weight decreases)' },
@@ -340,6 +342,7 @@ function TransactionForm({
   const [addingTech, setAddingTech] = useState(false)
   const [newTechName, setNewTechName] = useState('')
   const [newTechRhl, setNewTechRhl] = useState('')
+  const [pwPromptTech, setPwPromptTech] = useState<Technician | null>(null)
   const [equipment, setEquipment] = useState('')
   const [reason, setReason] = useState<TransactionReason | ''>('')
   const [notes, setNotes] = useState('')
@@ -744,8 +747,17 @@ function TransactionForm({
                 setAddingTech(true)
                 return
               }
+              if (v === '__other__') {
+                setTechId(v)
+                return
+              }
+              const target = state.technicians.find((t) => t.id === v)
+              if (target?.passwordHash && state.activeTechnicianId !== v) {
+                setPwPromptTech(target)
+                return
+              }
               setTechId(v)
-              if (v !== '__other__') setActiveTechnicianId(v)
+              setActiveTechnicianId(v)
             }}
             options={[
               ...state.technicians.map((t) => ({
@@ -855,6 +867,16 @@ function TransactionForm({
           }}
         />
       )}
+
+      <PasswordPromptModal
+        tech={pwPromptTech}
+        onClose={() => setPwPromptTech(null)}
+        onVerified={(t) => {
+          setTechId(t.id)
+          setActiveTechnicianId(t.id)
+          setPwPromptTech(null)
+        }}
+      />
     </Modal>
   )
 }

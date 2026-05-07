@@ -274,6 +274,11 @@ export interface Technician {
   id: string
   name: string
   arcLicenceNumber: string // ARC RHL — personal licence, per tech
+  // Optional soft lock for switching the active profile on a shared
+  // device. SHA-256 of `${id}:${password}` (id acts as salt). Storage
+  // is localStorage, so this only deters casual snooping — anyone with
+  // dev-tools access can still read every other tech's data.
+  passwordHash?: string
   createdAt: string
 }
 

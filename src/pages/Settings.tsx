@@ -26,6 +26,8 @@ import { formatDateTime } from '../lib/datetime'
 import { formatWeight } from '../lib/units'
 import { useToast } from '../lib/toast'
 import { useConfirm } from '../lib/confirm'
+import { hashPassword } from '../lib/auth'
+import { PasswordPromptModal } from '../components/PasswordPromptModal'
 import { isSyncConfigured } from '../lib/sync'
 import {
   deleteCorruptedBackup,
@@ -116,6 +118,17 @@ export default function Settings() {
   function openEditTech(t: Technician) {
     setEditingTech(t)
     setTechModalOpen(true)
+  }
+
+  // Password prompt for "Use"-switching into a protected tech.
+  const [pwPromptTech, setPwPromptTech] = useState<Technician | null>(null)
+  function requestActivate(t: Technician) {
+    if (t.passwordHash) {
+      setPwPromptTech(t)
+    } else {
+      setActiveTechnicianId(t.id)
+      toast.show(`Active tech: ${t.name}`)
+    }
   }
 
   // --- Storage health state ---------------------------------------------
@@ -384,14 +397,20 @@ export default function Settings() {
                         : 'No RHL recorded'}
                     </div>
                   </div>
-                  <div className="flex shrink-0 gap-1">
+                  <div className="flex shrink-0 items-center gap-1">
+                    {t.passwordHash && (
+                      <span
+                        className="text-slate-400 dark:text-slate-500"
+                        aria-label="Password protected"
+                        title="Password protected"
+                      >
+                        🔒
+                      </span>
+                    )}
                     {!isActive && (
                       <Button
                         variant="secondary"
-                        onClick={() => {
-                          setActiveTechnicianId(t.id)
-                          toast.show(`Active tech: ${t.name}`)
-                        }}
+                        onClick={() => requestActivate(t)}
                       >
                         Use
                       </Button>
@@ -408,8 +427,19 @@ export default function Settings() {
       </Card>
 
       <Card>
-        <div className="mb-1 text-sm font-semibold text-slate-700 dark:text-slate-200">
-          Compliance details (Australia)
+        <div className="mb-1 flex items-center justify-between gap-2">
+          <div className="text-sm font-semibold text-slate-700 dark:text-slate-200">
+            Compliance details (Australia)
+          </div>
+          <Button
+            onClick={() => {
+              setBusinessName(bizName)
+              setArcAuthorisationNumber(arcAuth)
+              toast.show('Saved')
+            }}
+          >
+            Save
+          </Button>
         </div>
         <p className="mb-3 text-xs text-slate-500">
           Used on logbook printouts and stamped onto every transaction at the
@@ -427,41 +457,21 @@ export default function Settings() {
         </p>
         <div className="space-y-3">
           <Field label="Trading / business name">
-            <div className="flex gap-2">
-              <TextInput
-                value={bizName}
-                onChange={(e) => setBizName(e.target.value)}
-                placeholder="e.g. Acme Refrigeration Pty Ltd"
-              />
-              <Button
-                onClick={() => {
-                  setBusinessName(bizName)
-                  toast.show('Saved')
-                }}
-              >
-                Save
-              </Button>
-            </div>
+            <TextInput
+              value={bizName}
+              onChange={(e) => setBizName(e.target.value)}
+              placeholder="e.g. Acme Refrigeration Pty Ltd"
+            />
           </Field>
           <Field
             label="ARC Refrigerant Trading Authorisation (RTA)"
             hint="Issued by the Australian Refrigeration Council to your business — required to handle/buy/sell refrigerant."
           >
-            <div className="flex gap-2">
-              <TextInput
-                value={arcAuth}
-                onChange={(e) => setArcAuth(e.target.value)}
-                placeholder="e.g. AU00000"
-              />
-              <Button
-                onClick={() => {
-                  setArcAuthorisationNumber(arcAuth)
-                  toast.show('Saved')
-                }}
-              >
-                Save
-              </Button>
-            </div>
+            <TextInput
+              value={arcAuth}
+              onChange={(e) => setArcAuth(e.target.value)}
+              placeholder="e.g. AU00000"
+            />
           </Field>
           <p className="text-xs text-slate-500">
             Each tech's RHL lives on their profile in the Technicians card
@@ -958,11 +968,28 @@ export default function Settings() {
         editing={editingTech}
         onClose={() => setTechModalOpen(false)}
         onSave={(data) => {
+          const passwordHashPatch =
+            data.passwordChange?.kind === 'set'
+              ? { passwordHash: data.passwordChange.hash }
+              : data.passwordChange?.kind === 'remove'
+                ? { passwordHash: undefined }
+                : {}
           if (editingTech) {
-            updateTechnician(editingTech.id, data)
+            updateTechnician(editingTech.id, {
+              name: data.name,
+              arcLicenceNumber: data.arcLicenceNumber,
+              ...passwordHashPatch,
+            })
             toast.show('Tech updated')
           } else {
-            const created = addTechnician(data)
+            const created = addTechnician({
+              name: data.name,
+              arcLicenceNumber: data.arcLicenceNumber,
+              passwordHash:
+                data.passwordChange?.kind === 'set'
+                  ? data.passwordChange.hash
+                  : undefined,
+            })
             setActiveTechnicianId(created.id)
             toast.show(`${created.name} added`)
           }
@@ -987,8 +1014,26 @@ export default function Settings() {
             : undefined
         }
       />
+
+      <PasswordPromptModal
+        tech={pwPromptTech}
+        onClose={() => setPwPromptTech(null)}
+        onVerified={(t) => {
+          setActiveTechnicianId(t.id)
+          toast.show(`Active tech: ${t.name}`)
+          setPwPromptTech(null)
+        }}
+      />
     </div>
   )
+}
+
+
+type TechSavePayload = {
+  name: string
+  arcLicenceNumber: string
+  // 'set' = replace hash, 'remove' = clear it, undefined = leave unchanged.
+  passwordChange?: { kind: 'set'; hash: string } | { kind: 'remove' }
 }
 
 function TechnicianModal({
@@ -1001,26 +1046,61 @@ function TechnicianModal({
   open: boolean
   editing: Technician | null
   onClose: () => void
-  onSave: (data: { name: string; arcLicenceNumber: string }) => void
+  onSave: (data: TechSavePayload) => void
   onDelete?: () => void
 }) {
   const [name, setName] = useState('')
   const [rhl, setRhl] = useState('')
+  const [password, setPassword] = useState('')
+  const [confirmPw, setConfirmPw] = useState('')
+  const [removePassword, setRemovePassword] = useState(false)
+  const [pwError, setPwError] = useState('')
+  const [busy, setBusy] = useState(false)
   const key = editing?.id ?? 'new'
   const [seenKey, setSeenKey] = useState('')
   if (open && seenKey !== key) {
     setSeenKey(key)
     setName(editing?.name ?? '')
     setRhl(editing?.arcLicenceNumber ?? '')
+    setPassword('')
+    setConfirmPw('')
+    setRemovePassword(false)
+    setPwError('')
   }
   if (!open && seenKey !== '') {
     setSeenKey('')
   }
 
-  function submit(e: React.FormEvent) {
+  const hasExistingPassword = !!editing?.passwordHash
+
+  async function submit(e: React.FormEvent) {
     e.preventDefault()
-    if (!name.trim()) return
-    onSave({ name: name.trim(), arcLicenceNumber: rhl.trim() })
+    if (!name.trim() || busy) return
+    setPwError('')
+
+    let passwordChange: TechSavePayload['passwordChange']
+    if (password) {
+      if (password.length < 4) {
+        setPwError('Password must be at least 4 characters.')
+        return
+      }
+      if (password !== confirmPw) {
+        setPwError('Passwords don’t match.')
+        return
+      }
+      setBusy(true)
+      const hash = await hashPassword(password)
+      setBusy(false)
+      passwordChange = { kind: 'set', hash }
+    } else if (removePassword && hasExistingPassword) {
+      passwordChange = { kind: 'remove' }
+    }
+
+    onSave({
+      name: name.trim(),
+      arcLicenceNumber: rhl.trim(),
+      passwordChange,
+    })
   }
 
   return (
@@ -1045,9 +1125,68 @@ function TechnicianModal({
             placeholder="e.g. L000000"
           />
         </Field>
+
+        <div className="rounded-xl border border-slate-200 p-3 dark:border-slate-800">
+          <div className="mb-1 text-sm font-semibold text-slate-700 dark:text-slate-200">
+            {hasExistingPassword ? 'Password' : 'Set password (optional)'}
+          </div>
+          <p className="mb-3 text-xs text-slate-500">
+            Prompts on a shared device when someone tries to switch into this
+            profile. {hasExistingPassword
+              ? 'Leave blank to keep the current password.'
+              : 'Leave blank for no password.'}{' '}
+            Stored hashed in this browser — not real account security.
+          </p>
+          <div className="space-y-2">
+            <TextInput
+              type="password"
+              autoComplete="new-password"
+              value={password}
+              onChange={(e) => {
+                setPassword(e.target.value)
+                if (e.target.value) setRemovePassword(false)
+              }}
+              placeholder={hasExistingPassword ? 'New password' : 'Password'}
+              disabled={removePassword}
+            />
+            {password && (
+              <TextInput
+                type="password"
+                autoComplete="new-password"
+                value={confirmPw}
+                onChange={(e) => setConfirmPw(e.target.value)}
+                placeholder="Confirm password"
+              />
+            )}
+            {hasExistingPassword && (
+              <label className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-400">
+                <input
+                  type="checkbox"
+                  checked={removePassword}
+                  onChange={(e) => {
+                    setRemovePassword(e.target.checked)
+                    if (e.target.checked) {
+                      setPassword('')
+                      setConfirmPw('')
+                    }
+                  }}
+                />
+                Remove password (anyone can switch into this profile)
+              </label>
+            )}
+            {pwError && (
+              <div className="text-xs text-red-600 dark:text-red-400">{pwError}</div>
+            )}
+          </div>
+        </div>
+
         <div className="flex gap-2">
-          <Button type="submit" full>
-            {editing ? 'Save changes' : 'Add tech'}
+          <Button type="submit" full disabled={busy}>
+            {busy
+              ? 'Hashing…'
+              : editing
+                ? 'Save changes'
+                : 'Add tech'}
           </Button>
           {onDelete && (
             <Button type="button" variant="danger" onClick={onDelete}>
