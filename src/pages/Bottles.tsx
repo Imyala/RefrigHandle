@@ -1674,8 +1674,9 @@ function BottleForm({
 // Reverse of safeFillKgFor — derive stamped W.C from a stored safe-fill
 // value using the refrigerant's filling ratio. Used to seed the W.C
 // field when editing a bottle whose initialNetWeight was stored as the
-// FR-adjusted safe fill.
+// FR-adjusted safe fill. Rounds in the display layer only — rounding
+// here would drift on lb round-trips (kg → lb display → kg storage).
 function wcFromSafeFill(safeFillKg: number, refrigerant?: string): number {
   if (!safeFillKg) return 0
-  return Math.round((safeFillKg / fillingRatio(refrigerant)) * 100) / 100
+  return safeFillKg / fillingRatio(refrigerant)
 }

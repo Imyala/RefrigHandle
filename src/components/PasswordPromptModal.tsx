@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { Button, Field, Modal, TextInput } from './ui'
 import { verifyPassword } from '../lib/auth'
 import type { Technician } from '../lib/types'
@@ -20,6 +20,11 @@ export function PasswordPromptModal({
   const [busy, setBusy] = useState(false)
   const open = !!tech
   const [seenId, setSeenId] = useState('')
+  // Track the live prop inside async work — closures capture the value at
+  // submit time, so without this a Cancel (or tech swap) mid-verify would
+  // still flow through to onVerified once the hash resolves.
+  const techRef = useRef(tech)
+  techRef.current = tech
   if (open && tech && seenId !== tech.id) {
     setSeenId(tech.id)
     setPassword('')
@@ -33,19 +38,21 @@ export function PasswordPromptModal({
     e.preventDefault()
     if (!tech || busy) return
     setError('')
-    if (!tech.passwordHash) {
-      onVerified(tech)
+    const submittedTech = tech
+    if (!submittedTech.passwordHash) {
+      onVerified(submittedTech)
       return
     }
     setBusy(true)
-    const ok = await verifyPassword(password, tech.passwordHash)
+    const ok = await verifyPassword(password, submittedTech.passwordHash)
     setBusy(false)
+    if (techRef.current?.id !== submittedTech.id) return
     if (!ok) {
       setError('Wrong password.')
       setPassword('')
       return
     }
-    onVerified(tech)
+    onVerified(submittedTech)
   }
 
   return (
