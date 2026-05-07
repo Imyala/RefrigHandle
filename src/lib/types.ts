@@ -392,10 +392,45 @@ export interface BottlePreset {
   custom?: boolean
 }
 
-// No built-in presets. Each tech adds the cylinders they actually use,
-// from which the picker is built. Tare comes from the cylinder stamp;
-// water capacity drives the refrigerant-aware safe fill (WC × FR).
-export const BOTTLE_PRESETS: BottlePreset[] = []
+// Built-in Australian recovery cylinder presets (5.2 MPa rated). Tare and
+// water capacity are nominal stamped values from supplier spec sheets
+// (BOC, Coregas, Air Wholesalers, Supagas) — techs should still confirm
+// against the actual cylinder's TW / WC stamp. Net refrigerant is worked
+// out at fill time from WC × FR (refrigerant-specific).
+export const BOTTLE_PRESETS: BottlePreset[] = [
+  {
+    id: 'au-rec-11wc',
+    label: '11WC recovery (N Size)',
+    labelKg: '11WC recovery (N Size, ~10 kg R-410A)',
+    labelLb: '11WC recovery (N Size, ~22 lb R-410A)',
+    tareKg: 6.25,
+    waterCapacityKg: 11,
+  },
+  {
+    id: 'au-rec-22wc',
+    label: '22WC recovery (P Size / 50 lb)',
+    labelKg: '22WC recovery (P Size, ~20 kg R-410A)',
+    labelLb: '22WC recovery (50 lb, ~45 lb R-410A)',
+    tareKg: 10,
+    waterCapacityKg: 22,
+  },
+  {
+    id: 'au-rec-46wc',
+    label: '46WC recovery',
+    labelKg: '46WC recovery (~43 kg R-410A)',
+    labelLb: '46WC recovery (~95 lb R-410A)',
+    tareKg: 21.2,
+    waterCapacityKg: 46,
+  },
+  {
+    id: 'au-rec-65wc',
+    label: '65WC recovery (R Size)',
+    labelKg: '65WC recovery (R Size, ~61 kg R-410A)',
+    labelLb: '65WC recovery (R Size, ~134 lb R-410A)',
+    tareKg: 31.3,
+    waterCapacityKg: 65,
+  },
+]
 
 export function presetLabel(p: BottlePreset, unit: WeightUnit): string {
   if (p.custom) return p.label
