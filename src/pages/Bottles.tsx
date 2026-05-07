@@ -18,9 +18,9 @@ import {
   type TransactionKind,
   type TransactionReason,
   type Unit,
-  BOTTLE_PRESETS,
   REFRIGERANT_TYPES,
   REASON_LABELS,
+  fillingRatio,
   hydroStatusFor,
   netWeight,
   overfillKg,
@@ -1318,8 +1318,15 @@ function BottleForm({
   const tareExceedsGross =
     tareKgEntered > 0 && grossKgEntered > 0 && tareKgEntered > grossKgEntered + 0.01
 
+  // capacityWeight holds the stamped water capacity (W.C) in display units.
+  // Safe fill = W.C × FR(refrigerant) is computed downstream (live check
+  // and on save), so this value stays the same when refrigerant changes.
+  // Legacy bottles stored initialNetWeight as the FR-adjusted safe fill;
+  // reverse-derive WC from that for editing.
   const [capacityWeight, setCapacityWeight] = useState(
-    initialDisplay(bottle?.initialNetWeight ?? 0),
+    initialDisplay(
+      wcFromSafeFill(bottle?.initialNetWeight ?? 0, bottle?.refrigerantType),
+    ),
   )
   const [appliedPresetId, setAppliedPresetId] = useState('')
 
@@ -1331,20 +1338,9 @@ function BottleForm({
   const statusEmptyButHasContent = status === 'empty' && liveNet > 0.01
   const submitBlocked = tareExceedsGross || statusEmptyButHasContent
 
-  // When the refrigerant changes AND a preset is applied, recompute safe
-  // fill from the preset's water capacity × FR for the new refrigerant.
-  // No-op if the user has manually edited tare/capacity (which clears
-  // appliedPresetId).
-  useEffect(() => {
-    if (!appliedPresetId) return
-    const preset = [
-      ...BOTTLE_PRESETS,
-      ...state.customBottlePresets.map((p) => ({ ...p, custom: true })),
-    ].find((p) => p.id === appliedPresetId)
-    if (!preset?.waterCapacityKg) return
-    const newSafe = safeFillKgFor(preset.waterCapacityKg, refrigerantType)
-    setCapacityWeight(kgToDisplay(newSafe, unit).toFixed(2))
-  }, [refrigerantType, appliedPresetId, state.customBottlePresets, unit])
+  // W.C is refrigerant-independent, so changing refrigerant doesn't touch
+  // the field — the safe fill (W.C × FR) is recomputed live for the
+  // overfill check and on submit.
 
   const key = bottle?.id ?? 'new'
   const [lastKey, setLastKey] = useState(key)
@@ -1363,7 +1359,11 @@ function BottleForm({
     )
     setCurrentSiteId(bottle?.currentSiteId ?? '')
     setNotes(bottle?.notes ?? '')
-    setCapacityWeight(initialDisplay(bottle?.initialNetWeight ?? 0))
+    setCapacityWeight(
+      initialDisplay(
+        wcFromSafeFill(bottle?.initialNetWeight ?? 0, bottle?.refrigerantType),
+      ),
+    )
     setAppliedPresetId('')
     setLastHydro(bottle?.lastHydroTestDate ?? '')
     setNextHydro(bottle?.nextHydroTestDate ?? '')
@@ -1383,10 +1383,13 @@ function BottleForm({
     const tare = displayToKg(parseFloat(tareWeight) || 0, unit)
     const gross = displayToKg(parseFloat(grossWeight) || 0, unit)
     const currentNet = Math.max(0, gross - tare)
-    const enteredCap = parseFloat(capacityWeight)
+    const enteredWcKg = displayToKg(parseFloat(capacityWeight) || 0, unit)
+    // Safe fill (stored as initialNetWeight) = W.C × FR for the refrigerant.
+    // Falls back to currentNet for legacy "fresh full bottle" entries with
+    // no W.C — keeps old behaviour for partially-filled receipts.
     const initialNet =
-      enteredCap && enteredCap > 0
-        ? displayToKg(enteredCap, unit)
+      enteredWcKg > 0
+        ? safeFillKgFor(enteredWcKg, refrigerantType)
         : currentNet
     onSave({
       bottleNumber: bottleNumber.trim(),
@@ -1404,13 +1407,13 @@ function BottleForm({
 
   function applyPreset(preset: BottlePreset) {
     setTareWeight(kgToDisplay(preset.tareKg, unit).toFixed(2))
-    // Use the refrigerant-specific filling ratio when the preset has a
-    // water capacity. Custom presets without a WC fall back to the
-    // user-entered safeFillKg.
-    const safeFill = preset.waterCapacityKg
-      ? safeFillKgFor(preset.waterCapacityKg, refrigerantType)
-      : (preset.safeFillKg ?? 0)
-    setCapacityWeight(kgToDisplay(safeFill, unit).toFixed(2))
+    // The W.C field holds stamped water capacity. Legacy custom presets
+    // saved only safeFillKg (no WC) — back-derive an approximate WC from
+    // it using the current refrigerant's FR.
+    const wcKg =
+      preset.waterCapacityKg ??
+      (preset.safeFillKg ? preset.safeFillKg / fillingRatio(refrigerantType) : 0)
+    setCapacityWeight(kgToDisplay(wcKg, unit).toFixed(2))
     setAppliedPresetId(preset.id)
   }
 
@@ -1481,8 +1484,9 @@ function BottleForm({
         )}
 
         {!tareExceedsGross && liveNet > 0 && (() => {
-          const capacityKg = displayToKg(parseFloat(capacityWeight) || 0, unit)
-          const over = capacityKg > 0 ? overfillKg(liveNet, capacityKg) : 0
+          const wcKg = displayToKg(parseFloat(capacityWeight) || 0, unit)
+          const safeFillKg = wcKg > 0 ? safeFillKgFor(wcKg, refrigerantType) : 0
+          const over = safeFillKg > 0 ? overfillKg(liveNet, safeFillKg) : 0
           return (
             <div
               className={`rounded-xl p-3 text-sm ${
@@ -1496,6 +1500,13 @@ function BottleForm({
               <div className="mt-0.5 text-xs">
                 (gross − tare, calculated automatically)
               </div>
+              {safeFillKg > 0 && (
+                <div className="mt-0.5 text-xs">
+                  Safe fill for {refrigerantType}:{' '}
+                  <strong>{formatWeight(safeFillKg, unit)}</strong>
+                  {' '}(W.C × FR {fillingRatio(refrigerantType).toFixed(2)})
+                </div>
+              )}
               {over > 0 && (
                 <div className="mt-1 font-semibold">
                   ⚠ Over safe-fill limit by {formatWeight(over, unit)}
@@ -1507,7 +1518,7 @@ function BottleForm({
 
         <Field
           label={`W.C (${unit})`}
-          hint="Auto-set when you pick a cylinder preset and a refrigerant. Edit to override. Used for the % remaining bar and the overfill warning."
+          hint="Stamped water capacity. Safe fill is calculated automatically from W.C × the selected refrigerant's filling ratio."
         >
           <TextInput
             type="number"
@@ -1658,4 +1669,13 @@ function BottleForm({
       />
     </Modal>
   )
+}
+
+// Reverse of safeFillKgFor — derive stamped W.C from a stored safe-fill
+// value using the refrigerant's filling ratio. Used to seed the W.C
+// field when editing a bottle whose initialNetWeight was stored as the
+// FR-adjusted safe fill.
+function wcFromSafeFill(safeFillKg: number, refrigerant?: string): number {
+  if (!safeFillKg) return 0
+  return Math.round((safeFillKg / fillingRatio(refrigerant)) * 100) / 100
 }
