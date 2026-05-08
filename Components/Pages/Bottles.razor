@@ -1,13 +1,16 @@
 @namespace RefrigHandle.Components.Pages
 @page "/bottles"
 @inject AppStateService Store
+@inject PreferencesService Prefs
+@inject ConfirmService Confirms
+@inject ToastService Toasts
 @implements IDisposable
 
 <h1 class="page-title">Bottles</h1>
 
 <div class="toolbar">
     <input class="text-input" placeholder="Search…" @bind="search" @bind:event="oninput" />
-    <select class="select" @bind="filterStatusRaw">
+    <select class="select" @bind="filterStatusRaw" @bind:after="@PersistFilter">
         <option value="">All statuses</option>
         <option value="@BottleStatus.InStock">In stock</option>
         <option value="@BottleStatus.OnSite">On site</option>
@@ -82,15 +85,23 @@ else
 </Modal>
 
 @code {
+    private const string FilterPrefKey = "bottles.filter.status";
     private string search = "";
     private string filterStatusRaw = "";
     private BottleStatus? filterStatus =>
         Enum.TryParse<BottleStatus>(filterStatusRaw, out var s) ? s : null;
+
+    protected override void OnInitialized()
+    {
+        Store.OnChange += OnStateChanged;
+        filterStatusRaw = Prefs.GetString(FilterPrefKey);
+    }
+
+    private void PersistFilter() => Prefs.SetString(FilterPrefKey, filterStatusRaw);
     private bool showForm;
     private Bottle? editing;
     private Bottle form = new();
 
-    protected override void OnInitialized() => Store.OnChange += OnStateChanged;
     public void Dispose() => Store.OnChange -= OnStateChanged;
     private void OnStateChanged() => InvokeAsync(StateHasChanged);
 
@@ -157,16 +168,26 @@ else
 
     private void Save()
     {
-        if (string.IsNullOrWhiteSpace(form.BottleNumber)) return;
+        if (string.IsNullOrWhiteSpace(form.BottleNumber))
+        {
+            Toasts.Show("Bottle number is required.", ToastKind.Error);
+            return;
+        }
         if (editing is null) Store.AddBottle(form);
         else Store.UpdateBottle(form);
+        Toasts.Show(editing is null ? "Bottle added" : "Bottle saved", ToastKind.Success);
         showForm = false;
     }
 
-    private void DeleteEditing()
+    private async Task DeleteEditing()
     {
         if (editing is null) return;
+        var ok = await Confirms.AskAsync(
+            $"Delete bottle {editing.BottleNumber}? This cannot be undone.",
+            "Delete bottle", "Delete", "Cancel", danger: true);
+        if (!ok) return;
         Store.DeleteBottle(editing.Id);
+        Toasts.Show("Bottle deleted", ToastKind.Success);
         showForm = false;
     }
 }

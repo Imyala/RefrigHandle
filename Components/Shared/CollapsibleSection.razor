@@ -1,0 +1,38 @@
+@namespace RefrigHandle.Components.Shared
+@inject PreferencesService Prefs
+
+<div class="collapsible">
+    <button type="button" class="collapsible-header" @onclick="Toggle">
+        <span class="collapsible-arrow">@(open ? "▾" : "▸")</span>
+        <span class="collapsible-title">@Title</span>
+    </button>
+    @if (open)
+    {
+        <div class="collapsible-body">
+            @ChildContent
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public string Title { get; set; } = "";
+    [Parameter] public string? PersistKey { get; set; }
+    [Parameter] public bool DefaultOpen { get; set; } = true;
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    private bool open;
+
+    protected override void OnInitialized()
+    {
+        open = string.IsNullOrEmpty(PersistKey)
+            ? DefaultOpen
+            : Prefs.GetBool($"collapse:{PersistKey}", DefaultOpen);
+    }
+
+    private void Toggle()
+    {
+        open = !open;
+        if (!string.IsNullOrEmpty(PersistKey))
+            Prefs.SetBool($"collapse:{PersistKey}", open);
+    }
+}

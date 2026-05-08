@@ -1,0 +1,16 @@
+@namespace RefrigHandle.Components.Shared
+@inject ToastService Toasts
+@implements IDisposable
+
+<div class="toast-host" aria-live="polite">
+    @foreach (var t in Toasts.Toasts)
+    {
+        <div class="toast toast--@t.Kind.ToString().ToLowerInvariant()">@t.Message</div>
+    }
+</div>
+
+@code {
+    protected override void OnInitialized() => Toasts.OnChange += Refresh;
+    public void Dispose() => Toasts.OnChange -= Refresh;
+    private void Refresh() => InvokeAsync(StateHasChanged);
+}

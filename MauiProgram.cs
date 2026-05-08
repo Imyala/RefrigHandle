@@ -21,6 +21,8 @@ public static class MauiProgram
         builder.Services.AddSingleton<StorageService>();
         builder.Services.AddSingleton<AppStateService>();
         builder.Services.AddSingleton<ToastService>();
+        builder.Services.AddSingleton<ConfirmService>();
+        builder.Services.AddSingleton<PreferencesService>();
 
         return builder.Build();
     }

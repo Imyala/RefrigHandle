@@ -1,0 +1,165 @@
+@namespace RefrigHandle.Components.Pages
+@page "/logbook/{UnitId}"
+@inject AppStateService Store
+@inject NavigationManager Nav
+@implements IDisposable
+
+@if (Unit is null)
+{
+    <h1 class="page-title">Logbook</h1>
+    <EmptyState Title="Unit not found" Message="The unit may have been deleted." />
+    <AppButton Variant="secondary" OnClick="@(() => Nav.NavigateTo("sites"))">Back to sites</AppButton>
+}
+else
+{
+    var site = Store.State.Sites.FirstOrDefault(s => s.Id == Unit.SiteId);
+    var entries = Store.State.Transactions
+        .Where(t => t.UnitId == UnitId && t.DeletedAt is null)
+        .OrderByDescending(t => t.Date)
+        .ToList();
+    var leak = BusinessLogic.LeakStatusFor(Unit, Store.State.Transactions);
+    var co2eCharge = Unit.RefrigerantCharge is double c
+        ? RefrigerantData.TonnesCo2eFor(c, Unit.RefrigerantType)
+        : null;
+
+    <div class="no-print">
+        <h1 class="page-title">Equipment logbook</h1>
+        <div class="toolbar">
+            <AppButton Variant="secondary" OnClick="@(() => Nav.NavigateTo("sites"))">Back to sites</AppButton>
+            <AppButton OnClick="@Print">Print</AppButton>
+        </div>
+    </div>
+
+    <div class="print-region">
+        <h2>Equipment logbook</h2>
+        <p class="print-meta">
+            Printed @DateTime.Now.ToString("yyyy-MM-dd HH:mm") · @Store.State.BusinessName
+            @if (!string.IsNullOrEmpty(Store.State.ArcAuthorisationNumber))
+            {
+                <span> · ARC RTA @Store.State.ArcAuthorisationNumber</span>
+            }
+        </p>
+
+        <table class="print-table">
+            <tbody>
+                <tr><th>Site</th><td>@(site?.Name ?? "—")</td></tr>
+                <tr><th>Client</th><td>@(site?.Client ?? "—")</td></tr>
+                <tr><th>Address</th><td>@(site?.Address ?? "—")</td></tr>
+                <tr><th>Unit</th><td>@Unit.Name</td></tr>
+                <tr><th>Kind</th><td>@(Unit.Kind?.ToString() ?? "—")</td></tr>
+                <tr><th>Refrigerant</th><td>@(Unit.RefrigerantType ?? "—")</td></tr>
+                <tr>
+                    <th>Factory charge</th>
+                    <td>
+                        @(Unit.RefrigerantCharge is double cc ? Units.FormatWeight(cc, Store.State.Unit) : "—")
+                        @if (co2eCharge is double cco2)
+                        {
+                            <span> · @cco2.ToString("F2") t CO₂-e</span>
+                        }
+                    </td>
+                </tr>
+                <tr><th>Manufacturer</th><td>@(Unit.Manufacturer ?? "—")</td></tr>
+                <tr><th>Model</th><td>@(Unit.Model ?? "—")</td></tr>
+                <tr><th>Serial</th><td>@(Unit.Serial ?? "—")</td></tr>
+                <tr><th>Install date</th><td>@(Unit.InstallDate ?? "—")</td></tr>
+                <tr>
+                    <th>Status</th>
+                    <td>
+                        @Unit.Status
+                        @if (Unit.Status == UnitStatus.Decommissioned)
+                        {
+                            <span> · @Unit.DecommissionedAt</span>
+                        }
+                    </td>
+                </tr>
+                <tr>
+                    <th>Leak status (12 mo)</th>
+                    <td>
+                        @leak.Level (@leak.TopUpKg.ToString("F2") kg topped up
+                        @if (Unit.RefrigerantCharge is double charge && charge > 0)
+                        {
+                            <span> = @((leak.Fraction * 100).ToString("F1"))% of charge</span>
+                        }
+                        )
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+
+        <h3>Service history</h3>
+        @if (entries.Count == 0)
+        {
+            <p>No transactions have been logged against this unit.</p>
+        }
+        else
+        {
+            <table class="print-table print-table--rows">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Kind</th>
+                        <th>Reason</th>
+                        <th>Amount</th>
+                        <th>Loss</th>
+                        <th>Bottle</th>
+                        <th>Technician</th>
+                        <th>RHL</th>
+                        <th>Notes</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var t in entries)
+                    {
+                        var bottle = Store.State.Bottles.FirstOrDefault(b => b.Id == t.BottleId);
+                        var loss = BusinessLogic.TransactionLoss(t);
+                        <tr>
+                            <td>@DateTimeFormatting.FormatDateTime(t.Date, Store.State)</td>
+                            <td>@t.Kind</td>
+                            <td>@(t.Reason?.ToString() ?? "—")</td>
+                            <td>@Units.FormatWeight(t.Amount, Store.State.Unit, 3)</td>
+                            <td>@(loss > 0 ? Units.FormatWeight(loss, Store.State.Unit, 3) : "—")</td>
+                            <td>@(bottle?.BottleNumber ?? "—") @(bottle is null ? "" : $"({bottle.RefrigerantType})")</td>
+                            <td>@(t.Technician ?? "—")</td>
+                            <td>@(t.TechnicianLicence ?? "—")</td>
+                            <td>@(t.Notes ?? "")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+
+        <div class="signature-row">
+            <div class="signature-block">
+                <div class="signature-line">Technician signature</div>
+                <div class="signature-meta">@(Store.ActiveTechnician?.Name ?? Store.State.Technician)</div>
+            </div>
+            <div class="signature-block">
+                <div class="signature-line">Customer signature</div>
+                <div class="signature-meta">@(site?.Client ?? "")</div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public string UnitId { get; set; } = "";
+
+    private Unit? Unit => Store.State.Units.FirstOrDefault(u => u.Id == UnitId);
+
+    protected override void OnInitialized() => Store.OnChange += OnStateChanged;
+    public void Dispose() => Store.OnChange -= OnStateChanged;
+    private void OnStateChanged() => InvokeAsync(StateHasChanged);
+
+    private async Task Print()
+    {
+        // BlazorWebView wraps a real WebView2/WKWebView/WebKit; window.print()
+        // works on Windows + macOS. On mobile platforms it's a no-op fallback.
+        try
+        {
+            await JS.InvokeVoidAsync("print");
+        }
+        catch { /* mobile WebViews may not support window.print */ }
+    }
+
+    [Inject] private Microsoft.JSInterop.IJSRuntime JS { get; set; } = default!;
+}

@@ -1,0 +1,20 @@
+@namespace RefrigHandle.Components.Shared
+@inject AppStateService Store
+
+<input class="text-input" type="datetime-local" value="@LocalValue" @onchange="HandleChange" />
+
+@code {
+    /// <summary>UTC ISO string. Two-way bound; the input edits in the configured timezone.</summary>
+    [Parameter] public string? Value { get; set; }
+    [Parameter] public EventCallback<string> ValueChanged { get; set; }
+
+    private string LocalValue =>
+        DateTimeFormatting.IsoToLocalInput(Value, Store.State);
+
+    private async Task HandleChange(ChangeEventArgs e)
+    {
+        var local = e.Value?.ToString() ?? "";
+        var iso = DateTimeFormatting.LocalInputToIso(local, Store.State);
+        await ValueChanged.InvokeAsync(iso);
+    }
+}

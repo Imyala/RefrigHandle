@@ -1,0 +1,22 @@
+@namespace RefrigHandle.Components.Shared
+@inject ConfirmService Confirms
+@implements IDisposable
+
+@if (Confirms.Pending is { } p)
+{
+    <Modal Open="true" Title="@p.Title" OnClose="@(() => Confirms.Resolve(false))">
+        <ChildContent>
+            <p>@p.Message</p>
+        </ChildContent>
+        <Footer>
+            <AppButton Variant="secondary" OnClick="@(() => Confirms.Resolve(false))">@p.CancelLabel</AppButton>
+            <AppButton Variant="@(p.Danger ? "danger" : "primary")" OnClick="@(() => Confirms.Resolve(true))">@p.ConfirmLabel</AppButton>
+        </Footer>
+    </Modal>
+}
+
+@code {
+    protected override void OnInitialized() => Confirms.OnChange += Refresh;
+    public void Dispose() => Confirms.OnChange -= Refresh;
+    private void Refresh() => InvokeAsync(StateHasChanged);
+}

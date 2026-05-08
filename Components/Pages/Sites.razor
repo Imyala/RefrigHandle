@@ -1,6 +1,9 @@
 @namespace RefrigHandle.Components.Pages
 @page "/sites"
 @inject AppStateService Store
+@inject ConfirmService Confirms
+@inject ToastService Toasts
+@inject NavigationManager Nav
 @implements IDisposable
 
 <h1 class="page-title">Sites</h1>
@@ -68,6 +71,7 @@ else
                                 {
                                     <Pill Tone="neutral">Decommissioned</Pill>
                                 }
+                                <AppButton Variant="ghost" OnClick="() => Nav.NavigateTo($"logbook/{u.Id}")">Logbook</AppButton>
                                 <AppButton Variant="ghost" OnClick="() => OpenEditUnit(u)">Edit</AppButton>
                             </li>
                         }
@@ -195,10 +199,15 @@ else
         else Store.UpdateSite(siteForm);
         showSiteForm = false;
     }
-    private void DeleteEditingSite()
+    private async Task DeleteEditingSite()
     {
         if (editingSite is null) return;
+        var ok = await Confirms.AskAsync(
+            $"Delete site {editingSite.Name}? Units logged at this site will also be removed.",
+            "Delete site", "Delete", "Cancel", danger: true);
+        if (!ok) return;
         Store.DeleteSite(editingSite.Id);
+        Toasts.Show("Site deleted", ToastKind.Success);
         showSiteForm = false;
     }
 
@@ -232,10 +241,15 @@ else
         else Store.UpdateUnit(unitForm);
         showUnitForm = false;
     }
-    private void DeleteEditingUnit()
+    private async Task DeleteEditingUnit()
     {
         if (editingUnit is null) return;
+        var ok = await Confirms.AskAsync(
+            $"Delete unit {editingUnit.Name}? Its transactions will remain in the log but will no longer be linked.",
+            "Delete unit", "Delete", "Cancel", danger: true);
+        if (!ok) return;
         Store.DeleteUnit(editingUnit.Id);
+        Toasts.Show("Unit deleted", ToastKind.Success);
         showUnitForm = false;
     }
     private void DecommissionEditingUnit()

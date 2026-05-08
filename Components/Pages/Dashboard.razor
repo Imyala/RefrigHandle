@@ -17,80 +17,105 @@
         <div class="stat-row">
             <Stat Label="Total net" Value="@TotalNetDisplay" />
             <Stat Label="Bottles" Value="@Store.State.Bottles.Count.ToString()" />
+            <Stat Label="Total CO₂-e" Value="@TotalCo2eDisplay" />
         </div>
     </Card>
 
-    <Card Title="By refrigerant type">
-        @if (Totals.Count == 0)
-        {
-            <EmptyState Message="No bottles yet." />
-        }
-        else
-        {
-            <table class="table">
-                <thead>
-                    <tr><th>Type</th><th>Bottles</th><th>Net</th></tr>
-                </thead>
-                <tbody>
-                    @foreach (var (type, t) in Totals.OrderByDescending(kv => kv.Value.NetKg))
-                    {
+    <Card>
+        <CollapsibleSection Title="By refrigerant type" PersistKey="dash.byType">
+            @if (Totals.Count == 0)
+            {
+                <EmptyState Message="No bottles yet." />
+            }
+            else
+            {
+                <table class="table">
+                    <thead>
                         <tr>
-                            <td>@type</td>
-                            <td>@t.Count</td>
-                            <td>@Units.FormatWeight(t.NetKg, Store.State.Unit)</td>
+                            <th>Type</th>
+                            <th>Bottles</th>
+                            <th>Net</th>
+                            <th>CO₂-e (t)</th>
                         </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var (type, t) in Totals.OrderByDescending(kv => kv.Value.NetKg))
+                        {
+                            var co2e = RefrigerantData.TonnesCo2eFor(t.NetKg, type);
+                            <tr>
+                                <td>@type</td>
+                                <td>@t.Count</td>
+                                <td>@Units.FormatWeight(t.NetKg, Store.State.Unit)</td>
+                                <td>@(co2e is null ? "—" : co2e.Value.ToString("F2"))</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        </CollapsibleSection>
+    </Card>
+
+    <Card>
+        <CollapsibleSection Title="Hydro alerts" PersistKey="dash.hydro">
+            @if (HydroAlerts.Count == 0)
+            {
+                <EmptyState Message="No bottles approaching their next AS 2030 test." />
+            }
+            else
+            {
+                <ul class="list">
+                    @foreach (var (b, h) in HydroAlerts)
+                    {
+                        <li class="list-row">
+                            <span class="list-row-main">@b.BottleNumber — @b.RefrigerantType</span>
+                            @if (h.Status == HydroStatus.Overdue)
+                            {
+                                <Pill Tone="danger">Overdue @Math.Abs(h.DaysUntilDue ?? 0)d</Pill>
+                            }
+                            else
+                            {
+                                <Pill Tone="warn">Due in @h.DaysUntilDue d</Pill>
+                            }
+                        </li>
                     }
-                </tbody>
-            </table>
-        }
+                </ul>
+            }
+        </CollapsibleSection>
     </Card>
 
-    <Card Title="Hydro alerts">
-        @if (HydroAlerts.Count == 0)
-        {
-            <EmptyState Message="No bottles approaching their next AS 2030 test." />
-        }
-        else
-        {
-            <ul class="list">
-                @foreach (var (b, h) in HydroAlerts)
-                {
-                    <li class="list-row">
-                        <span class="list-row-main">@b.BottleNumber — @b.RefrigerantType</span>
-                        @if (h.Status == HydroStatus.Overdue)
-                        {
-                            <Pill Tone="danger">Overdue @Math.Abs(h.DaysUntilDue ?? 0)d</Pill>
-                        }
-                        else
-                        {
-                            <Pill Tone="warn">Due in @h.DaysUntilDue d</Pill>
-                        }
-                    </li>
-                }
-            </ul>
-        }
+    <Card>
+        <CollapsibleSection Title="Recent activity" PersistKey="dash.recent">
+            @if (Recent.Count == 0)
+            {
+                <EmptyState Message="No transactions yet." />
+            }
+            else
+            {
+                <ul class="list">
+                    @foreach (var t in Recent)
+                    {
+                        var b = Store.State.Bottles.FirstOrDefault(x => x.Id == t.BottleId);
+                        <li class="list-row">
+                            <span class="list-row-main">
+                                @t.Kind.ToString().ToLowerInvariant() · @(b?.BottleNumber ?? "—")
+                            </span>
+                            <span class="list-row-meta">@DateTimeFormatting.FormatDateTime(t.Date, Store.State)</span>
+                        </li>
+                    }
+                </ul>
+            }
+        </CollapsibleSection>
     </Card>
 
-    <Card Title="Recent activity">
-        @if (Recent.Count == 0)
-        {
-            <EmptyState Message="No transactions yet." />
-        }
-        else
-        {
-            <ul class="list">
-                @foreach (var t in Recent)
-                {
-                    var b = Store.State.Bottles.FirstOrDefault(x => x.Id == t.BottleId);
-                    <li class="list-row">
-                        <span class="list-row-main">
-                            @t.Kind.ToString().ToLowerInvariant() · @(b?.BottleNumber ?? "—")
-                        </span>
-                        <span class="list-row-meta">@FormatDate(t.Date)</span>
-                    </li>
-                }
+    <Card>
+        <CollapsibleSection Title="Tips" PersistKey="dash.tips" DefaultOpen="false">
+            <ul class="tip-list">
+                <li>Charge / recover into equipment from the <strong>Log</strong> tab. Both bottle and equipment are stamped on the audit trail.</li>
+                <li>Set a unit's factory charge to enable leak-watch monitoring (5% over 12 mo flags <em>watch</em>, 10% flags <em>suspected</em>).</li>
+                <li>Keep your ARC RTA and each tech's RHL up to date in <strong>Settings</strong> — they're frozen onto every transaction at the moment of logging.</li>
+                <li>Backups in <strong>Settings → Backup</strong> share the full state as a JSON file to any app on your device.</li>
             </ul>
-        }
+        </CollapsibleSection>
     </Card>
 </div>
 
@@ -114,6 +139,20 @@
         }
     }
 
+    private string TotalCo2eDisplay
+    {
+        get
+        {
+            double total = 0;
+            foreach (var (type, t) in Totals)
+            {
+                var co2e = RefrigerantData.TonnesCo2eFor(t.NetKg, type);
+                if (co2e is double v) total += v;
+            }
+            return total <= 0 ? "—" : total.ToString("F1") + " t";
+        }
+    }
+
     private List<(Bottle B, HydroState H)> HydroAlerts =>
         Store.State.Bottles
             .Select(b => (B: b, H: BusinessLogic.HydroStatusFor(b)))
@@ -128,6 +167,4 @@
             .Take(5)
             .ToList();
 
-    private static string FormatDate(string iso) =>
-        DateTime.TryParse(iso, out var d) ? d.ToLocalTime().ToString("g") : iso;
 }

@@ -1,6 +1,8 @@
 @namespace RefrigHandle.Components.Pages
 @page "/transactions"
 @inject AppStateService Store
+@inject ConfirmService Confirms
+@inject ToastService Toasts
 @implements IDisposable
 
 <h1 class="page-title">Transactions</h1>
@@ -37,7 +39,11 @@ else
                     @if (t.Amount > 0) { <span> · @Units.FormatWeight(t.Amount, Store.State.Unit, 3)</span> }
                     @if (site is not null) { <span class="list-row-meta"> · @site.Name</span> }
                 </div>
-                <span class="list-row-meta">@FormatDate(t.Date)</span>
+                <span class="list-row-meta">@DateTimeFormatting.FormatDateTime(t.Date, Store.State)</span>
+                @if (t.RefrigerantMismatch is not null)
+                {
+                    <Pill Tone="warn">Mismatch @t.RefrigerantMismatch.BottleType→@t.RefrigerantMismatch.UnitType</Pill>
+                }
                 @if (t.DeletedAt is not null)
                 {
                     <Pill Tone="warn">Deleted</Pill>
@@ -96,6 +102,29 @@ else
             </select>
         </Field>
     }
+    @if (form.Kind is TransactionKind.Charge or TransactionKind.Recover)
+    {
+        <Field Label="Site (optional)">
+            <select class="select" @bind="form.SiteId">
+                <option value="">(none)</option>
+                @foreach (var s in Store.State.Sites.OrderBy(x => x.Name))
+                {
+                    <option value="@s.Id">@s.Name</option>
+                }
+            </select>
+        </Field>
+        <Field Label="Unit (optional)" Hint="Attaches the transaction to a specific piece of equipment.">
+            <select class="select" @bind="form.UnitId">
+                <option value="">(none)</option>
+                @foreach (var u in Store.State.Units
+                    .Where(u => string.IsNullOrEmpty(form.SiteId) || u.SiteId == form.SiteId)
+                    .OrderBy(u => u.Name))
+                {
+                    <option value="@u.Id">@u.Name @(string.IsNullOrEmpty(u.RefrigerantType) ? "" : $"({u.RefrigerantType})")</option>
+                }
+            </select>
+        </Field>
+    }
     @if (form.Kind == TransactionKind.Charge || form.Kind == TransactionKind.Recover)
     {
         <Field Label="Reason">
@@ -114,6 +143,9 @@ else
             <input class="text-input" @bind="form.ReturnDestination" />
         </Field>
     }
+    <Field Label="Date / time" Hint="Defaults to now in your configured timezone.">
+        <DateTimeInput Value="@form.Date" ValueChanged="@(v => form.Date = string.IsNullOrEmpty(v) ? DateTime.UtcNow.ToString("o") : v)" />
+    </Field>
     <Field Label="Notes"><textarea class="text-input" @bind="form.Notes"></textarea></Field>
     </ChildContent>
     <Footer>
@@ -148,16 +180,48 @@ else
         showForm = true;
     }
 
-    private void SaveTransaction()
+    private async Task SaveTransaction()
     {
-        if (string.IsNullOrEmpty(form.BottleId)) return;
+        if (string.IsNullOrEmpty(form.BottleId))
+        {
+            Toasts.Show("Pick a bottle.", ToastKind.Error);
+            return;
+        }
         form.Reason = Enum.TryParse<TransactionReason>(reasonRaw, out var r) ? r : null;
+
+        var bottle = Store.State.Bottles.FirstOrDefault(b => b.Id == form.BottleId);
+        var unit = string.IsNullOrEmpty(form.UnitId) ? null
+                   : Store.State.Units.FirstOrDefault(u => u.Id == form.UnitId);
+
+        // Refrigerant mismatch (don't block; require acknowledgement, stamp on transaction).
+        if (bottle is not null && unit is not null &&
+            !string.IsNullOrEmpty(unit.RefrigerantType) &&
+            !string.Equals(bottle.RefrigerantType, unit.RefrigerantType, StringComparison.OrdinalIgnoreCase))
+        {
+            var ok = await Confirms.AskAsync(
+                $"Bottle is {bottle.RefrigerantType} but unit is {unit.RefrigerantType}. " +
+                "Mixing types is unusual and will be recorded in the audit trail. Continue?",
+                "Refrigerant mismatch", "Acknowledge & save", "Cancel", danger: true);
+            if (!ok) return;
+            form.RefrigerantMismatch = new RefrigerantMismatch
+            {
+                BottleType = bottle.RefrigerantType,
+                UnitType = unit.RefrigerantType!,
+            };
+        }
+
         Store.AddTransaction(form);
+        Toasts.Show("Transaction logged", ToastKind.Success);
         showForm = false;
     }
 
-    private void DeleteTransaction(Transaction t) => Store.DeleteTransaction(t.Id, null);
-
-    private static string FormatDate(string iso) =>
-        DateTime.TryParse(iso, out var d) ? d.ToLocalTime().ToString("g") : iso;
+    private async Task DeleteTransaction(Transaction t)
+    {
+        var ok = await Confirms.AskAsync(
+            "Delete this transaction? It will be soft-deleted and remain in the audit log.",
+            "Delete transaction", "Delete", "Cancel", danger: true);
+        if (!ok) return;
+        Store.DeleteTransaction(t.Id, null);
+        Toasts.Show("Transaction deleted (soft)", ToastKind.Success);
+    }
 }

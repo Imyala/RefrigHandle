@@ -2,6 +2,8 @@
 @page "/settings"
 @inject AppStateService Store
 @inject StorageService Storage
+@inject ToastService Toasts
+@inject ConfirmService Confirms
 @implements IDisposable
 
 <h1 class="page-title">Settings</h1>
@@ -32,6 +34,10 @@
                         <div class="list-row-main">
                             <strong>@t.Name</strong>
                             <span class="list-row-meta"> · RHL @t.ArcLicenceNumber</span>
+                            @if (!string.IsNullOrEmpty(t.PasswordHash))
+                            {
+                                <span class="list-row-meta"> · 🔒 locked</span>
+                            }
                         </div>
                         @if (t.Id == Store.State.ActiveTechnicianId)
                         {
@@ -39,11 +45,12 @@
                         }
                         else
                         {
-                            <AppButton Variant="ghost" OnClick="() => Store.SetActiveTechnicianId(t.Id)">
+                            <AppButton Variant="ghost" OnClick="() => RequestActivate(t)">
                                 Set active
                             </AppButton>
                         }
-                        <AppButton Variant="ghost" OnClick="() => Store.DeleteTechnician(t.Id)">Delete</AppButton>
+                        <AppButton Variant="ghost" OnClick="() => OpenTechEdit(t)">Lock</AppButton>
+                        <AppButton Variant="ghost" OnClick="() => RequestDeleteTech(t)">Delete</AppButton>
                     </li>
                 }
             </ul>
@@ -82,6 +89,110 @@
         </Field>
     </Card>
 
+    <Card Title="Location & timezone">
+        <Field Label="Country">
+            <input class="text-input" value="@Store.State.Location.Country"
+                   @oninput="@(e => UpdateLocation(l => l.Country = e.Value?.ToString() ?? ""))" />
+        </Field>
+        <Field Label="Region / state">
+            <input class="text-input" value="@Store.State.Location.Region"
+                   @oninput="@(e => UpdateLocation(l => l.Region = e.Value?.ToString() ?? ""))" />
+        </Field>
+        <Field Label="City">
+            <input class="text-input" value="@Store.State.Location.City"
+                   @oninput="@(e => UpdateLocation(l => l.City = e.Value?.ToString() ?? ""))" />
+        </Field>
+        <Field Label="Timezone (IANA)" Hint="Defaults to Australia/Sydney. e.g. Australia/Brisbane, Pacific/Auckland.">
+            <input class="text-input" value="@Store.State.Location.Timezone"
+                   @oninput="@(e => UpdateLocation(l => l.Timezone = e.Value?.ToString() ?? ""))" />
+        </Field>
+    </Card>
+
+    <Card Title="Refrigerants">
+        <p>Add a custom refrigerant code that's not in the built-in list. Star a code to pin it to the top of selectors.</p>
+        <Field Label="Add custom code (e.g. R513A)">
+            <input class="text-input" @bind="newCustomRefrigerant" />
+        </Field>
+        <AppButton OnClick="@AddCustomRefrigerant">Add</AppButton>
+
+        @if (Store.State.CustomRefrigerants.Count > 0)
+        {
+            <h3 class="settings-subhead">Custom</h3>
+            <ul class="list">
+                @foreach (var c in Store.State.CustomRefrigerants)
+                {
+                    var fav = Store.State.FavoriteRefrigerants.Contains(c, StringComparer.OrdinalIgnoreCase);
+                    <li class="list-row">
+                        <span class="list-row-main">@c</span>
+                        <AppButton Variant="ghost" OnClick="() => Store.ToggleFavoriteRefrigerant(c)">@(fav ? "★" : "☆")</AppButton>
+                        <AppButton Variant="ghost" OnClick="() => Store.RemoveCustomRefrigerant(c)">Remove</AppButton>
+                    </li>
+                }
+            </ul>
+        }
+
+        <h3 class="settings-subhead">Favourites (built-in)</h3>
+        <div class="chip-row">
+            @foreach (var c in RefrigerantData.BuiltInTypes)
+            {
+                var fav = Store.State.FavoriteRefrigerants.Contains(c, StringComparer.OrdinalIgnoreCase);
+                <button type="button" class="chip @(fav ? "chip--on" : "")"
+                        @onclick="() => Store.ToggleFavoriteRefrigerant(c)">
+                    @(fav ? "★ " : "")@c
+                </button>
+            }
+        </div>
+    </Card>
+
+    <Card Title="Cylinder presets">
+        <p>Save a custom cylinder spec to apply to new bottles in one click.</p>
+        <Field Label="Label"><input class="text-input" @bind="presetForm.Label" /></Field>
+        <Field Label="Tare (kg)">
+            <input class="text-input" type="number" step="0.001" @bind="presetForm.TareKg" />
+        </Field>
+        <Field Label="Water capacity (L)" Hint="Optional. Drives safe-fill via WC × FR(refrigerant).">
+            <input class="text-input" type="number" step="0.1" @bind="presetForm.WaterCapacityKg" />
+        </Field>
+        <AppButton OnClick="@AddCustomPreset">Add preset</AppButton>
+
+        @if (Store.State.CustomBottlePresets.Count > 0)
+        {
+            <h3 class="settings-subhead">Custom presets</h3>
+            <ul class="list">
+                @foreach (var p in Store.State.CustomBottlePresets)
+                {
+                    var fav = Store.State.FavoriteBottlePresets.Contains(p.Id);
+                    <li class="list-row">
+                        <span class="list-row-main">@p.Label · tare @p.TareKg kg @(p.WaterCapacityKg is double wc ? $"· {wc} L WC" : "")</span>
+                        <AppButton Variant="ghost" OnClick="() => Store.ToggleFavoriteBottlePreset(p.Id)">@(fav ? "★" : "☆")</AppButton>
+                        <AppButton Variant="ghost" OnClick="() => Store.RemoveCustomBottlePreset(p.Id)">Remove</AppButton>
+                    </li>
+                }
+            </ul>
+        }
+    </Card>
+
+    <Card Title="Storage health">
+        <p>Local data file: <code>@StorageHealthLabel</code></p>
+        @if (Store.LoadStatus == LoadStatus.Corrupted)
+        {
+            <Pill Tone="danger">Last load was corrupted</Pill>
+            @if (!string.IsNullOrEmpty(Store.CorruptedBackupPath))
+            {
+                <p class="list-row-meta">Backup at: <code>@Store.CorruptedBackupPath</code></p>
+            }
+            <p>Open the backup in a text editor to recover what you can, then re-import via JSON below.</p>
+        }
+        else if (Store.LoadStatus == LoadStatus.Empty)
+        {
+            <Pill Tone="info">Empty (no data yet)</Pill>
+        }
+        else
+        {
+            <Pill Tone="success">OK</Pill>
+        }
+    </Card>
+
     <Card Title="Backup">
         <p>Export everything (bottles, sites, units, transactions, settings) as a JSON file.</p>
         <AppButton OnClick="@ExportData">Export JSON</AppButton>
@@ -97,46 +208,223 @@
     </Card>
 </div>
 
+<Modal Open="@showTechEdit" Title="Lock technician profile" OnClose="@(() => showTechEdit = false)">
+    <ChildContent>
+        @if (techEditing is not null)
+        {
+            <p>Set or clear a password lock for <strong>@techEditing.Name</strong>. The hash is stored locally; the password itself is never saved.</p>
+            <Field Label="New password (blank to clear lock)">
+                <input class="text-input" type="password" @bind="techPassword" />
+            </Field>
+        }
+    </ChildContent>
+    <Footer>
+        <AppButton Variant="secondary" OnClick="@(() => showTechEdit = false)">Cancel</AppButton>
+        <AppButton OnClick="@SaveTechLock">Save</AppButton>
+    </Footer>
+</Modal>
+
+<PasswordPromptModal Open="@unlockOpen"
+                     TechnicianName="@(unlockTarget?.Name ?? "")"
+                     TechnicianId="@(unlockTarget?.Id ?? "")"
+                     ExpectedHash="@(unlockTarget?.PasswordHash)"
+                     OnCancel="@(() => unlockOpen = false)"
+                     OnConfirm="@ConfirmActivateUnlock" />
+
 @code {
     private string newTechName = "";
     private string newTechRhl = "";
+    private string newCustomRefrigerant = "";
+    private BottlePreset presetForm = new();
     private string importPayload = "";
     private string? exportPayload;
+
+    private bool showTechEdit;
+    private Technician? techEditing;
+    private string techPassword = "";
+
+    private bool unlockOpen;
+    private Technician? unlockTarget;
 
     protected override void OnInitialized() => Store.OnChange += OnStateChanged;
     public void Dispose() => Store.OnChange -= OnStateChanged;
     private void OnStateChanged() => InvokeAsync(StateHasChanged);
 
+    private string StorageHealthLabel
+    {
+        get
+        {
+            try { return Path.Combine(FileSystem.AppDataDirectory, "refrighandle.v1.json"); }
+            catch { return "(unavailable)"; }
+        }
+    }
+
     private void AddTech()
     {
-        if (string.IsNullOrWhiteSpace(newTechName) || string.IsNullOrWhiteSpace(newTechRhl)) return;
+        if (string.IsNullOrWhiteSpace(newTechName) || string.IsNullOrWhiteSpace(newTechRhl))
+        {
+            Toasts.Show("Name and RHL are both required.", ToastKind.Error);
+            return;
+        }
         Store.AddTechnician(new Technician { Name = newTechName, ArcLicenceNumber = newTechRhl });
+        Toasts.Show("Technician added", ToastKind.Success);
         newTechName = "";
         newTechRhl = "";
     }
 
-    private async Task ExportData()
+    private async Task RequestDeleteTech(Technician t)
     {
-        exportPayload = Storage.ExportJson(Store.State);
-        var path = Path.Combine(FileSystem.CacheDirectory, Storage.ExportFileName());
-        await File.WriteAllTextAsync(path, exportPayload);
-        await Share.Default.RequestAsync(new ShareFileRequest
-        {
-            Title = "RefrigHandle backup",
-            File = new ShareFile(path),
-        });
+        var ok = await Confirms.AskAsync(
+            $"Delete technician {t.Name}? Past transactions keep the frozen audit stamps.",
+            "Delete technician", "Delete", "Cancel", danger: true);
+        if (!ok) return;
+        Store.DeleteTechnician(t.Id);
+        Toasts.Show("Technician deleted", ToastKind.Success);
     }
 
-    private void ImportData()
+    private void RequestActivate(Technician t)
     {
-        if (string.IsNullOrWhiteSpace(importPayload)) return;
-        var incoming = Storage.ImportJson(importPayload);
-        if (incoming is not null)
+        if (string.IsNullOrEmpty(t.PasswordHash))
         {
-            Store.ImportState(incoming);
-            importPayload = "";
+            Store.SetActiveTechnicianId(t.Id);
+            Toasts.Show($"Active: {t.Name}", ToastKind.Info);
+            return;
+        }
+        unlockTarget = t;
+        unlockOpen = true;
+    }
+
+    private void ConfirmActivateUnlock()
+    {
+        if (unlockTarget is null) return;
+        Store.SetActiveTechnicianId(unlockTarget.Id);
+        Toasts.Show($"Active: {unlockTarget.Name}", ToastKind.Info);
+        unlockOpen = false;
+        unlockTarget = null;
+    }
+
+    private void OpenTechEdit(Technician t)
+    {
+        techEditing = t;
+        techPassword = "";
+        showTechEdit = true;
+    }
+
+    private void SaveTechLock()
+    {
+        if (techEditing is null) return;
+        var copy = new Technician
+        {
+            Id = techEditing.Id,
+            Name = techEditing.Name,
+            ArcLicenceNumber = techEditing.ArcLicenceNumber,
+            CreatedAt = techEditing.CreatedAt,
+            PasswordHash = string.IsNullOrEmpty(techPassword)
+                ? null
+                : Auth.HashPassword(techEditing.Id, techPassword),
+        };
+        Store.UpdateTechnician(copy);
+        Toasts.Show(string.IsNullOrEmpty(techPassword) ? "Lock cleared" : "Lock set", ToastKind.Success);
+        showTechEdit = false;
+    }
+
+    private void UpdateLocation(Action<LocationSettings> mutate)
+    {
+        var loc = new LocationSettings
+        {
+            Country = Store.State.Location.Country,
+            Region = Store.State.Location.Region,
+            City = Store.State.Location.City,
+            Timezone = Store.State.Location.Timezone,
+        };
+        mutate(loc);
+        Store.SetLocation(loc);
+    }
+
+    private void AddCustomRefrigerant()
+    {
+        if (string.IsNullOrWhiteSpace(newCustomRefrigerant))
+        {
+            Toasts.Show("Enter a refrigerant code.", ToastKind.Error);
+            return;
+        }
+        Store.AddCustomRefrigerant(newCustomRefrigerant);
+        newCustomRefrigerant = "";
+    }
+
+    private void AddCustomPreset()
+    {
+        if (string.IsNullOrWhiteSpace(presetForm.Label) || presetForm.TareKg <= 0)
+        {
+            Toasts.Show("Label and tare are required.", ToastKind.Error);
+            return;
+        }
+        Store.AddCustomBottlePreset(new BottlePreset
+        {
+            Label = presetForm.Label,
+            TareKg = presetForm.TareKg,
+            WaterCapacityKg = presetForm.WaterCapacityKg,
+            Custom = true,
+        });
+        Toasts.Show("Preset saved", ToastKind.Success);
+        presetForm = new BottlePreset();
+    }
+
+    private async Task ExportData()
+    {
+        try
+        {
+            exportPayload = Storage.ExportJson(Store.State);
+            var path = Path.Combine(FileSystem.CacheDirectory, Storage.ExportFileName());
+            await File.WriteAllTextAsync(path, exportPayload);
+            await Share.Default.RequestAsync(new ShareFileRequest
+            {
+                Title = "RefrigHandle backup",
+                File = new ShareFile(path),
+            });
+        }
+        catch (Exception ex)
+        {
+            Toasts.Show($"Export failed: {ex.Message}", ToastKind.Error);
         }
     }
 
-    private void ResetAll() => Store.ResetAll();
+    private async Task ImportData()
+    {
+        if (string.IsNullOrWhiteSpace(importPayload))
+        {
+            Toasts.Show("Paste a backup JSON first.", ToastKind.Error);
+            return;
+        }
+        var ok = await Confirms.AskAsync(
+            "Importing replaces all current bottles, sites, units, and transactions. Continue?",
+            "Import backup", "Replace data", "Cancel", danger: true);
+        if (!ok) return;
+        try
+        {
+            var incoming = Storage.ImportJson(importPayload);
+            if (incoming is null)
+            {
+                Toasts.Show("Could not parse the backup.", ToastKind.Error);
+                return;
+            }
+            Store.ImportState(incoming);
+            importPayload = "";
+            Toasts.Show("Backup imported", ToastKind.Success);
+        }
+        catch (Exception ex)
+        {
+            Toasts.Show($"Import failed: {ex.Message}", ToastKind.Error);
+        }
+    }
+
+    private async Task ResetAll()
+    {
+        var ok = await Confirms.AskAsync(
+            "Reset wipes all bottles, sites, units, and transactions. Technician profiles and settings stay. Continue?",
+            "Reset all data", "Reset", "Cancel", danger: true);
+        if (!ok) return;
+        Store.ResetAll();
+        Toasts.Show("All data reset", ToastKind.Success);
+    }
 }
