@@ -1,0 +1,253 @@
+@namespace RefrigHandle.Components.Pages
+@page "/sites"
+@inject AppStateService Store
+@implements IDisposable
+
+<h1 class="page-title">Sites</h1>
+
+<div class="toolbar">
+    <input class="text-input" placeholder="Search sites…" @bind="search" @bind:event="oninput" />
+    <AppButton OnClick="@OpenAddSite">Add site</AppButton>
+</div>
+
+@if (!FilteredSites.Any())
+{
+    <EmptyState Title="No sites" Message="Add a customer site or job to start tracking units." />
+}
+else
+{
+    @foreach (var s in FilteredSites)
+    {
+        <Card>
+            <div class="site-header">
+                <div>
+                    <strong>@s.Name</strong>
+                    @if (!string.IsNullOrEmpty(s.Client))
+                    {
+                        <span class="list-row-meta">@s.Client</span>
+                    }
+                </div>
+                <AppButton Variant="ghost" OnClick="() => OpenEditSite(s)">Edit</AppButton>
+            </div>
+            @if (!string.IsNullOrEmpty(s.Address))
+            {
+                <div class="list-row-meta">@s.Address</div>
+            }
+
+            <div class="site-units">
+                <div class="site-units-header">
+                    <strong>Units</strong>
+                    <AppButton Variant="ghost" OnClick="() => OpenAddUnit(s)">Add unit</AppButton>
+                </div>
+                @{
+                    var siteUnits = Store.State.Units.Where(u => u.SiteId == s.Id).ToList();
+                }
+                @if (siteUnits.Count == 0)
+                {
+                    <div class="empty-state-message">No units logged at this site.</div>
+                }
+                else
+                {
+                    <ul class="list">
+                        @foreach (var u in siteUnits)
+                        {
+                            var leak = BusinessLogic.LeakStatusFor(u, Store.State.Transactions);
+                            <li class="list-row">
+                                <div class="list-row-main">
+                                    <strong>@u.Name</strong>
+                                    @if (!string.IsNullOrEmpty(u.RefrigerantType))
+                                    {
+                                        <span class="list-row-meta">
+                                            @u.RefrigerantType
+                                            @if (u.RefrigerantCharge is double c) { @($" · {c:F2} kg charge") }
+                                        </span>
+                                    }
+                                </div>
+                                <Pill Tone="@LeakTone(leak.Level)">@LeakLabel(leak)</Pill>
+                                @if (u.Status == UnitStatus.Decommissioned)
+                                {
+                                    <Pill Tone="neutral">Decommissioned</Pill>
+                                }
+                                <AppButton Variant="ghost" OnClick="() => OpenEditUnit(u)">Edit</AppButton>
+                            </li>
+                        }
+                    </ul>
+                }
+            </div>
+        </Card>
+    }
+}
+
+<Modal Open="@showSiteForm" Title="@(editingSite is null ? "Add site" : "Edit site")" OnClose="@(() => showSiteForm = false)">
+    <ChildContent>
+    <Field Label="Name"><input class="text-input" @bind="siteForm.Name" /></Field>
+    <Field Label="Client"><input class="text-input" @bind="siteForm.Client" /></Field>
+    <Field Label="Address"><input class="text-input" @bind="siteForm.Address" /></Field>
+    <Field Label="Notes"><textarea class="text-input" @bind="siteForm.Notes"></textarea></Field>
+    </ChildContent>
+    <Footer>
+        @if (editingSite is not null)
+        {
+            <AppButton Variant="danger" OnClick="@DeleteEditingSite">Delete</AppButton>
+        }
+        <AppButton Variant="secondary" OnClick="@(() => showSiteForm = false)">Cancel</AppButton>
+        <AppButton OnClick="@SaveSite">Save</AppButton>
+    </Footer>
+</Modal>
+
+<Modal Open="@showUnitForm" Title="@(editingUnit is null ? "Add unit" : "Edit unit")" OnClose="@(() => showUnitForm = false)">
+    <ChildContent>
+    <Field Label="Name"><input class="text-input" @bind="unitForm.Name" /></Field>
+    <Field Label="Kind">
+        <select class="select" @bind="unitKindRaw">
+            <option value="">(unspecified)</option>
+            @foreach (var k in Enum.GetValues<UnitKind>())
+            {
+                <option value="@k">@k.ToString()</option>
+            }
+        </select>
+    </Field>
+    <Field Label="Refrigerant">
+        <RefrigerantSelect Value="@unitForm.RefrigerantType"
+                           ValueChanged="@(v => unitForm.RefrigerantType = v)" />
+    </Field>
+    <Field Label="Factory charge (kg)">
+        <input class="text-input" type="number" step="0.001" @bind="unitForm.RefrigerantCharge" />
+    </Field>
+    <Field Label="Manufacturer"><input class="text-input" @bind="unitForm.Manufacturer" /></Field>
+    <Field Label="Model"><input class="text-input" @bind="unitForm.Model" /></Field>
+    <Field Label="Serial"><input class="text-input" @bind="unitForm.Serial" /></Field>
+    <Field Label="Install date"><input class="text-input" type="date" @bind="unitForm.InstallDate" /></Field>
+    <Field Label="Notes"><textarea class="text-input" @bind="unitForm.Notes"></textarea></Field>
+    </ChildContent>
+    <Footer>
+        @if (editingUnit is not null)
+        {
+            @if (editingUnit.Status == UnitStatus.Active)
+            {
+                <AppButton Variant="secondary" OnClick="@DecommissionEditingUnit">Decommission</AppButton>
+            }
+            else
+            {
+                <AppButton Variant="secondary" OnClick="@ReactivateEditingUnit">Reactivate</AppButton>
+            }
+            <AppButton Variant="danger" OnClick="@DeleteEditingUnit">Delete</AppButton>
+        }
+        <AppButton Variant="secondary" OnClick="@(() => showUnitForm = false)">Cancel</AppButton>
+        <AppButton OnClick="@SaveUnit">Save</AppButton>
+    </Footer>
+</Modal>
+
+@code {
+    private string search = "";
+    private bool showSiteForm;
+    private Site? editingSite;
+    private Site siteForm = new();
+
+    private bool showUnitForm;
+    private Unit? editingUnit;
+    private Unit unitForm = new();
+    private string unitKindRaw = "";
+
+    protected override void OnInitialized() => Store.OnChange += OnStateChanged;
+    public void Dispose() => Store.OnChange -= OnStateChanged;
+    private void OnStateChanged() => InvokeAsync(StateHasChanged);
+
+    private IEnumerable<Site> FilteredSites =>
+        Store.State.Sites
+            .Where(s => string.IsNullOrWhiteSpace(search) ||
+                        s.Name.Contains(search, StringComparison.OrdinalIgnoreCase) ||
+                        (s.Client?.Contains(search, StringComparison.OrdinalIgnoreCase) ?? false) ||
+                        (s.Address?.Contains(search, StringComparison.OrdinalIgnoreCase) ?? false))
+            .OrderBy(s => s.Name, StringComparer.OrdinalIgnoreCase);
+
+    private static string LeakTone(LeakLevel level) => level switch
+    {
+        LeakLevel.Suspected => "danger",
+        LeakLevel.Watch => "warn",
+        LeakLevel.Unknown => "neutral",
+        _ => "success",
+    };
+
+    private static string LeakLabel(LeakState s) => s.Level switch
+    {
+        LeakLevel.Suspected => $"Leak suspected ({(s.Fraction * 100):F0}%)",
+        LeakLevel.Watch => $"Watch ({(s.Fraction * 100):F0}%)",
+        LeakLevel.Unknown => "Charge unknown",
+        _ => "OK",
+    };
+
+    private void OpenAddSite() { editingSite = null; siteForm = new Site(); showSiteForm = true; }
+    private void OpenEditSite(Site s)
+    {
+        editingSite = s;
+        siteForm = new Site
+        {
+            Id = s.Id, Name = s.Name, Client = s.Client,
+            Address = s.Address, Notes = s.Notes, CreatedAt = s.CreatedAt,
+        };
+        showSiteForm = true;
+    }
+    private void SaveSite()
+    {
+        if (string.IsNullOrWhiteSpace(siteForm.Name)) return;
+        if (editingSite is null) Store.AddSite(siteForm);
+        else Store.UpdateSite(siteForm);
+        showSiteForm = false;
+    }
+    private void DeleteEditingSite()
+    {
+        if (editingSite is null) return;
+        Store.DeleteSite(editingSite.Id);
+        showSiteForm = false;
+    }
+
+    private void OpenAddUnit(Site s)
+    {
+        editingUnit = null;
+        unitForm = new Unit { SiteId = s.Id };
+        unitKindRaw = "";
+        showUnitForm = true;
+    }
+    private void OpenEditUnit(Unit u)
+    {
+        editingUnit = u;
+        unitForm = new Unit
+        {
+            Id = u.Id, SiteId = u.SiteId, Name = u.Name, Kind = u.Kind,
+            RefrigerantType = u.RefrigerantType, RefrigerantCharge = u.RefrigerantCharge,
+            Manufacturer = u.Manufacturer, Model = u.Model, Serial = u.Serial,
+            InstallDate = u.InstallDate, Status = u.Status,
+            DecommissionedAt = u.DecommissionedAt, DecommissionedReason = u.DecommissionedReason,
+            Notes = u.Notes, CreatedAt = u.CreatedAt,
+        };
+        unitKindRaw = u.Kind?.ToString() ?? "";
+        showUnitForm = true;
+    }
+    private void SaveUnit()
+    {
+        if (string.IsNullOrWhiteSpace(unitForm.Name)) return;
+        unitForm.Kind = Enum.TryParse<UnitKind>(unitKindRaw, out var k) ? k : null;
+        if (editingUnit is null) Store.AddUnit(unitForm);
+        else Store.UpdateUnit(unitForm);
+        showUnitForm = false;
+    }
+    private void DeleteEditingUnit()
+    {
+        if (editingUnit is null) return;
+        Store.DeleteUnit(editingUnit.Id);
+        showUnitForm = false;
+    }
+    private void DecommissionEditingUnit()
+    {
+        if (editingUnit is null) return;
+        Store.DecommissionUnit(editingUnit.Id, null);
+        showUnitForm = false;
+    }
+    private void ReactivateEditingUnit()
+    {
+        if (editingUnit is null) return;
+        Store.ReactivateUnit(editingUnit.Id);
+        showUnitForm = false;
+    }
+}

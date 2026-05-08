@@ -1,0 +1,19 @@
+@namespace RefrigHandle.Components.Shared
+
+<div class="empty-state">
+    @if (!string.IsNullOrEmpty(Title))
+    {
+        <div class="empty-state-title">@Title</div>
+    }
+    @if (!string.IsNullOrEmpty(Message))
+    {
+        <div class="empty-state-message">@Message</div>
+    }
+    @ChildContent
+</div>
+
+@code {
+    [Parameter] public string? Title { get; set; }
+    [Parameter] public string? Message { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+}

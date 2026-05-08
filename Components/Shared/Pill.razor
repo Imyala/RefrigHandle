@@ -1,0 +1,9 @@
+@namespace RefrigHandle.Components.Shared
+
+<span class="pill pill--@Tone">@ChildContent</span>
+
+@code {
+    /// <summary>Tone: neutral, info, success, warn, danger.</summary>
+    [Parameter] public string Tone { get; set; } = "neutral";
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+}

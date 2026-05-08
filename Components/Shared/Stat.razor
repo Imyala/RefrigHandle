@@ -1,0 +1,11 @@
+@namespace RefrigHandle.Components.Shared
+
+<div class="stat">
+    <div class="stat-value">@Value</div>
+    <div class="stat-label">@Label</div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public string Label { get; set; } = "";
+    [Parameter, EditorRequired] public string Value { get; set; } = "";
+}

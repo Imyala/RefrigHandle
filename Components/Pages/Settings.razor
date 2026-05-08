@@ -1,0 +1,142 @@
+@namespace RefrigHandle.Components.Pages
+@page "/settings"
+@inject AppStateService Store
+@inject StorageService Storage
+@implements IDisposable
+
+<h1 class="page-title">Settings</h1>
+
+<div class="grid">
+    <Card Title="Compliance / business">
+        <Field Label="Business name">
+            <input class="text-input" value="@Store.State.BusinessName"
+                   @oninput="@(e => Store.SetBusinessName(e.Value?.ToString() ?? ""))" />
+        </Field>
+        <Field Label="ARC RTA (Refrigerant Trading Authorisation)" Hint="Frozen on every transaction for audit.">
+            <input class="text-input" value="@Store.State.ArcAuthorisationNumber"
+                   @oninput="@(e => Store.SetArcAuthorisationNumber(e.Value?.ToString() ?? ""))" />
+        </Field>
+    </Card>
+
+    <Card Title="Technicians">
+        @if (Store.State.Technicians.Count == 0)
+        {
+            <EmptyState Message="Add a technician profile to start logging compliant transactions." />
+        }
+        else
+        {
+            <ul class="list">
+                @foreach (var t in Store.State.Technicians)
+                {
+                    <li class="list-row">
+                        <div class="list-row-main">
+                            <strong>@t.Name</strong>
+                            <span class="list-row-meta"> · RHL @t.ArcLicenceNumber</span>
+                        </div>
+                        @if (t.Id == Store.State.ActiveTechnicianId)
+                        {
+                            <Pill Tone="success">Active</Pill>
+                        }
+                        else
+                        {
+                            <AppButton Variant="ghost" OnClick="() => Store.SetActiveTechnicianId(t.Id)">
+                                Set active
+                            </AppButton>
+                        }
+                        <AppButton Variant="ghost" OnClick="() => Store.DeleteTechnician(t.Id)">Delete</AppButton>
+                    </li>
+                }
+            </ul>
+        }
+        <Field Label="New technician name">
+            <input class="text-input" @bind="newTechName" />
+        </Field>
+        <Field Label="ARC RHL (Refrigerant Handling Licence)">
+            <input class="text-input" @bind="newTechRhl" />
+        </Field>
+        <AppButton OnClick="@AddTech">Add technician</AppButton>
+    </Card>
+
+    <Card Title="Display">
+        <Field Label="Weight unit">
+            <select class="select" value="@Store.State.Unit"
+                    @onchange="@(e => Store.SetWeightUnit(Enum.Parse<WeightUnit>(e.Value!.ToString()!)))">
+                <option value="@WeightUnit.Kg">Kilograms</option>
+                <option value="@WeightUnit.Lb">Pounds</option>
+            </select>
+        </Field>
+        <Field Label="Theme">
+            <select class="select" value="@Store.State.Theme"
+                    @onchange="@(e => Store.SetTheme(Enum.Parse<ThemePreference>(e.Value!.ToString()!)))">
+                <option value="@ThemePreference.System">System</option>
+                <option value="@ThemePreference.Light">Light</option>
+                <option value="@ThemePreference.Dark">Dark</option>
+            </select>
+        </Field>
+        <Field Label="Clock format">
+            <select class="select" value="@Store.State.Clock"
+                    @onchange="@(e => Store.SetClock(Enum.Parse<ClockFormat>(e.Value!.ToString()!)))">
+                <option value="@ClockFormat.TwentyFourHour">24-hour</option>
+                <option value="@ClockFormat.TwelveHour">12-hour</option>
+            </select>
+        </Field>
+    </Card>
+
+    <Card Title="Backup">
+        <p>Export everything (bottles, sites, units, transactions, settings) as a JSON file.</p>
+        <AppButton OnClick="@ExportData">Export JSON</AppButton>
+        <hr />
+        <p>Paste a previously-exported JSON file to restore.</p>
+        <textarea class="text-input" rows="6" @bind="importPayload"></textarea>
+        <AppButton Variant="secondary" OnClick="@ImportData">Import JSON</AppButton>
+    </Card>
+
+    <Card Title="Danger zone">
+        <p>Reset wipes bottles, sites, units, and transactions. Keeps technician profiles and settings.</p>
+        <AppButton Variant="danger" OnClick="@ResetAll">Reset all data</AppButton>
+    </Card>
+</div>
+
+@code {
+    private string newTechName = "";
+    private string newTechRhl = "";
+    private string importPayload = "";
+    private string? exportPayload;
+
+    protected override void OnInitialized() => Store.OnChange += OnStateChanged;
+    public void Dispose() => Store.OnChange -= OnStateChanged;
+    private void OnStateChanged() => InvokeAsync(StateHasChanged);
+
+    private void AddTech()
+    {
+        if (string.IsNullOrWhiteSpace(newTechName) || string.IsNullOrWhiteSpace(newTechRhl)) return;
+        Store.AddTechnician(new Technician { Name = newTechName, ArcLicenceNumber = newTechRhl });
+        newTechName = "";
+        newTechRhl = "";
+    }
+
+    private async Task ExportData()
+    {
+        exportPayload = Storage.ExportJson(Store.State);
+        var path = Path.Combine(FileSystem.CacheDirectory, Storage.ExportFileName());
+        await File.WriteAllTextAsync(path, exportPayload);
+        await Share.Default.RequestAsync(new ShareFileRequest
+        {
+            Title = "RefrigHandle backup",
+            File = new ShareFile(path),
+        });
+    }
+
+    private void ImportData()
+    {
+        if (string.IsNullOrWhiteSpace(importPayload)) return;
+        var incoming = Storage.ImportJson(importPayload);
+        if (incoming is not null)
+        {
+            Store.ImportState(incoming);
+            importPayload = "";
+        }
+    }
+
+    private void ResetAll() => Store.ResetAll();
+}

@@ -1,0 +1,2 @@
+Place OpenSans-Regular.ttf and OpenSans-Semibold.ttf here, or remove the
+font registrations from MauiProgram.cs if you don't need them.

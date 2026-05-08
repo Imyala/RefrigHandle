@@ -1,0 +1,37 @@
+@namespace RefrigHandle.Components.Shared
+@inject AppStateService Store
+
+<select class="select" @onchange="HandleChange">
+    <option value="">Pick a cylinder preset…</option>
+    @foreach (var p in Options)
+    {
+        <option value="@p.Id">@DisplayLabel(p)</option>
+    }
+</select>
+
+@code {
+    [Parameter] public EventCallback<BottlePreset> OnPresetSelected { get; set; }
+
+    private IEnumerable<BottlePreset> Options =>
+        RefrigerantData.BuiltInPresets
+            .Concat(Store.State.CustomBottlePresets)
+            .OrderByDescending(p => Store.State.FavoriteBottlePresets.Contains(p.Id) ? 1 : 0)
+            .ThenBy(p => p.Label, StringComparer.OrdinalIgnoreCase);
+
+    private string DisplayLabel(BottlePreset p)
+    {
+        var unit = Store.State.Unit;
+        var label = unit == WeightUnit.Lb ? (p.LabelLb ?? p.Label) : (p.LabelKg ?? p.Label);
+        var fav = Store.State.FavoriteBottlePresets.Contains(p.Id) ? "★ " : "";
+        return fav + label;
+    }
+
+    private async Task HandleChange(ChangeEventArgs e)
+    {
+        var id = e.Value?.ToString() ?? "";
+        if (string.IsNullOrEmpty(id)) return;
+        var preset = Options.FirstOrDefault(p => p.Id == id);
+        if (preset is not null && OnPresetSelected.HasDelegate)
+            await OnPresetSelected.InvokeAsync(preset);
+    }
+}

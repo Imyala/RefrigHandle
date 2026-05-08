@@ -1,0 +1,163 @@
+@namespace RefrigHandle.Components.Pages
+@page "/transactions"
+@inject AppStateService Store
+@implements IDisposable
+
+<h1 class="page-title">Transactions</h1>
+
+<div class="toolbar">
+    <select class="select" @bind="kindFilterRaw">
+        <option value="">All kinds</option>
+        @foreach (var k in Enum.GetValues<TransactionKind>())
+        {
+            <option value="@k">@k.ToString()</option>
+        }
+    </select>
+    <label class="checkbox">
+        <input type="checkbox" @bind="showDeleted" /> Show deleted
+    </label>
+    <AppButton OnClick="@OpenForm">Log transaction</AppButton>
+</div>
+
+@if (!Filtered.Any())
+{
+    <EmptyState Title="No transactions" Message="Activity will appear here once you log charge / recover / transfer events." />
+}
+else
+{
+    <ul class="list">
+        @foreach (var t in Filtered)
+        {
+            var bottle = Store.State.Bottles.FirstOrDefault(b => b.Id == t.BottleId);
+            var site = Store.State.Sites.FirstOrDefault(s => s.Id == t.SiteId);
+            <li class="list-row @(t.DeletedAt is not null ? "list-row--muted" : "")">
+                <div class="list-row-main">
+                    <strong>@t.Kind</strong>
+                    @if (bottle is not null) { <span> · @bottle.BottleNumber (@bottle.RefrigerantType)</span> }
+                    @if (t.Amount > 0) { <span> · @Units.FormatWeight(t.Amount, Store.State.Unit, 3)</span> }
+                    @if (site is not null) { <span class="list-row-meta"> · @site.Name</span> }
+                </div>
+                <span class="list-row-meta">@FormatDate(t.Date)</span>
+                @if (t.DeletedAt is not null)
+                {
+                    <Pill Tone="warn">Deleted</Pill>
+                    <AppButton Variant="ghost" OnClick="() => Store.RestoreTransaction(t.Id)">Restore</AppButton>
+                }
+                else
+                {
+                    <AppButton Variant="ghost" OnClick="() => DeleteTransaction(t)">Delete</AppButton>
+                }
+            </li>
+        }
+    </ul>
+}
+
+<Modal Open="@showForm" Title="Log transaction" OnClose="@(() => showForm = false)">
+    <ChildContent>
+    <Field Label="Kind">
+        <select class="select" @bind="form.Kind">
+            @foreach (var k in Enum.GetValues<TransactionKind>())
+            {
+                <option value="@k">@k.ToString()</option>
+            }
+        </select>
+    </Field>
+    <Field Label="Bottle">
+        <BottleSelect Value="@form.BottleId" ValueChanged="@(v => form.BottleId = v)" />
+    </Field>
+    @if (form.Kind == TransactionKind.Recover)
+    {
+        <Field Label="Source bottle (optional, bottle-to-bottle)">
+            <BottleSelect Value="@(form.SourceBottleId ?? "")"
+                          ValueChanged="@(v => form.SourceBottleId = string.IsNullOrEmpty(v) ? null : v)" />
+        </Field>
+    }
+    @if (form.Kind is TransactionKind.Charge or TransactionKind.Recover or TransactionKind.Adjust)
+    {
+        <Field Label="Amount (kg)" Hint="@(form.Kind == TransactionKind.Adjust ? "Signed; negative reduces gross weight." : null)">
+            <input class="text-input" type="number" step="0.001" @bind="form.Amount" />
+        </Field>
+    }
+    @if (form.Kind is TransactionKind.Charge or TransactionKind.Recover)
+    {
+        <Field Label="Bottle-side amount (kg)" Hint="If different from amount (e.g. hose losses).">
+            <input class="text-input" type="number" step="0.001" @bind="form.BottleAmount" />
+        </Field>
+    }
+    @if (form.Kind is TransactionKind.Transfer or TransactionKind.Station)
+    {
+        <Field Label="Site">
+            <select class="select" @bind="form.SiteId">
+                <option value="">(choose site)</option>
+                @foreach (var s in Store.State.Sites.OrderBy(x => x.Name))
+                {
+                    <option value="@s.Id">@s.Name</option>
+                }
+            </select>
+        </Field>
+    }
+    @if (form.Kind == TransactionKind.Charge || form.Kind == TransactionKind.Recover)
+    {
+        <Field Label="Reason">
+            <select class="select" @bind="reasonRaw">
+                <option value="">(none)</option>
+                @foreach (var r in Enum.GetValues<TransactionReason>())
+                {
+                    <option value="@r">@r.ToString()</option>
+                }
+            </select>
+        </Field>
+    }
+    @if (form.Kind == TransactionKind.Return)
+    {
+        <Field Label="Return destination">
+            <input class="text-input" @bind="form.ReturnDestination" />
+        </Field>
+    }
+    <Field Label="Notes"><textarea class="text-input" @bind="form.Notes"></textarea></Field>
+    </ChildContent>
+    <Footer>
+        <AppButton Variant="secondary" OnClick="@(() => showForm = false)">Cancel</AppButton>
+        <AppButton OnClick="@SaveTransaction">Save</AppButton>
+    </Footer>
+</Modal>
+
+@code {
+    private string kindFilterRaw = "";
+    private TransactionKind? kindFilter =>
+        Enum.TryParse<TransactionKind>(kindFilterRaw, out var k) ? k : null;
+    private bool showDeleted;
+    private bool showForm;
+    private Transaction form = new();
+    private string reasonRaw = "";
+
+    protected override void OnInitialized() => Store.OnChange += OnStateChanged;
+    public void Dispose() => Store.OnChange -= OnStateChanged;
+    private void OnStateChanged() => InvokeAsync(StateHasChanged);
+
+    private IEnumerable<Transaction> Filtered =>
+        Store.State.Transactions
+            .Where(t => kindFilter is null || t.Kind == kindFilter)
+            .Where(t => showDeleted || t.DeletedAt is null)
+            .OrderByDescending(t => t.Date);
+
+    private void OpenForm()
+    {
+        form = new Transaction { Kind = TransactionKind.Charge };
+        reasonRaw = "";
+        showForm = true;
+    }
+
+    private void SaveTransaction()
+    {
+        if (string.IsNullOrEmpty(form.BottleId)) return;
+        form.Reason = Enum.TryParse<TransactionReason>(reasonRaw, out var r) ? r : null;
+        Store.AddTransaction(form);
+        showForm = false;
+    }
+
+    private void DeleteTransaction(Transaction t) => Store.DeleteTransaction(t.Id, null);
+
+    private static string FormatDate(string iso) =>
+        DateTime.TryParse(iso, out var d) ? d.ToLocalTime().ToString("g") : iso;
+}

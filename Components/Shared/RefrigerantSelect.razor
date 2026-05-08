@@ -1,0 +1,34 @@
+@namespace RefrigHandle.Components.Shared
+@inject AppStateService Store
+
+<select class="select" value="@Value" @onchange="HandleChange">
+    @if (!string.IsNullOrEmpty(Placeholder))
+    {
+        <option value="">@Placeholder</option>
+    }
+    @foreach (var code in Options)
+    {
+        var fav = Store.State.FavoriteRefrigerants.Contains(code, StringComparer.OrdinalIgnoreCase);
+        <option value="@code">@(fav ? "★ " : "")@code</option>
+    }
+</select>
+
+@code {
+    [Parameter] public string? Value { get; set; }
+    [Parameter] public EventCallback<string> ValueChanged { get; set; }
+    [Parameter] public string? Placeholder { get; set; } = "Refrigerant…";
+
+    private IEnumerable<string> Options =>
+        RefrigerantData.BuiltInTypes
+            .Concat(Store.State.CustomRefrigerants)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderByDescending(c =>
+                Store.State.FavoriteRefrigerants.Contains(c, StringComparer.OrdinalIgnoreCase) ? 1 : 0)
+            .ThenBy(c => c, StringComparer.OrdinalIgnoreCase);
+
+    private async Task HandleChange(ChangeEventArgs e)
+    {
+        var v = e.Value?.ToString() ?? "";
+        await ValueChanged.InvokeAsync(v);
+    }
+}

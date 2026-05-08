@@ -1,0 +1,2 @@
+Any raw asset files placed in this folder will be copied to the application's
+output and made available via FileSystem.OpenAppPackageFileAsync(...).

@@ -1,0 +1,13 @@
+@namespace RefrigHandle.Components.Layout
+
+<NavLink class="nav-tab" ActiveClass="nav-tab--active" Match="@MatchMode" href="@Href">
+    @Label
+</NavLink>
+
+@code {
+    [Parameter, EditorRequired] public string Href { get; set; } = "";
+    [Parameter, EditorRequired] public string Label { get; set; } = "";
+
+    private NavLinkMatch MatchMode =>
+        string.IsNullOrEmpty(Href) ? NavLinkMatch.All : NavLinkMatch.Prefix;
+}

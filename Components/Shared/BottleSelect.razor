@@ -1,0 +1,36 @@
+@namespace RefrigHandle.Components.Shared
+@inject AppStateService Store
+
+<select class="select" value="@Value" @onchange="HandleChange">
+    @if (!string.IsNullOrEmpty(Placeholder))
+    {
+        <option value="">@Placeholder</option>
+    }
+    @foreach (var b in Options)
+    {
+        <option value="@b.Id">@b.BottleNumber — @b.RefrigerantType (@b.GrossWeight.ToString("F2") kg)</option>
+    }
+</select>
+
+@code {
+    [Parameter] public string? Value { get; set; }
+    [Parameter] public EventCallback<string> ValueChanged { get; set; }
+    [Parameter] public string? Placeholder { get; set; } = "Choose bottle…";
+    [Parameter] public Func<Bottle, bool>? Filter { get; set; }
+
+    private IEnumerable<Bottle> Options
+    {
+        get
+        {
+            IEnumerable<Bottle> q = Store.State.Bottles;
+            if (Filter is not null) q = q.Where(Filter);
+            return q.OrderBy(b => b.BottleNumber, StringComparer.OrdinalIgnoreCase);
+        }
+    }
+
+    private async Task HandleChange(ChangeEventArgs e)
+    {
+        var v = e.Value?.ToString() ?? "";
+        await ValueChanged.InvokeAsync(v);
+    }
+}

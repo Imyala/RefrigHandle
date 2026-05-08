@@ -1,0 +1,15 @@
+@namespace RefrigHandle.Components.Shared
+
+<div class="card @Class">
+    @if (!string.IsNullOrEmpty(Title))
+    {
+        <div class="card-title">@Title</div>
+    }
+    <div class="card-body">@ChildContent</div>
+</div>
+
+@code {
+    [Parameter] public string? Title { get; set; }
+    [Parameter] public string? Class { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+}

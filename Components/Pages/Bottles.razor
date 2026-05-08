@@ -1,0 +1,172 @@
+@namespace RefrigHandle.Components.Pages
+@page "/bottles"
+@inject AppStateService Store
+@implements IDisposable
+
+<h1 class="page-title">Bottles</h1>
+
+<div class="toolbar">
+    <input class="text-input" placeholder="Search…" @bind="search" @bind:event="oninput" />
+    <select class="select" @bind="filterStatusRaw">
+        <option value="">All statuses</option>
+        <option value="@BottleStatus.InStock">In stock</option>
+        <option value="@BottleStatus.OnSite">On site</option>
+        <option value="@BottleStatus.Stationed">Stationed</option>
+        <option value="@BottleStatus.Returned">Returned</option>
+        <option value="@BottleStatus.Empty">Empty</option>
+    </select>
+    <AppButton OnClick="@OpenAdd">Add bottle</AppButton>
+</div>
+
+@if (!Filtered.Any())
+{
+    <EmptyState Title="No bottles" Message="Add your first cylinder to start tracking." />
+}
+else
+{
+    <ul class="list">
+        @foreach (var b in Filtered)
+        {
+            <li class="list-row">
+                <div class="list-row-main">
+                    <strong>@b.BottleNumber</strong> · @b.RefrigerantType
+                    <span class="list-row-meta">
+                        Net @Units.FormatWeight(BusinessLogic.NetWeight(b), Store.State.Unit)
+                        · Gross @Units.FormatWeight(b.GrossWeight, Store.State.Unit)
+                    </span>
+                </div>
+                <Pill Tone="@StatusTone(b.Status)">@b.Status.ToString()</Pill>
+                <AppButton Variant="ghost" OnClick="() => OpenEdit(b)">Edit</AppButton>
+            </li>
+        }
+    </ul>
+}
+
+<Modal Open="@showForm" Title="@(editing is null ? "Add bottle" : "Edit bottle")" OnClose="@CloseForm">
+    <ChildContent>
+    <Field Label="Bottle number / serial">
+        <input class="text-input" @bind="form.BottleNumber" />
+    </Field>
+    <Field Label="Refrigerant">
+        <RefrigerantSelect Value="@form.RefrigerantType"
+                           ValueChanged="@(v => form.RefrigerantType = v)" />
+    </Field>
+    <CylinderPresetSelect OnPresetSelected="@ApplyPreset" />
+    <Field Label="Tare weight (kg)">
+        <input class="text-input" type="number" step="0.001" @bind="form.TareWeight" />
+    </Field>
+    <Field Label="Current gross weight (kg)">
+        <input class="text-input" type="number" step="0.001" @bind="form.GrossWeight" />
+    </Field>
+    <Field Label="Initial net capacity (kg)" Hint="Safe-fill (WC × FR). Auto-set from preset.">
+        <input class="text-input" type="number" step="0.001" @bind="form.InitialNetWeight" />
+    </Field>
+    <Field Label="Last hydro test date">
+        <input class="text-input" type="date" @bind="form.LastHydroTestDate" />
+    </Field>
+    <Field Label="Next hydro test date">
+        <input class="text-input" type="date" @bind="form.NextHydroTestDate" />
+    </Field>
+    <Field Label="Notes">
+        <textarea class="text-input" @bind="form.Notes"></textarea>
+    </Field>
+    </ChildContent>
+    <Footer>
+        @if (editing is not null)
+        {
+            <AppButton Variant="danger" OnClick="@DeleteEditing">Delete</AppButton>
+        }
+        <AppButton Variant="secondary" OnClick="@CloseForm">Cancel</AppButton>
+        <AppButton OnClick="@Save">Save</AppButton>
+    </Footer>
+</Modal>
+
+@code {
+    private string search = "";
+    private string filterStatusRaw = "";
+    private BottleStatus? filterStatus =>
+        Enum.TryParse<BottleStatus>(filterStatusRaw, out var s) ? s : null;
+    private bool showForm;
+    private Bottle? editing;
+    private Bottle form = new();
+
+    protected override void OnInitialized() => Store.OnChange += OnStateChanged;
+    public void Dispose() => Store.OnChange -= OnStateChanged;
+    private void OnStateChanged() => InvokeAsync(StateHasChanged);
+
+    private IEnumerable<Bottle> Filtered =>
+        Store.State.Bottles
+            .Where(b => filterStatus is null || b.Status == filterStatus)
+            .Where(b => string.IsNullOrWhiteSpace(search) ||
+                        b.BottleNumber.Contains(search, StringComparison.OrdinalIgnoreCase) ||
+                        b.RefrigerantType.Contains(search, StringComparison.OrdinalIgnoreCase))
+            .OrderBy(b => b.BottleNumber, StringComparer.OrdinalIgnoreCase);
+
+    private static string StatusTone(BottleStatus s) => s switch
+    {
+        BottleStatus.InStock => "info",
+        BottleStatus.OnSite => "success",
+        BottleStatus.Stationed => "info",
+        BottleStatus.Returned => "neutral",
+        BottleStatus.Empty => "warn",
+        _ => "neutral",
+    };
+
+    private void OpenAdd()
+    {
+        editing = null;
+        form = new Bottle();
+        showForm = true;
+    }
+
+    private void OpenEdit(Bottle b)
+    {
+        editing = b;
+        // shallow copy so cancel doesn't mutate
+        form = new Bottle
+        {
+            Id = b.Id,
+            BottleNumber = b.BottleNumber,
+            RefrigerantType = b.RefrigerantType,
+            TareWeight = b.TareWeight,
+            GrossWeight = b.GrossWeight,
+            InitialNetWeight = b.InitialNetWeight,
+            Status = b.Status,
+            CurrentSiteId = b.CurrentSiteId,
+            Notes = b.Notes,
+            LastHydroTestDate = b.LastHydroTestDate,
+            NextHydroTestDate = b.NextHydroTestDate,
+            CreatedAt = b.CreatedAt,
+            CreatedBy = b.CreatedBy,
+            CreatedByLicence = b.CreatedByLicence,
+            UpdatedAt = b.UpdatedAt,
+        };
+        showForm = true;
+    }
+
+    private void CloseForm() => showForm = false;
+
+    private void ApplyPreset(BottlePreset p)
+    {
+        form.TareWeight = p.TareKg;
+        if (p.WaterCapacityKg is double wc)
+            form.InitialNetWeight = RefrigerantData.SafeFillKgFor(wc, form.RefrigerantType);
+        else if (p.SafeFillKg is double sf)
+            form.InitialNetWeight = sf;
+    }
+
+    private void Save()
+    {
+        if (string.IsNullOrWhiteSpace(form.BottleNumber)) return;
+        if (editing is null) Store.AddBottle(form);
+        else Store.UpdateBottle(form);
+        showForm = false;
+    }
+
+    private void DeleteEditing()
+    {
+        if (editing is null) return;
+        Store.DeleteBottle(editing.Id);
+        showForm = false;
+    }
+}

@@ -1,24 +1,50 @@
-# Logs
-logs
-*.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-lerna-debug.log*
+# .NET build output
+bin/
+obj/
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+arm64/
+[Bb]uild/
+[Oo]ut/
+publish/
 
-node_modules
-dist
-dist-ssr
-*.local
+# .NET tooling
+*.user
+*.suo
+*.userprefs
+*.usertasks
+*.csproj.user
+*.binlog
+.vs/
+.dotnet/
+.nuget/
+nuget.exe
 
-# Editor directories and files
+# MAUI / mobile artifacts
+*.apk
+*.aab
+*.ipa
+*.app
+*.dmg
+*.msix
+*.appx
+*.appxbundle
+
+# Test output
+TestResults/
+*.coverage
+*.coveragexml
+
+# Editor
 .vscode/*
 !.vscode/extensions.json
-.idea
+.idea/
+*.swp
+*.swo
+*.tmp
+
+# OS
 .DS_Store
-*.suo
-*.ntvs*
-*.njsproj
-*.sln
-*.sw?
+Thumbs.db

@@ -1,0 +1,16 @@
+@namespace RefrigHandle.Components.Shared
+
+<label class="field">
+    <span class="field-label">@Label</span>
+    @ChildContent
+    @if (!string.IsNullOrEmpty(Hint))
+    {
+        <span class="field-hint">@Hint</span>
+    }
+</label>
+
+@code {
+    [Parameter, EditorRequired] public string Label { get; set; } = "";
+    [Parameter] public string? Hint { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+}

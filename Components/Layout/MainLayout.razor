@@ -1,0 +1,39 @@
+@namespace RefrigHandle.Components.Layout
+@inherits LayoutComponentBase
+@inject AppStateService Store
+@inject NavigationManager Nav
+@implements IDisposable
+
+<div class="app-shell @ThemeClass">
+    <header class="app-header">
+        <div class="app-header-inner">
+            <div class="brand">Refrigerant Handling</div>
+            <div class="brand-sub">@(Store.ActiveTechnician?.Name ?? Store.State.Technician)</div>
+        </div>
+    </header>
+
+    <main class="app-main">
+        @Body
+    </main>
+
+    <nav class="app-nav">
+        <NavTab Href="" Label="Home" />
+        <NavTab Href="bottles" Label="Bottles" />
+        <NavTab Href="sites" Label="Sites" />
+        <NavTab Href="transactions" Label="Log" />
+        <NavTab Href="settings" Label="Settings" />
+    </nav>
+</div>
+
+@code {
+    private string ThemeClass => Store.State.Theme switch
+    {
+        ThemePreference.Dark => "theme-dark",
+        ThemePreference.Light => "theme-light",
+        _ => "",
+    };
+
+    protected override void OnInitialized() => Store.OnChange += OnStateChanged;
+    public void Dispose() => Store.OnChange -= OnStateChanged;
+    private void OnStateChanged() => InvokeAsync(StateHasChanged);
+}

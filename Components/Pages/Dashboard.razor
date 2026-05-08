@@ -1,0 +1,133 @@
+@namespace RefrigHandle.Components.Pages
+@page "/"
+@inject AppStateService Store
+@implements IDisposable
+
+<h1 class="page-title">Dashboard</h1>
+
+<div class="grid">
+    <Card Title="Stock summary">
+        <div class="stat-row">
+            <Stat Label="In stock" Value="@StatusCount(BottleStatus.InStock)" />
+            <Stat Label="On site" Value="@StatusCount(BottleStatus.OnSite)" />
+            <Stat Label="Stationed" Value="@StatusCount(BottleStatus.Stationed)" />
+            <Stat Label="Returned" Value="@StatusCount(BottleStatus.Returned)" />
+            <Stat Label="Empty" Value="@StatusCount(BottleStatus.Empty)" />
+        </div>
+        <div class="stat-row">
+            <Stat Label="Total net" Value="@TotalNetDisplay" />
+            <Stat Label="Bottles" Value="@Store.State.Bottles.Count.ToString()" />
+        </div>
+    </Card>
+
+    <Card Title="By refrigerant type">
+        @if (Totals.Count == 0)
+        {
+            <EmptyState Message="No bottles yet." />
+        }
+        else
+        {
+            <table class="table">
+                <thead>
+                    <tr><th>Type</th><th>Bottles</th><th>Net</th></tr>
+                </thead>
+                <tbody>
+                    @foreach (var (type, t) in Totals.OrderByDescending(kv => kv.Value.NetKg))
+                    {
+                        <tr>
+                            <td>@type</td>
+                            <td>@t.Count</td>
+                            <td>@Units.FormatWeight(t.NetKg, Store.State.Unit)</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </Card>
+
+    <Card Title="Hydro alerts">
+        @if (HydroAlerts.Count == 0)
+        {
+            <EmptyState Message="No bottles approaching their next AS 2030 test." />
+        }
+        else
+        {
+            <ul class="list">
+                @foreach (var (b, h) in HydroAlerts)
+                {
+                    <li class="list-row">
+                        <span class="list-row-main">@b.BottleNumber — @b.RefrigerantType</span>
+                        @if (h.Status == HydroStatus.Overdue)
+                        {
+                            <Pill Tone="danger">Overdue @Math.Abs(h.DaysUntilDue ?? 0)d</Pill>
+                        }
+                        else
+                        {
+                            <Pill Tone="warn">Due in @h.DaysUntilDue d</Pill>
+                        }
+                    </li>
+                }
+            </ul>
+        }
+    </Card>
+
+    <Card Title="Recent activity">
+        @if (Recent.Count == 0)
+        {
+            <EmptyState Message="No transactions yet." />
+        }
+        else
+        {
+            <ul class="list">
+                @foreach (var t in Recent)
+                {
+                    var b = Store.State.Bottles.FirstOrDefault(x => x.Id == t.BottleId);
+                    <li class="list-row">
+                        <span class="list-row-main">
+                            @t.Kind.ToString().ToLowerInvariant() · @(b?.BottleNumber ?? "—")
+                        </span>
+                        <span class="list-row-meta">@FormatDate(t.Date)</span>
+                    </li>
+                }
+            </ul>
+        }
+    </Card>
+</div>
+
+@code {
+    protected override void OnInitialized() => Store.OnChange += OnStateChanged;
+    public void Dispose() => Store.OnChange -= OnStateChanged;
+    private void OnStateChanged() => InvokeAsync(StateHasChanged);
+
+    private string StatusCount(BottleStatus s) =>
+        Store.State.Bottles.Count(b => b.Status == s).ToString();
+
+    private Dictionary<string, (int Count, double NetKg)> Totals =>
+        BusinessLogic.TotalsByType(Store.State.Bottles);
+
+    private string TotalNetDisplay
+    {
+        get
+        {
+            var total = Store.State.Bottles.Sum(BusinessLogic.NetWeight);
+            return Units.FormatWeight(total, Store.State.Unit);
+        }
+    }
+
+    private List<(Bottle B, HydroState H)> HydroAlerts =>
+        Store.State.Bottles
+            .Select(b => (B: b, H: BusinessLogic.HydroStatusFor(b)))
+            .Where(x => x.H.Status is HydroStatus.Overdue or HydroStatus.DueSoon)
+            .OrderBy(x => x.H.DaysUntilDue ?? 0)
+            .ToList();
+
+    private List<Transaction> Recent =>
+        Store.State.Transactions
+            .Where(t => t.DeletedAt is null)
+            .OrderByDescending(t => t.Date)
+            .Take(5)
+            .ToList();
+
+    private static string FormatDate(string iso) =>
+        DateTime.TryParse(iso, out var d) ? d.ToLocalTime().ToString("g") : iso;
+}
