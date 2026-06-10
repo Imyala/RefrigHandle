@@ -70,7 +70,6 @@ export default function Bottles() {
       saved === 'all' ||
       saved === 'in_stock' ||
       saved === 'on_site' ||
-      saved === 'stationed' ||
       saved === 'returned' ||
       saved === 'empty'
     ) {
@@ -314,7 +313,7 @@ export default function Bottles() {
       )}
 
       <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
-        {(['all', 'in_stock', 'on_site', 'stationed', 'returned', 'empty'] as const).map(
+        {(['all', 'in_stock', 'on_site', 'returned', 'empty'] as const).map(
           (f) => {
             const count =
               f === 'all'
