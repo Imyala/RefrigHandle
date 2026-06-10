@@ -9,9 +9,13 @@ import {
   TextArea,
   TextInput,
 } from '../components/ui'
-import { Picker } from '../components/Picker'
+import { Picker, type PickerOption } from '../components/Picker'
 import { useStore } from '../lib/store'
 import {
+  AU_CITIES_BY_REGION,
+  AU_REGIONS,
+  CITIES_BY_COUNTRY,
+  CITY_OTHER_VALUE,
   NON_REFRIGERANT_UNIT_KINDS,
   REASON_LABELS,
   UNIT_KIND_LABELS,
@@ -841,24 +845,11 @@ export function SiteForm({
   onClose: () => void
   onSave: (data: Omit<Site, 'id' | 'createdAt'>) => void
 }) {
-  const { state } = useStore()
   const [name, setName] = useState(site?.name ?? '')
   const [client, setClient] = useState(site?.client ?? '')
   const [address, setAddress] = useState(site?.address ?? '')
   const [group, setGroup] = useState(site?.group ?? '')
   const [notes, setNotes] = useState(site?.notes ?? '')
-
-  // Groups already used on other sites — offered as quick-pick chips so
-  // spelling stays consistent (so "Brisbane" sites all land in one
-  // heading instead of "Brisbane" / "brisbane" / "BNE").
-  const existingGroups = useMemo(() => {
-    const seen = new Map<string, string>()
-    for (const s of state.sites) {
-      const g = s.group?.trim()
-      if (g && !seen.has(g.toLowerCase())) seen.set(g.toLowerCase(), g)
-    }
-    return Array.from(seen.values()).sort((a, b) => a.localeCompare(b))
-  }, [state.sites])
 
   const key = site?.id ?? 'new'
   const [lastKey, setLastKey] = useState(key)
@@ -907,32 +898,7 @@ export function SiteForm({
           label="Group / area"
           hint="Sites with the same group are bundled under one heading on the Sites page."
         >
-          <TextInput
-            value={group}
-            onChange={(e) => setGroup(e.target.value)}
-            placeholder="e.g. Brisbane, North region, Westfield campus"
-          />
-          {existingGroups.length > 0 && (
-            <div className="mt-2 flex flex-wrap gap-1.5">
-              {existingGroups.map((g) => {
-                const active = g.toLowerCase() === group.trim().toLowerCase()
-                return (
-                  <button
-                    key={g}
-                    type="button"
-                    onClick={() => setGroup(active ? '' : g)}
-                    className={`rounded-full px-2.5 py-1 text-xs font-medium transition ${
-                      active
-                        ? 'bg-brand-600 text-white'
-                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700'
-                    }`}
-                  >
-                    {g}
-                  </button>
-                )
-              })}
-            </div>
-          )}
+          <GroupField value={group} onChange={setGroup} />
         </Field>
         <Field label="Notes">
           <TextArea value={notes} onChange={(e) => setNotes(e.target.value)} />
@@ -942,6 +908,117 @@ export function SiteForm({
         </Button>
       </form>
     </Modal>
+  )
+}
+
+// Group / area picker for sites. Offers the curated city list (grouped
+// by state for Australia) plus any groups already used on other sites,
+// and an "Other — type my own" option that reveals a free-text input —
+// so a tech can pick Brisbane from the list or type anything they like.
+function GroupField({
+  value,
+  onChange,
+}: {
+  value: string
+  onChange: (v: string) => void
+}) {
+  const { state } = useStore()
+  const country = state.location.country
+
+  const cityOptions = useMemo<PickerOption[]>(() => {
+    // AU-first: fall back to Australian cities when no country is set.
+    if (country === 'Australia' || country === '') {
+      const opts: PickerOption[] = []
+      for (const region of AU_REGIONS) {
+        for (const city of AU_CITIES_BY_REGION[region] ?? []) {
+          opts.push({ value: city, label: city, group: region })
+        }
+      }
+      return opts
+    }
+    return (CITIES_BY_COUNTRY[country] ?? []).map((c) => ({
+      value: c,
+      label: c,
+      group: country,
+    }))
+  }, [country])
+
+  // Groups already used on other sites that aren't already curated
+  // cities — so custom buckets like "North region" stay pickable.
+  const customGroupOptions = useMemo<PickerOption[]>(() => {
+    const cityVals = new Set(cityOptions.map((o) => o.value.toLowerCase()))
+    const seen = new Map<string, string>()
+    for (const s of state.sites) {
+      const g = s.group?.trim()
+      if (g && !cityVals.has(g.toLowerCase()) && !seen.has(g.toLowerCase())) {
+        seen.set(g.toLowerCase(), g)
+      }
+    }
+    return Array.from(seen.values())
+      .sort((a, b) => a.localeCompare(b))
+      .map((g) => ({ value: g, label: g, group: 'Your groups' }))
+  }, [state.sites, cityOptions])
+
+  const options = useMemo<PickerOption[]>(
+    () => [
+      ...customGroupOptions,
+      ...cityOptions,
+      { value: CITY_OTHER_VALUE, label: 'Other — type my own' },
+    ],
+    [customGroupOptions, cityOptions],
+  )
+
+  const known = useMemo(
+    () =>
+      new Set(
+        options
+          .filter((o) => o.value !== CITY_OTHER_VALUE)
+          .map((o) => o.value),
+      ),
+    [options],
+  )
+
+  const trimmed = value.trim()
+  const isCustom = trimmed !== '' && !known.has(trimmed)
+  const pickerValue = isCustom ? CITY_OTHER_VALUE : trimmed
+
+  // No curated cities and no existing groups — plain text entry.
+  if (cityOptions.length === 0 && customGroupOptions.length === 0) {
+    return (
+      <TextInput
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder="e.g. Brisbane, North region, Westfield campus"
+      />
+    )
+  }
+
+  return (
+    <div className="space-y-2">
+      <Picker
+        title="Group / area"
+        value={pickerValue}
+        onChange={(v) => {
+          if (v === CITY_OTHER_VALUE) {
+            // Preserve a previously typed custom value; only clear when
+            // switching away from a known list entry.
+            if (known.has(trimmed)) onChange('')
+            return
+          }
+          onChange(v)
+        }}
+        emptyLabel="No group"
+        options={options}
+      />
+      {(pickerValue === CITY_OTHER_VALUE || isCustom) && (
+        <TextInput
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder="Type group / area name"
+          aria-label="Custom group name"
+        />
+      )}
+    </div>
   )
 }
 
