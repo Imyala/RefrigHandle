@@ -111,7 +111,7 @@ export default function Sites() {
             return (
               <div key={g.key || '__ungrouped__'}>
                 <SectionHeader
-                  title={`${g.label || 'Ungrouped'} (${g.sites.length})`}
+                  title={`${g.label || 'No region'} (${g.sites.length})`}
                   open={!collapsed}
                   onToggle={() => toggleGroup(g.key)}
                 />
@@ -307,7 +307,7 @@ function SiteDetail({
             <dl className="space-y-2">
               <DetailRow label="Client" value={site.client} />
               <DetailRow label="Address" value={site.address} />
-              <DetailRow label="Group / area" value={site.group} />
+              <DetailRow label="Region" value={site.group} />
               <DetailRow label="Notes" value={site.notes} italic />
               {!site.client && !site.address && !site.group && !site.notes && (
                 <div className="text-sm text-slate-500">
@@ -883,6 +883,12 @@ export function SiteForm({
   return (
     <Modal open={open} title={title} onClose={onClose}>
       <form onSubmit={submit} className="space-y-3">
+        <Field
+          label="Region"
+          hint="Sites in the same region are grouped under one heading on the Sites page."
+        >
+          <GroupField key={resetKey} value={group} onChange={setGroup} />
+        </Field>
         <Field label="Site name">
           <TextInput
             required
@@ -901,12 +907,6 @@ export function SiteForm({
         <Field label="Address">
           <TextInput value={address} onChange={(e) => setAddress(e.target.value)} />
         </Field>
-        <Field
-          label="Group / area"
-          hint="Sites with the same group are bundled under one heading on the Sites page."
-        >
-          <GroupField value={group} onChange={setGroup} />
-        </Field>
         <Field label="Notes">
           <TextArea value={notes} onChange={(e) => setNotes(e.target.value)} />
         </Field>
@@ -918,10 +918,12 @@ export function SiteForm({
   )
 }
 
-// Group / area picker for sites. Offers the curated city list (grouped
-// by state for Australia) plus any groups already used on other sites,
-// and an "Other — type my own" option that reveals a free-text input —
-// so a tech can pick Brisbane from the list or type anything they like.
+// Region picker for sites. Offers the curated city list (grouped by
+// state for Australia) plus any regions already used on other sites,
+// and an "Other — type my own" option (kept at the top) that reveals a
+// free-text box — so a tech can pick Brisbane from the list or type
+// anything they like. Mounted with key={resetKey} by the form so the
+// manual-entry mode resets cleanly between sites.
 function GroupField({
   value,
   onChange,
@@ -931,6 +933,10 @@ function GroupField({
 }) {
   const { state } = useStore()
   const country = state.location.country
+  // Explicit "typing my own" mode. Needed because picking Other leaves
+  // the value empty until the user types, and an empty value alone can't
+  // tell "No region" apart from "Other, mid-typing".
+  const [manual, setManual] = useState(false)
 
   const cityOptions = useMemo<PickerOption[]>(() => {
     // AU-first: fall back to Australian cities when no country is set.
@@ -950,7 +956,7 @@ function GroupField({
     }))
   }, [country])
 
-  // Groups already used on other sites that aren't already curated
+  // Regions already used on other sites that aren't already curated
   // cities — so custom buckets like "North region" stay pickable.
   const customGroupOptions = useMemo<PickerOption[]>(() => {
     const cityVals = new Set(cityOptions.map((o) => o.value.toLowerCase()))
@@ -963,14 +969,15 @@ function GroupField({
     }
     return Array.from(seen.values())
       .sort((a, b) => a.localeCompare(b))
-      .map((g) => ({ value: g, label: g, group: 'Your groups' }))
+      .map((g) => ({ value: g, label: g, group: 'Your regions' }))
   }, [state.sites, cityOptions])
 
   const options = useMemo<PickerOption[]>(
     () => [
+      // Kept first so manual entry is reachable without scrolling.
+      { value: CITY_OTHER_VALUE, label: 'Other — type my own' },
       ...customGroupOptions,
       ...cityOptions,
-      { value: CITY_OTHER_VALUE, label: 'Other — type my own' },
     ],
     [customGroupOptions, cityOptions],
   )
@@ -987,9 +994,10 @@ function GroupField({
 
   const trimmed = value.trim()
   const isCustom = trimmed !== '' && !known.has(trimmed)
-  const pickerValue = isCustom ? CITY_OTHER_VALUE : trimmed
+  const showManual = manual || isCustom
+  const pickerValue = showManual ? CITY_OTHER_VALUE : trimmed
 
-  // No curated cities and no existing groups — plain text entry.
+  // No curated cities and no existing regions — plain text entry.
   if (cityOptions.length === 0 && customGroupOptions.length === 0) {
     return (
       <TextInput
@@ -1003,26 +1011,28 @@ function GroupField({
   return (
     <div className="space-y-2">
       <Picker
-        title="Group / area"
+        title="Region"
         value={pickerValue}
         onChange={(v) => {
           if (v === CITY_OTHER_VALUE) {
-            // Preserve a previously typed custom value; only clear when
-            // switching away from a known list entry.
+            setManual(true)
+            // Start the box empty when coming from a known list entry.
             if (known.has(trimmed)) onChange('')
             return
           }
+          setManual(false)
           onChange(v)
         }}
-        emptyLabel="No group"
+        emptyLabel="No region"
         options={options}
       />
-      {(pickerValue === CITY_OTHER_VALUE || isCustom) && (
+      {showManual && (
         <TextInput
+          autoFocus
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          placeholder="Type group / area name"
-          aria-label="Custom group name"
+          placeholder="Type a region / area name"
+          aria-label="Custom region name"
         />
       )}
     </div>
@@ -1585,7 +1595,7 @@ function SiteAuditModal({
           </div>
           <div className="mt-1 grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
             <Kv label="Site" v={site.name} />
-            {site.group && <Kv label="Group / area" v={site.group} />}
+            {site.group && <Kv label="Region" v={site.group} />}
             {site.client && <Kv label="Client" v={site.client} />}
             {site.address && <Kv label="Address" v={site.address} />}
             {!isBottles && (
