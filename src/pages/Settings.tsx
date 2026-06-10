@@ -11,7 +11,10 @@ import { Picker } from '../components/Picker'
 import { InstallAppButton } from '../components/InstallAppButton'
 import { useStore } from '../lib/store'
 import {
+  AU_CITIES_BY_REGION,
   AU_REGIONS,
+  CITIES_BY_COUNTRY,
+  CITY_OTHER_VALUE,
   REFRIGERANT_TYPES,
   TIMEZONE_OPTIONS,
   transactionLabel,
@@ -542,11 +545,7 @@ export default function Settings() {
             </Field>
           </div>
           <Field label="City">
-            <TextInput
-              value={loc.city}
-              onChange={(e) => setLoc((l) => ({ ...l, city: e.target.value }))}
-              placeholder="e.g. Sydney"
-            />
+            <CityField loc={loc} setLoc={setLoc} />
           </Field>
           <Field
             label="Timezone"
@@ -1352,6 +1351,87 @@ function formatBytes(n?: number): string {
   if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`
   if (n < 1024 * 1024 * 1024) return `${(n / 1024 / 1024).toFixed(1)} MB`
   return `${(n / 1024 / 1024 / 1024).toFixed(2)} GB`
+}
+
+function CityField({
+  loc,
+  setLoc,
+}: {
+  loc: LocationSettings
+  setLoc: React.Dispatch<React.SetStateAction<LocationSettings>>
+}) {
+  // City list depends on Country (and Region for Australia).
+  const cityList: readonly string[] = useMemo(() => {
+    if (loc.country === 'Australia') {
+      return loc.region ? AU_CITIES_BY_REGION[loc.region] ?? [] : []
+    }
+    return CITIES_BY_COUNTRY[loc.country] ?? []
+  }, [loc.country, loc.region])
+
+  const cityOptions = useMemo<PickerOption[]>(() => {
+    const opts: PickerOption[] = cityList.map((c) => ({ value: c, label: c }))
+    opts.push({
+      value: CITY_OTHER_VALUE,
+      label: 'Other — type my own',
+    })
+    return opts
+  }, [cityList])
+
+  // A city counts as "custom" when it has a value and that value isn't
+  // in the curated list for the current country/region.
+  const isCustom = !!loc.city && !cityList.includes(loc.city)
+  // pickerValue is the value displayed by the Picker trigger. When the
+  // stored city is custom, we show the "Other" marker so the field
+  // makes sense; the real value lives in loc.city and is editable
+  // below via the TextInput.
+  const pickerValue = isCustom ? CITY_OTHER_VALUE : loc.city
+
+  // If the country/region change leaves the stored city missing from
+  // the curated list, we keep the typed value in loc.city and just
+  // surface "Other" — the tech doesn't lose their entry.
+
+  if (cityList.length === 0) {
+    // No curated list for this country — fall back to a plain text
+    // input so the field still works.
+    return (
+      <TextInput
+        value={loc.city}
+        onChange={(e) => setLoc((l) => ({ ...l, city: e.target.value }))}
+        placeholder="e.g. Sydney"
+      />
+    )
+  }
+
+  return (
+    <div className="space-y-2">
+      <Picker
+        title="City"
+        value={pickerValue}
+        onChange={(v) => {
+          if (v === CITY_OTHER_VALUE) {
+            // Switching to Other clears the stored city only if it's
+            // currently one of the curated values — preserves a
+            // previously typed custom city.
+            setLoc((l) =>
+              cityList.includes(l.city) ? { ...l, city: '' } : l,
+            )
+            return
+          }
+          setLoc((l) => ({ ...l, city: v }))
+        }}
+        emptyLabel="—"
+        options={cityOptions}
+      />
+      {(pickerValue === CITY_OTHER_VALUE || isCustom) && (
+        <TextInput
+          value={loc.city}
+          onChange={(e) => setLoc((l) => ({ ...l, city: e.target.value }))}
+          placeholder="Type city name"
+          aria-label="Custom city name"
+        />
+      )}
+    </div>
+  )
 }
 
 function RefrigerantChip({

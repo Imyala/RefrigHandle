@@ -333,7 +333,7 @@ export const EMPTY_STATE: AppState = {
   businessName: '',
   location: { country: '', region: '', city: '', timezone: '' },
   unit: 'kg',
-  theme: 'system',
+  theme: 'light',
   clock: '24h',
   sync: { enabled: false, teamId: '' },
 }
@@ -745,6 +745,73 @@ export const TIMEZONE_OPTIONS: readonly TimezoneOption[] = [
 export const AU_REGIONS: readonly string[] = [
   'NSW', 'VIC', 'QLD', 'SA', 'WA', 'TAS', 'NT', 'ACT',
 ] as const
+
+// Curated city lists for the City picker on the Settings page. AU is
+// grouped by state so the picker can filter; other countries are a
+// single flat list. Not exhaustive — a tech in a small town picks
+// "Other" and types the name in.
+export const AU_CITIES_BY_REGION: Record<string, readonly string[]> = {
+  NSW: [
+    'Sydney', 'Newcastle', 'Wollongong', 'Central Coast',
+    'Wagga Wagga', 'Albury', 'Coffs Harbour', 'Port Macquarie',
+    'Tamworth', 'Dubbo', 'Orange', 'Bathurst', 'Lismore', 'Armidale',
+  ],
+  VIC: [
+    'Melbourne', 'Geelong', 'Ballarat', 'Bendigo', 'Shepparton',
+    'Mildura', 'Warrnambool', 'Traralgon', 'Wodonga',
+  ],
+  QLD: [
+    'Brisbane', 'Gold Coast', 'Sunshine Coast', 'Townsville', 'Cairns',
+    'Toowoomba', 'Mackay', 'Rockhampton', 'Bundaberg', 'Hervey Bay',
+    'Gladstone', 'Mount Isa',
+  ],
+  SA: [
+    'Adelaide', 'Mount Gambier', 'Whyalla', 'Murray Bridge', 'Port Augusta',
+    'Port Lincoln', 'Port Pirie',
+  ],
+  WA: [
+    'Perth', 'Mandurah', 'Bunbury', 'Geraldton', 'Kalgoorlie',
+    'Albany', 'Karratha', 'Port Hedland', 'Broome',
+  ],
+  TAS: ['Hobart', 'Launceston', 'Devonport', 'Burnie'],
+  NT: ['Darwin', 'Alice Springs', 'Katherine', 'Palmerston'],
+  ACT: ['Canberra'],
+}
+
+export const CITIES_BY_COUNTRY: Record<string, readonly string[]> = {
+  'New Zealand': [
+    'Auckland', 'Wellington', 'Christchurch', 'Hamilton', 'Tauranga',
+    'Dunedin', 'Palmerston North', 'Napier', 'Hastings', 'Nelson',
+    'Rotorua', 'Whangarei', 'Invercargill', 'New Plymouth',
+  ],
+  'United Kingdom': [
+    'London', 'Birmingham', 'Manchester', 'Glasgow', 'Leeds',
+    'Liverpool', 'Edinburgh', 'Bristol', 'Sheffield', 'Cardiff',
+    'Newcastle upon Tyne', 'Belfast', 'Aberdeen', 'Plymouth',
+    'Brighton', 'Oxford', 'Cambridge', 'Southampton', 'Reading',
+    'Nottingham', 'Leicester',
+  ],
+  'United States': [
+    'New York', 'Los Angeles', 'Chicago', 'Houston', 'Phoenix',
+    'Philadelphia', 'San Antonio', 'San Diego', 'Dallas', 'San Jose',
+    'Austin', 'Jacksonville', 'Fort Worth', 'Columbus', 'Charlotte',
+    'San Francisco', 'Indianapolis', 'Seattle', 'Denver',
+    'Washington DC', 'Boston', 'Nashville', 'Portland', 'Las Vegas',
+    'Detroit', 'Memphis', 'Louisville', 'Baltimore', 'Milwaukee',
+    'Albuquerque', 'Tucson', 'Atlanta', 'Miami', 'Orlando', 'Tampa',
+    'Pittsburgh', 'Cincinnati', 'Cleveland', 'Kansas City', 'St Louis',
+    'Minneapolis', 'New Orleans', 'Honolulu', 'Anchorage',
+  ],
+  Canada: [
+    'Toronto', 'Montreal', 'Vancouver', 'Calgary', 'Edmonton',
+    'Ottawa', 'Winnipeg', 'Quebec City', 'Hamilton', 'Kitchener',
+    'London', 'Victoria', 'Halifax', 'Oshawa', 'Windsor',
+    'Saskatoon', 'Regina', "St John's",
+  ],
+}
+
+// The marker the City picker uses to mean "let me type my own".
+export const CITY_OTHER_VALUE = '__other__'
 
 // --- Cylinder hydrostatic test ----------------------------------------
 //

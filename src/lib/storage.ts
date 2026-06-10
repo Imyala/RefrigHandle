@@ -152,10 +152,14 @@ function normalize(parsed: LegacyState): AppState {
       timezone: parsed.location?.timezone ?? '',
     },
     unit: parsed.unit === 'lb' ? 'lb' : 'kg',
+    // Existing users keep whatever they previously chose (light / dark /
+    // system). New installs (no stored theme) default to light.
     theme:
-      parsed.theme === 'light' || parsed.theme === 'dark'
+      parsed.theme === 'light' ||
+      parsed.theme === 'dark' ||
+      parsed.theme === 'system'
         ? parsed.theme
-        : 'system',
+        : 'light',
     clock: parsed.clock === '12h' ? '12h' : '24h',
     sync: {
       enabled: parsed.sync?.enabled ?? false,
