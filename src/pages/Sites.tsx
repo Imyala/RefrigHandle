@@ -632,6 +632,7 @@ function AssignBottleModal({
   onAssign: (bottle: Bottle) => void
 }) {
   const { state } = useStore()
+  const confirm = useConfirm()
 
   // Candidates: any bottle not already on this site and not retired
   // (empty / returned). A bottle currently on another site can still be
@@ -651,6 +652,31 @@ function AssignBottleModal({
 
   const siteName = (id?: string) =>
     state.sites.find((s) => s.id === id)?.name ?? null
+
+  // A bottle lives at exactly one site (currentSiteId). When the chosen
+  // cylinder is already at another site, adding it here is really a
+  // transfer — confirm it so the tech knows it's being pulled off the
+  // other site (rather than silently appearing in two places).
+  async function pick(b: Bottle) {
+    const fromSite = siteName(b.currentSiteId)
+    if (b.currentSiteId && b.currentSiteId !== site.id && fromSite) {
+      const ok = await confirm({
+        title: `Transfer ${b.bottleNumber}?`,
+        message: (
+          <>
+            This cylinder is currently on site at{' '}
+            <strong>{fromSite}</strong>. Adding it here will move it from{' '}
+            <strong>{fromSite}</strong> to <strong>{site.name}</strong> — it
+            can only be on one site at a time. A transfer is recorded in the
+            log.
+          </>
+        ),
+        confirmLabel: `Transfer to ${site.name}`,
+      })
+      if (!ok) return
+    }
+    onAssign(b)
+  }
 
   return (
     <Modal open={open} title="Add bottle to site" onClose={onClose}>
@@ -677,7 +703,7 @@ function AssignBottleModal({
                 <button
                   key={b.id}
                   type="button"
-                  onClick={() => onAssign(b)}
+                  onClick={() => pick(b)}
                   className="flex w-full items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-3 py-3 text-left transition hover:bg-slate-50 active:scale-[0.99] dark:border-slate-700 dark:bg-slate-900 dark:hover:bg-slate-800/70"
                 >
                   <div className="min-w-0 flex-1">
@@ -691,7 +717,7 @@ function AssignBottleModal({
                     </div>
                   </div>
                   <span className="shrink-0 text-sm font-medium text-brand-600 dark:text-brand-300">
-                    Add
+                    {loc ? 'Transfer' : 'Add'}
                   </span>
                 </button>
               )
