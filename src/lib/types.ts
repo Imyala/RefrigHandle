@@ -50,7 +50,6 @@ export type RefrigerantType = (typeof REFRIGERANT_TYPES)[number] | string
 export type BottleStatus =
   | 'in_stock'
   | 'on_site'
-  | 'stationed'
   | 'returned'
   | 'empty'
 
@@ -172,7 +171,6 @@ export type TransactionKind =
   | 'charge' // refrigerant put INTO equipment, removed from bottle
   | 'recover' // refrigerant pulled OUT of equipment, added to bottle
   | 'transfer' // bottle moved to a site (no weight change)
-  | 'station' // bottle stationed/parked at a facility (no weight change)
   | 'return' // bottle returned to stock / supplier
   | 'adjust' // manual correction
 
@@ -537,8 +535,6 @@ export function statusLabel(s: BottleStatus): string {
       return 'In stock'
     case 'on_site':
       return 'On site'
-    case 'stationed':
-      return 'At facility'
     case 'returned':
       return 'Returned'
     case 'empty':
@@ -554,8 +550,6 @@ export function transactionLabel(k: TransactionKind): string {
       return 'Recover'
     case 'transfer':
       return 'Transfer'
-    case 'station':
-      return 'Stationed'
     case 'return':
       return 'Return'
     case 'adjust':
@@ -578,11 +572,11 @@ export function transactionLoss(t: Transaction): number {
 // bottle's currentSiteId (see the store) — charge/recover/adjust leave
 // the bottle where it is.
 export function isMovement(k: TransactionKind): boolean {
-  return k === 'transfer' || k === 'station' || k === 'return'
+  return k === 'transfer' || k === 'return'
 }
 
 // The site a bottle was located at immediately BEFORE the given movement
-// (transfer / station / return) transaction. Movement rows only store the
+// (transfer / return) transaction. Movement rows only store the
 // destination, so the origin has to be derived from history: it's the
 // destination of the bottle's previous movement, or undefined when the
 // bottle wasn't on any site then (fresh from stock, or its last move was

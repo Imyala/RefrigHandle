@@ -45,7 +45,6 @@ const statusTone: Record<
 > = {
   in_stock: 'green',
   on_site: 'amber',
-  stationed: 'blue',
   returned: 'slate',
   empty: 'red',
 }
@@ -453,8 +452,8 @@ export default function Bottles() {
           if (editing) {
             // Detect a meaningful site/status change so the activity
             // log gets a transaction record (otherwise a tech editing
-            // a bottle to "At facility — Site 1" leaves no audit
-            // trail of the move).
+            // a bottle to "On site — Site 1" leaves no audit trail of
+            // the move).
             const prevStatus = editing.status
             const prevSite = editing.currentSiteId ?? ''
             const newStatus = data.status
@@ -462,13 +461,10 @@ export default function Bottles() {
             const siteOrStatusChanged =
               prevStatus !== newStatus || prevSite !== newSite
             if (siteOrStatusChanged) {
-              if (
-                (newStatus === 'on_site' || newStatus === 'stationed') &&
-                newSite
-              ) {
+              if (newStatus === 'on_site' && newSite) {
                 addTransaction({
                   bottleId: editing.id,
-                  kind: newStatus === 'stationed' ? 'station' : 'transfer',
+                  kind: 'transfer',
                   siteId: newSite,
                   amount: 0,
                   date: new Date().toISOString(),
@@ -868,7 +864,6 @@ function QuickLogModal({
     charge: 'Charge into equipment',
     recover: 'Recover refrigerant',
     transfer: 'Transfer bottle to a site',
-    station: 'Station at facility',
     return: 'Return bottle to store',
     adjust: 'Manual adjustment',
   }
@@ -1076,7 +1071,7 @@ function QuickLogModal({
                         setSiteId(v)
                         setUnitId('')
                       }}
-                      required={kind === 'transfer' || kind === 'station'}
+                      required={kind === 'transfer'}
                       emptyLabel="— none —"
                       placeholder="— none —"
                       options={state.sites.map((j) => ({
@@ -1774,12 +1769,7 @@ function BottleForm({
               {
                 value: 'on_site',
                 label: 'On site',
-                hint: 'Currently in use on a job',
-              },
-              {
-                value: 'stationed',
-                label: 'At facility',
-                hint: 'Left at a customer site / building long-term',
+                hint: 'Currently at a site / job',
               },
               { value: 'returned', label: 'Returned' },
               {
@@ -1798,26 +1788,17 @@ function BottleForm({
           <div className="rounded-xl bg-red-50 p-3 text-sm text-red-900 dark:bg-red-900/20 dark:text-red-100">
             ⛔ Status is "Empty" but the bottle still has{' '}
             {formatWeight(liveNet, unit)} of refrigerant. Pick "In stock",
-            "On site", "At facility", or "Returned" — or correct the gross
-            weight if the bottle really is empty.
+            "On site", or "Returned" — or correct the gross weight if the
+            bottle really is empty.
           </div>
         )}
 
-        {(status === 'on_site' || status === 'stationed') && (
-          <Field
-            label={status === 'stationed' ? 'Facility / site' : 'Current site'}
-            hint={
-              status === 'stationed'
-                ? 'Where the bottle is parked long-term'
-                : undefined
-            }
-          >
+        {status === 'on_site' && (
+          <Field label="Current site">
             <div className="flex gap-2">
               <div className="min-w-0 flex-1">
                 <Picker
-                  title={
-                    status === 'stationed' ? 'Facility / site' : 'Current site'
-                  }
+                  title="Current site"
                   value={currentSiteId}
                   onChange={setCurrentSiteId}
                   placeholder="— pick a site —"

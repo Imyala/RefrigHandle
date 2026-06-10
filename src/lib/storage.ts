@@ -78,6 +78,10 @@ function normalize(parsed: LegacyState): AppState {
     const next = rest as unknown as Bottle
     return {
       ...next,
+      // The 'stationed' (at facility) status was retired — it duplicated
+      // 'on_site'. Fold any stored value back into 'on_site'.
+      status:
+        (next.status as string) === 'stationed' ? 'on_site' : next.status,
       currentSiteId: next.currentSiteId ?? currentJobId ?? currentLocationId,
     }
   })
@@ -87,6 +91,9 @@ function normalize(parsed: LegacyState): AppState {
     const next = rest as unknown as Transaction
     return {
       ...next,
+      // The 'station' kind was retired alongside the 'stationed' status —
+      // treat legacy rows as a plain transfer to a site.
+      kind: (next.kind as string) === 'station' ? 'transfer' : next.kind,
       siteId: next.siteId ?? jobId ?? locationId,
     }
   })
