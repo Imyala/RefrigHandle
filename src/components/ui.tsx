@@ -1,4 +1,5 @@
 import type { ButtonHTMLAttributes, InputHTMLAttributes, SelectHTMLAttributes, TextareaHTMLAttributes, ReactNode } from 'react'
+import { useRef } from 'react'
 import { createPortal } from 'react-dom'
 
 type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
@@ -156,6 +157,13 @@ export function Modal({
   children: ReactNode
   size?: 'sm' | 'lg'
 }) {
+  // Only treat a click as a "close on backdrop" when the press STARTED on
+  // the backdrop. Without this, selecting text inside a field and
+  // releasing the mouse over the backdrop (a drag that ends outside the
+  // dialog) fires a click on the overlay and wrongly closes the modal —
+  // losing whatever the user was editing. Tracking the mousedown origin
+  // means a drag-select that strays onto the backdrop never closes it.
+  const pressedOnOverlayRef = useRef(false)
   if (!open) return null
   const overlayCls =
     size === 'lg'
@@ -170,7 +178,20 @@ export function Modal({
   // rendered inside the BottleForm) ends up submitting the outer form
   // because HTML doesn't honour nested <form> elements.
   return createPortal(
-    <div className={overlayCls} onClick={onClose}>
+    <div
+      className={overlayCls}
+      onMouseDown={(e) => {
+        pressedOnOverlayRef.current = e.target === e.currentTarget
+      }}
+      onClick={(e) => {
+        // Close only on a genuine backdrop click — press and release both
+        // on the overlay itself, not a drag that began inside the dialog.
+        if (e.target === e.currentTarget && pressedOnOverlayRef.current) {
+          onClose()
+        }
+        pressedOnOverlayRef.current = false
+      }}
+    >
       <div
         className={containerCls}
         onClick={(e) => e.stopPropagation()}

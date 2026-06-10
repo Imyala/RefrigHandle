@@ -44,7 +44,16 @@ export default function Sites() {
   const { state, addSite } = useStore()
   const { sites } = state
 
-  const [openSite, setOpenSite] = useState<Site | null>(null)
+  // Track the open site by id (not a snapshot) so the detail view always
+  // reflects the latest data from the store. Holding the Site object
+  // meant that editing + saving left the detail panel showing the old
+  // values — the store updated, but this view kept rendering the stale
+  // object captured when the card was tapped.
+  const [openSiteId, setOpenSiteId] = useState<string | null>(null)
+  const openSite = useMemo(
+    () => (openSiteId ? sites.find((s) => s.id === openSiteId) ?? null : null),
+    [sites, openSiteId],
+  )
   const [adding, setAdding] = useState(false)
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set())
 
@@ -101,7 +110,7 @@ export default function Sites() {
       ) : !hasGroups ? (
         <div className="space-y-2">
           {groups[0].sites.map((s) => (
-            <SiteCard key={s.id} site={s} onOpen={() => setOpenSite(s)} />
+            <SiteCard key={s.id} site={s} onOpen={() => setOpenSiteId(s.id)} />
           ))}
         </div>
       ) : (
@@ -121,7 +130,7 @@ export default function Sites() {
                       <SiteCard
                         key={s.id}
                         site={s}
-                        onOpen={() => setOpenSite(s)}
+                        onOpen={() => setOpenSiteId(s.id)}
                       />
                     ))}
                   </div>
@@ -144,7 +153,7 @@ export default function Sites() {
 
       <SiteDetail
         site={openSite}
-        onClose={() => setOpenSite(null)}
+        onClose={() => setOpenSiteId(null)}
       />
     </div>
   )
