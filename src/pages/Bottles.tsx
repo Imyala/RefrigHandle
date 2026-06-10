@@ -83,6 +83,31 @@ export default function Bottles() {
   }, [filter])
   const [query, setQuery] = useState('')
 
+  // How the list is bundled. Persisted per browser tab like the filter
+  // so it survives navigation. Defaults to grouping by location so a
+  // long list collapses into one heading per site.
+  const [grouping, setGrouping] = useState<'none' | 'location' | 'refrigerant'>(
+    () => {
+      const saved = sessionStorage.getItem('bottles.grouping')
+      if (saved === 'none' || saved === 'location' || saved === 'refrigerant') {
+        return saved
+      }
+      return 'location'
+    },
+  )
+  useEffect(() => {
+    sessionStorage.setItem('bottles.grouping', grouping)
+  }, [grouping])
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set())
+  function toggleGroup(key: string) {
+    setCollapsedGroups((prev) => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
+  }
+
   // Action sheet — primary tap target
   // Track by id so the action sheet always reflects the latest bottle state
   // from the store (no stale snapshot after a charge updates the bottle).
@@ -117,6 +142,137 @@ export default function Bottles() {
       })
       .sort((a, b) => a.bottleNumber.localeCompare(b.bottleNumber))
   }, [bottles, filter, query])
+
+  // Bundle the visible bottles into collapsible groups. `visible` is
+  // already sorted by bottle number, so order within each group is kept.
+  const groups = useMemo(() => {
+    if (grouping === 'none') return null
+    const map = new Map<string, { key: string; label: string; rows: Bottle[] }>()
+    for (const b of visible) {
+      let key: string
+      let label: string
+      if (grouping === 'location') {
+        const site = sites.find((s) => s.id === b.currentSiteId)
+        if (site) {
+          key = `s:${site.id}`
+          label = site.name
+        } else {
+          key = 'none'
+          label = 'Not on site'
+        }
+      } else {
+        const t = b.refrigerantType || 'Unknown'
+        key = `r:${t.toUpperCase()}`
+        label = t
+      }
+      if (!map.has(key)) map.set(key, { key, label, rows: [] })
+      map.get(key)!.rows.push(b)
+    }
+    const arr = Array.from(map.values())
+    arr.sort((a, b) => {
+      // Keep the "Not on site" bucket last when grouping by location.
+      if (grouping === 'location') {
+        if (a.key === 'none') return 1
+        if (b.key === 'none') return -1
+      }
+      return a.label.localeCompare(b.label)
+    })
+    return arr
+  }, [grouping, visible, sites])
+
+  const renderBottle = (b: Bottle) => {
+    const site = sites.find((j) => j.id === b.currentSiteId)
+    const net = netWeight(b)
+    const initialNet = b.initialNetWeight || 0
+    const pct =
+      initialNet > 0 ? Math.min(100, Math.max(0, (net / initialNet) * 100)) : 0
+    const over = overfillKg(net, initialNet)
+    return (
+      <Card key={b.id} className="!p-3">
+        <button
+          className="flex w-full items-start justify-between gap-3 text-left"
+          onClick={() => setSheetBottleId(b.id)}
+        >
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="font-semibold text-slate-900 dark:text-slate-100">
+                {b.bottleNumber}
+              </span>
+              <span className="rounded-full bg-brand-100 px-2 py-0.5 text-xs font-semibold text-brand-700 dark:bg-brand-900/40 dark:text-brand-300">
+                {b.refrigerantType}
+              </span>
+              <Pill tone={statusTone[b.status]}>{statusLabel(b.status)}</Pill>
+              {b.bottleKind === 'pump_down' && (
+                <Pill tone="blue">Pump-down</Pill>
+              )}
+              {over > 0 && (
+                <Pill tone="amber">Overfill +{formatWeight(over, unit)}</Pill>
+              )}
+              {(() => {
+                const h = hydroStatusFor(b)
+                if (h.status === 'overdue')
+                  return <Pill tone="red">Hydro overdue</Pill>
+                if (h.status === 'due_soon')
+                  return (
+                    <Pill tone="amber">
+                      {h.monthsUntilDue === 0
+                        ? 'Hydro due this month'
+                        : 'Hydro due next month'}
+                    </Pill>
+                  )
+                return null
+              })()}
+            </div>
+            {site && (
+              <div className="mt-1 text-sm text-slate-500">{site.name}</div>
+            )}
+            <div className="mt-1 text-xs text-slate-500">
+              Added{' '}
+              {new Date(b.createdAt).toLocaleDateString(undefined, {
+                day: 'numeric',
+                month: 'short',
+                year: 'numeric',
+              })}
+              {b.createdBy && (
+                <>
+                  {' · by '}
+                  <span className="text-slate-600 dark:text-slate-400">
+                    {b.createdBy}
+                  </span>
+                  {b.createdByLicence && (
+                    <span className="text-slate-500">
+                      {' '}· RHL {b.createdByLicence}
+                    </span>
+                  )}
+                </>
+              )}
+            </div>
+            {initialNet > 0 && (
+              <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800">
+                <div
+                  className={`h-full rounded-full ${over > 0 ? 'bg-amber-500' : 'bg-brand-500'}`}
+                  style={{ width: `${pct}%` }}
+                />
+              </div>
+            )}
+          </div>
+          <div className="shrink-0 text-right">
+            <div className="text-lg font-bold tabular-nums text-slate-900 dark:text-slate-100">
+              {kgToDisplay(net, unit).toFixed(2)}
+              <span className="ml-1 text-xs font-medium text-slate-500">
+                {unit}
+              </span>
+            </div>
+            {initialNet > 0 && (
+              <div className="text-xs text-slate-500">
+                of {formatWeight(initialNet, unit, 1)}
+              </div>
+            )}
+          </div>
+        </button>
+      </Card>
+    )
+  }
 
   return (
     <div className="space-y-3">
@@ -159,6 +315,35 @@ export default function Bottles() {
         )}
       </div>
 
+      {bottles.length > 1 && (
+        <div className="flex items-center gap-2 px-1">
+          <span className="shrink-0 text-xs font-medium text-slate-500">
+            Group by
+          </span>
+          <div className="flex gap-1.5">
+            {(
+              [
+                ['none', 'None'],
+                ['location', 'Location'],
+                ['refrigerant', 'Refrigerant'],
+              ] as const
+            ).map(([val, lbl]) => (
+              <button
+                key={val}
+                onClick={() => setGrouping(val)}
+                className={`rounded-full px-3 py-1 text-xs font-medium transition ${
+                  grouping === val
+                    ? 'bg-brand-600 text-white'
+                    : 'bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-200'
+                }`}
+              >
+                {lbl}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {visible.length === 0 ? (
         <EmptyState
           title={bottles.length === 0 ? 'No bottles yet' : 'No matches'}
@@ -173,106 +358,27 @@ export default function Bottles() {
             ) : undefined
           }
         />
-      ) : (
-        <div className="space-y-2">
-          {visible.map((b) => {
-            const site = sites.find((j) => j.id === b.currentSiteId)
-            const net = netWeight(b)
-            const initialNet = b.initialNetWeight || 0
-            const pct =
-              initialNet > 0 ? Math.min(100, Math.max(0, (net / initialNet) * 100)) : 0
-            const over = overfillKg(net, initialNet)
+      ) : groups ? (
+        <div className="space-y-3">
+          {groups.map((g) => {
+            const isCollapsed = collapsedGroups.has(g.key)
             return (
-              <Card key={b.id} className="!p-3">
-                <button
-                  className="flex w-full items-start justify-between gap-3 text-left"
-                  onClick={() => setSheetBottleId(b.id)}
-                >
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="font-semibold text-slate-900 dark:text-slate-100">
-                        {b.bottleNumber}
-                      </span>
-                      <span className="rounded-full bg-brand-100 px-2 py-0.5 text-xs font-semibold text-brand-700 dark:bg-brand-900/40 dark:text-brand-300">
-                        {b.refrigerantType}
-                      </span>
-                      <Pill tone={statusTone[b.status]}>
-                        {statusLabel(b.status)}
-                      </Pill>
-                      {b.bottleKind === 'pump_down' && (
-                        <Pill tone="blue">Pump-down</Pill>
-                      )}
-                      {over > 0 && (
-                        <Pill tone="amber">Overfill +{formatWeight(over, unit)}</Pill>
-                      )}
-                      {(() => {
-                        const h = hydroStatusFor(b)
-                        if (h.status === 'overdue')
-                          return <Pill tone="red">Hydro overdue</Pill>
-                        if (h.status === 'due_soon')
-                          return (
-                            <Pill tone="amber">
-                              {h.monthsUntilDue === 0
-                                ? 'Hydro due this month'
-                                : 'Hydro due next month'}
-                            </Pill>
-                          )
-                        return null
-                      })()}
-                    </div>
-                    {site && (
-                      <div className="mt-1 text-sm text-slate-500">
-                        {site.name}
-                      </div>
-                    )}
-                    <div className="mt-1 text-xs text-slate-500">
-                      Added{' '}
-                      {new Date(b.createdAt).toLocaleDateString(undefined, {
-                        day: 'numeric',
-                        month: 'short',
-                        year: 'numeric',
-                      })}
-                      {b.createdBy && (
-                        <>
-                          {' · by '}
-                          <span className="text-slate-600 dark:text-slate-400">
-                            {b.createdBy}
-                          </span>
-                          {b.createdByLicence && (
-                            <span className="text-slate-500">
-                              {' '}· RHL {b.createdByLicence}
-                            </span>
-                          )}
-                        </>
-                      )}
-                    </div>
-                    {initialNet > 0 && (
-                      <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800">
-                        <div
-                          className={`h-full rounded-full ${over > 0 ? 'bg-amber-500' : 'bg-brand-500'}`}
-                          style={{ width: `${pct}%` }}
-                        />
-                      </div>
-                    )}
-                  </div>
-                  <div className="shrink-0 text-right">
-                    <div className="text-lg font-bold tabular-nums text-slate-900 dark:text-slate-100">
-                      {kgToDisplay(net, unit).toFixed(2)}
-                      <span className="ml-1 text-xs font-medium text-slate-500">
-                        {unit}
-                      </span>
-                    </div>
-                    {initialNet > 0 && (
-                      <div className="text-xs text-slate-500">
-                        of {formatWeight(initialNet, unit, 1)}
-                      </div>
-                    )}
-                  </div>
-                </button>
-              </Card>
+              <div key={g.key}>
+                <BottleGroupHeader
+                  label={g.label}
+                  count={g.rows.length}
+                  open={!isCollapsed}
+                  onToggle={() => toggleGroup(g.key)}
+                />
+                {!isCollapsed && (
+                  <div className="space-y-2">{g.rows.map(renderBottle)}</div>
+                )}
+              </div>
             )
           })}
         </div>
+      ) : (
+        <div className="space-y-2">{visible.map(renderBottle)}</div>
       )}
 
       <BottleActionSheet
@@ -383,6 +489,44 @@ export default function Bottles() {
         }
       />
     </div>
+  )
+}
+
+function BottleGroupHeader({
+  label,
+  count,
+  open,
+  onToggle,
+}: {
+  label: string
+  count: number
+  open: boolean
+  onToggle: () => void
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-expanded={open}
+      className="mb-2 flex w-full items-center gap-1.5 px-1 text-left text-slate-500 transition hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
+    >
+      <svg
+        aria-hidden
+        viewBox="0 0 24 24"
+        className={`h-4 w-4 shrink-0 transition-transform ${open ? '' : '-rotate-90'}`}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <path d="M6 9l6 6 6-6" />
+      </svg>
+      <span className="min-w-0 flex-1 truncate text-sm font-semibold uppercase tracking-wider">
+        {label}
+      </span>
+      <span className="shrink-0 text-xs font-medium">({count})</span>
+    </button>
   )
 }
 
