@@ -109,20 +109,22 @@ export default function Bottles() {
   }, [grouping])
   // Track which groups are EXPANDED (default: none) so the list opens
   // fully collapsed and a long inventory doesn't overwhelm the screen —
-  // the tech taps a heading to reveal that group. Persisted per browser
-  // tab so anything manually expanded stays open across navigation.
+  // the tech taps a heading to reveal that group. Persisted in
+  // localStorage so the collapsed/expanded layout the tech leaves behind
+  // is exactly what they come back to — across page navigation and app
+  // restarts, not just the current tab.
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(() => {
     try {
-      const saved = sessionStorage.getItem('bottles.expandedGroups')
+      const saved = localStorage.getItem('bottles.expandedGroups')
       if (saved) return new Set(JSON.parse(saved) as string[])
     } catch {
-      /* sessionStorage unavailable — start collapsed */
+      /* localStorage unavailable — start collapsed */
     }
     return new Set()
   })
   useEffect(() => {
     try {
-      sessionStorage.setItem(
+      localStorage.setItem(
         'bottles.expandedGroups',
         JSON.stringify([...expandedGroups]),
       )

@@ -57,20 +57,20 @@ export default function Sites() {
   const [adding, setAdding] = useState(false)
   // Track which region groups are EXPANDED (default: none) so the Sites
   // page opens fully collapsed — tap a region heading to reveal it.
-  // Persisted per browser tab so a manually expanded region stays open
-  // across navigation.
+  // Persisted in localStorage so the layout the tech leaves behind is
+  // exactly what they return to, across page navigation and app restarts.
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(() => {
     try {
-      const saved = sessionStorage.getItem('sites.expandedGroups')
+      const saved = localStorage.getItem('sites.expandedGroups')
       if (saved) return new Set(JSON.parse(saved) as string[])
     } catch {
-      /* sessionStorage unavailable — start collapsed */
+      /* localStorage unavailable — start collapsed */
     }
     return new Set()
   })
   useEffect(() => {
     try {
-      sessionStorage.setItem(
+      localStorage.setItem(
         'sites.expandedGroups',
         JSON.stringify([...expandedGroups]),
       )
