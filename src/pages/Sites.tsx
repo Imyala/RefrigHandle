@@ -851,15 +851,22 @@ export function SiteForm({
   const [group, setGroup] = useState(site?.group ?? '')
   const [notes, setNotes] = useState(site?.notes ?? '')
 
-  const key = site?.id ?? 'new'
-  const [lastKey, setLastKey] = useState(key)
-  if (open && lastKey !== key) {
-    setLastKey(key)
+  // Reset on every open transition (and when the edited site changes),
+  // so adding a second site doesn't inherit the first one's values.
+  // Keying on `open` is what fixes that — for new sites the id is always
+  // "new", so an id-only key never changes between consecutive adds.
+  const resetKey = `${open ? 'open' : 'closed'}:${site?.id ?? 'new'}`
+  const [lastResetKey, setLastResetKey] = useState(resetKey)
+  if (open && resetKey !== lastResetKey) {
+    setLastResetKey(resetKey)
     setName(site?.name ?? '')
     setClient(site?.client ?? '')
     setAddress(site?.address ?? '')
     setGroup(site?.group ?? '')
     setNotes(site?.notes ?? '')
+  } else if (!open && lastResetKey !== resetKey) {
+    // Track the closed state too so the next open transition is detected.
+    setLastResetKey(resetKey)
   }
 
   function submit(e: React.FormEvent) {
@@ -1056,10 +1063,13 @@ export function UnitForm({
   const [installDate, setInstallDate] = useState(unit?.installDate ?? '')
   const [notes, setNotes] = useState(unit?.notes ?? '')
 
-  const key = unit?.id ?? 'new'
-  const [lastKey, setLastKey] = useState(key)
-  if (open && lastKey !== key) {
-    setLastKey(key)
+  // Reset on every open transition (and when the edited unit changes) so
+  // adding a second unit doesn't inherit the first one's values — keying
+  // on `open` is what fixes consecutive adds (the id is always "new").
+  const resetKey = `${open ? 'open' : 'closed'}:${unit?.id ?? 'new'}`
+  const [lastResetKey, setLastResetKey] = useState(resetKey)
+  if (open && resetKey !== lastResetKey) {
+    setLastResetKey(resetKey)
     setName(unit?.name ?? '')
     setKind(unit?.kind ?? '')
     setRefrigerantType(unit?.refrigerantType ?? '')
@@ -1073,6 +1083,8 @@ export function UnitForm({
     setSerial(unit?.serial ?? '')
     setInstallDate(unit?.installDate ?? '')
     setNotes(unit?.notes ?? '')
+  } else if (!open && lastResetKey !== resetKey) {
+    setLastResetKey(resetKey)
   }
 
   function submit(e: React.FormEvent) {
