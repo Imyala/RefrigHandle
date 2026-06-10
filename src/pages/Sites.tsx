@@ -13,6 +13,7 @@ import { Picker } from '../components/Picker'
 import { useStore } from '../lib/store'
 import {
   NON_REFRIGERANT_UNIT_KINDS,
+  REASON_LABELS,
   UNIT_KIND_LABELS,
   gwpFor,
   leakStatusFor,
@@ -201,6 +202,9 @@ function SiteDetail({
   const [decommissionTarget, setDecommissionTarget] = useState<Unit | null>(null)
   const [showDecommissioned, setShowDecommissioned] = useState(true)
   const [logbookUnit, setLogbookUnit] = useState<Unit | null>(null)
+  const [bottlesOpen, setBottlesOpen] = useState(true)
+  const [unitsOpen, setUnitsOpen] = useState(true)
+  const [auditScope, setAuditScope] = useState<'site' | 'bottles' | null>(null)
 
   const siteId = site?.id ?? ''
   const activeUnits = useMemo(
@@ -251,6 +255,9 @@ function SiteDetail({
               <Button variant="secondary" onClick={() => setEditing(true)}>
                 Edit site
               </Button>
+              <Button variant="secondary" onClick={() => setAuditScope('site')}>
+                Audit
+              </Button>
               <Button
                 variant="danger"
                 onClick={async () => {
@@ -274,13 +281,22 @@ function SiteDetail({
           </Card>
 
           <div>
-            <div className="mb-2 flex items-center justify-between px-1">
-              <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                Bottles on site ({bottlesOnSite.length})
-              </h3>
+            <SectionHeader
+              title={`Bottles on site (${bottlesOnSite.length})`}
+              open={bottlesOpen}
+              onToggle={() => setBottlesOpen((v) => !v)}
+            >
+              {bottlesOnSite.length > 0 && (
+                <Button
+                  variant="secondary"
+                  onClick={() => setAuditScope('bottles')}
+                >
+                  Audit
+                </Button>
+              )}
               <Button onClick={() => setAddingBottle(true)}>+ Add bottle</Button>
-            </div>
-            {bottlesOnSite.length === 0 ? (
+            </SectionHeader>
+            {!bottlesOpen ? null : bottlesOnSite.length === 0 ? (
               <Card className="!p-3">
                 <p className="text-sm text-slate-500">
                   No bottles here yet — add a cylinder so its location and
@@ -330,13 +346,14 @@ function SiteDetail({
           </div>
 
           <div>
-            <div className="mb-2 flex items-center justify-between px-1">
-              <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                Units installed ({activeUnits.length})
-              </h3>
+            <SectionHeader
+              title={`Units installed (${activeUnits.length})`}
+              open={unitsOpen}
+              onToggle={() => setUnitsOpen((v) => !v)}
+            >
               <Button onClick={() => setAddingUnit(true)}>+ Add unit</Button>
-            </div>
-            {activeUnits.length === 0 ? (
+            </SectionHeader>
+            {!unitsOpen ? null : activeUnits.length === 0 ? (
               <Card className="!p-3">
                 <p className="text-sm text-slate-500">
                   No units yet — add the AC, chiller, fridge or other equipment
@@ -491,7 +508,51 @@ function SiteDetail({
         site={site}
         onClose={() => setLogbookUnit(null)}
       />
+
+      <SiteAuditModal
+        scope={auditScope}
+        site={site}
+        onClose={() => setAuditScope(null)}
+      />
     </>
+  )
+}
+
+function SectionHeader({
+  title,
+  open,
+  onToggle,
+  children,
+}: {
+  title: string
+  open: boolean
+  onToggle: () => void
+  children?: React.ReactNode
+}) {
+  return (
+    <div className="mb-2 flex items-center justify-between gap-2 px-1">
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={open}
+        className="flex min-w-0 items-center gap-1.5 text-sm font-semibold uppercase tracking-wider text-slate-500 transition hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
+      >
+        <svg
+          aria-hidden
+          viewBox="0 0 24 24"
+          className={`h-4 w-4 shrink-0 transition-transform ${open ? '' : '-rotate-90'}`}
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <path d="M6 9l6 6 6-6" />
+        </svg>
+        <span className="truncate">{title}</span>
+      </button>
+      <div className="flex shrink-0 flex-wrap justify-end gap-2">{children}</div>
+    </div>
   )
 }
 
@@ -1220,6 +1281,327 @@ function LogbookRow({ t }: { t: Transaction }) {
           </div>
         )}
         {t.notes ?? ''}
+      </td>
+    </tr>
+  )
+}
+
+// Format a stored cylinder test date (YYYY-MM or legacy YYYY-MM-DD) as
+// "Mon YYYY" for audit display. Cylinder periodic test is tracked to the
+// month per AS 2030.
+function formatTestDate(s?: string): string {
+  if (!s) return '—'
+  const m = s.match(/^(\d{4})-(\d{2})/)
+  if (!m) return '—'
+  const d = new Date(Number(m[1]), Number(m[2]) - 1, 1)
+  return d.toLocaleDateString('en-AU', { month: 'short', year: 'numeric' })
+}
+
+function SiteAuditModal({
+  scope,
+  site,
+  onClose,
+}: {
+  scope: 'site' | 'bottles' | null
+  site: Site
+  onClose: () => void
+}) {
+  const { state } = useStore()
+
+  const bottles = useMemo(
+    () =>
+      state.bottles
+        .filter((b) => b.currentSiteId === site.id)
+        .sort((a, b) => a.bottleNumber.localeCompare(b.bottleNumber)),
+    [state.bottles, site.id],
+  )
+  const units = useMemo(
+    () =>
+      state.units
+        .filter((u) => u.siteId === site.id && u.status === 'active')
+        .sort((a, b) => a.name.localeCompare(b.name)),
+    [state.units, site.id],
+  )
+  const txs = useMemo(() => {
+    const live = state.transactions.filter((t) => !t.deletedAt)
+    if (scope === 'bottles') {
+      const ids = new Set(bottles.map((b) => b.id))
+      return live
+        .filter(
+          (t) =>
+            ids.has(t.bottleId) ||
+            (t.sourceBottleId != null && ids.has(t.sourceBottleId)),
+        )
+        .sort((a, b) => (a.date < b.date ? 1 : -1))
+    }
+    return live
+      .filter((t) => t.siteId === site.id)
+      .sort((a, b) => (a.date < b.date ? 1 : -1))
+  }, [state.transactions, bottles, site.id, scope])
+
+  if (!scope) return null
+
+  const isBottles = scope === 'bottles'
+  const generatedAt = formatDateTime(
+    new Date().toISOString(),
+    state.location.timezone,
+    state.clock,
+  )
+  const totalOnSiteNet = bottles.reduce((s, b) => s + netWeight(b), 0)
+  const totalCharged = state.transactions
+    .filter((t) => !t.deletedAt && t.siteId === site.id && t.kind === 'charge')
+    .reduce((s, t) => s + t.amount, 0)
+  const totalRecovered = state.transactions
+    .filter((t) => !t.deletedAt && t.siteId === site.id && t.kind === 'recover')
+    .reduce((s, t) => s + t.amount, 0)
+
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      title={isBottles ? 'Bottle audit' : 'Site audit'}
+      size="lg"
+    >
+      <div className="no-print mb-3 flex flex-wrap items-center justify-end gap-2">
+        <Button variant="secondary" onClick={() => window.print()}>
+          Print / Save PDF
+        </Button>
+      </div>
+
+      <div className="print-region space-y-4 text-sm text-slate-900 dark:text-slate-100">
+        <header className="border-b border-slate-300 pb-3 dark:border-slate-700">
+          <div className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+            {isBottles ? 'Cylinder / Bottle Audit' : 'Site Audit Report'}
+          </div>
+          <div className="mt-1 text-lg font-semibold">
+            {state.businessName || 'Business name not set in Settings'}
+          </div>
+          <div className="text-xs text-slate-500">
+            {state.arcAuthorisationNumber
+              ? `ARC RTA ${state.arcAuthorisationNumber}`
+              : 'ARC RTA not set in Settings'}
+          </div>
+        </header>
+
+        <section>
+          <div className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+            Site
+          </div>
+          <div className="mt-1 grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
+            <Kv label="Site" v={site.name} />
+            {site.client && <Kv label="Client" v={site.client} />}
+            {site.address && <Kv label="Address" v={site.address} />}
+            {!isBottles && (
+              <Kv label="Units installed" v={String(units.length)} />
+            )}
+            <Kv label="Bottles on site" v={String(bottles.length)} />
+            <Kv
+              label="Refrigerant on site"
+              v={`${totalOnSiteNet.toFixed(3)} kg`}
+            />
+          </div>
+        </section>
+
+        <section>
+          <div className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+            Bottles on site ({bottles.length})
+          </div>
+          {bottles.length === 0 ? (
+            <p className="text-sm text-slate-500">
+              No bottles currently on site.
+            </p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead className="border-b border-slate-300 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:border-slate-700">
+                  <tr>
+                    <th className="py-1 pr-2">Bottle</th>
+                    <th className="py-1 pr-2">Refrigerant</th>
+                    <th className="py-1 pr-2 text-right">Tare kg</th>
+                    <th className="py-1 pr-2 text-right">Gross kg</th>
+                    <th className="py-1 pr-2 text-right">Net kg</th>
+                    <th className="py-1 pr-2">Status</th>
+                    <th className="py-1">Next test</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {bottles.map((b) => (
+                    <tr
+                      key={b.id}
+                      className="border-b border-slate-200 align-top dark:border-slate-800"
+                    >
+                      <td className="py-1 pr-2">{b.bottleNumber}</td>
+                      <td className="py-1 pr-2">{b.refrigerantType}</td>
+                      <td className="py-1 pr-2 text-right tabular-nums">
+                        {b.tareWeight.toFixed(3)}
+                      </td>
+                      <td className="py-1 pr-2 text-right tabular-nums">
+                        {b.grossWeight.toFixed(3)}
+                      </td>
+                      <td className="py-1 pr-2 text-right tabular-nums">
+                        {netWeight(b).toFixed(3)}
+                      </td>
+                      <td className="py-1 pr-2">{statusLabel(b.status)}</td>
+                      <td className="py-1 whitespace-nowrap">
+                        {formatTestDate(b.nextHydroTestDate)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+
+        {!isBottles && (
+          <section>
+            <div className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+              Units installed ({units.length})
+            </div>
+            {units.length === 0 ? (
+              <p className="text-sm text-slate-500">
+                No active units at this site.
+              </p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs">
+                  <thead className="border-b border-slate-300 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:border-slate-700">
+                    <tr>
+                      <th className="py-1 pr-2">Unit</th>
+                      <th className="py-1 pr-2">Type</th>
+                      <th className="py-1 pr-2">Refrigerant</th>
+                      <th className="py-1 pr-2 text-right">Charge kg</th>
+                      <th className="py-1">Leak status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {units.map((u) => {
+                      const leak = leakStatusFor(u, state.transactions)
+                      const meta = [u.manufacturer, u.model, u.serial].filter(
+                        Boolean,
+                      )
+                      return (
+                        <tr
+                          key={u.id}
+                          className="border-b border-slate-200 align-top dark:border-slate-800"
+                        >
+                          <td className="py-1 pr-2">
+                            {u.name}
+                            {meta.length > 0 && (
+                              <div className="text-[10px] text-slate-500">
+                                {meta.join(' · ')}
+                              </div>
+                            )}
+                          </td>
+                          <td className="py-1 pr-2">
+                            {u.kind ? UNIT_KIND_LABELS[u.kind] : '—'}
+                          </td>
+                          <td className="py-1 pr-2">
+                            {u.refrigerantType ?? '—'}
+                          </td>
+                          <td className="py-1 pr-2 text-right tabular-nums">
+                            {u.refrigerantCharge
+                              ? u.refrigerantCharge.toFixed(3)
+                              : '—'}
+                          </td>
+                          <td className="py-1">{leakLevelLabel(leak.level)}</td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
+        )}
+
+        <section>
+          <div className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+            {isBottles ? 'Bottle movement & charge history' : 'Site activity'} (
+            {txs.length})
+          </div>
+          {txs.length === 0 ? (
+            <p className="text-sm text-slate-500">
+              No transactions recorded{' '}
+              {isBottles ? 'for these bottles' : 'at this site'} yet.
+            </p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead className="border-b border-slate-300 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:border-slate-700">
+                  <tr>
+                    <th className="py-1 pr-2">Date</th>
+                    <th className="py-1 pr-2">Type</th>
+                    <th className="py-1 pr-2">Bottle</th>
+                    <th className="py-1 pr-2">Equipment</th>
+                    <th className="py-1 pr-2 text-right">Refrig kg</th>
+                    <th className="py-1 pr-2 text-right">Loss kg</th>
+                    <th className="py-1 pr-2">Reason</th>
+                    <th className="py-1">Operator</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {txs.map((t) => (
+                    <AuditTxRow key={t.id} t={t} />
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+
+        <footer className="border-t border-slate-300 pt-3 text-[11px] text-slate-500 dark:border-slate-700">
+          <p>
+            Refrigerant handling records per AS/NZS 5149.4 §6, the AREMA /
+            AIRAH "Code of Practice for the reduction of emissions of
+            fluorocarbon refrigerants" 2018, and AIRAH DA19. Cylinder periodic
+            test dates per AS 2030.
+          </p>
+          {(totalCharged > 0 || totalRecovered > 0) && (
+            <p className="mt-2">
+              Lifetime at this site — charged {totalCharged.toFixed(3)} kg,
+              recovered {totalRecovered.toFixed(3)} kg.
+            </p>
+          )}
+          <p className="mt-2">Generated {generatedAt}.</p>
+          <div className="mt-4 grid grid-cols-2 gap-6 print:mt-8">
+            <SignatureLine label="Technician signature" />
+            <SignatureLine label="Customer signature" />
+          </div>
+        </footer>
+      </div>
+    </Modal>
+  )
+}
+
+function AuditTxRow({ t }: { t: Transaction }) {
+  const { state } = useStore()
+  const bottle = state.bottles.find((b) => b.id === t.bottleId)
+  const unit = t.unitId ? state.units.find((u) => u.id === t.unitId) : undefined
+  const refrigKg = t.kind === 'charge' || t.kind === 'recover' ? t.amount : 0
+  const loss = transactionLoss(t)
+  return (
+    <tr className="border-b border-slate-200 align-top dark:border-slate-800">
+      <td className="py-1 pr-2 whitespace-nowrap">
+        {new Date(t.date).toLocaleDateString('en-AU')}
+      </td>
+      <td className="py-1 pr-2">{transactionLabel(t.kind)}</td>
+      <td className="py-1 pr-2">{bottle ? bottle.bottleNumber : '—'}</td>
+      <td className="py-1 pr-2">{unit?.name ?? t.equipment ?? '—'}</td>
+      <td className="py-1 pr-2 text-right tabular-nums">
+        {refrigKg ? refrigKg.toFixed(3) : ''}
+      </td>
+      <td className="py-1 pr-2 text-right tabular-nums">
+        {loss > 0 ? loss.toFixed(3) : ''}
+      </td>
+      <td className="py-1 pr-2">{t.reason ? REASON_LABELS[t.reason] : ''}</td>
+      <td className="py-1 whitespace-nowrap">
+        {t.technician && <div>{t.technician}</div>}
+        {t.technicianLicence && (
+          <div className="text-[10px] text-slate-500">
+            RHL {t.technicianLicence}
+          </div>
+        )}
       </td>
     </tr>
   )
