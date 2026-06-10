@@ -13,7 +13,6 @@ import { Picker } from '../components/Picker'
 import { useStore } from '../lib/store'
 import {
   type Bottle,
-  type BottlePreset,
   type BottleStatus,
   type TransactionKind,
   type TransactionReason,
@@ -31,7 +30,6 @@ import {
 } from '../lib/types'
 import { RefrigerantSelect } from '../components/RefrigerantSelect'
 import { BottleSelect } from '../components/BottleSelect'
-import { CylinderPresetSelect } from '../components/CylinderPresetSelect'
 import { DateInput } from '../components/DateInput'
 import { SiteForm } from './Sites'
 import { useToast } from '../lib/toast'
@@ -1328,7 +1326,6 @@ function BottleForm({
       wcFromSafeFill(bottle?.initialNetWeight ?? 0, bottle?.refrigerantType),
     ),
   )
-  const [appliedPresetId, setAppliedPresetId] = useState('')
 
   // "Empty" status only makes sense when the bottle actually contains
   // no refrigerant. Reverse of the addTransaction auto-empty behaviour:
@@ -1342,10 +1339,15 @@ function BottleForm({
   // the field — the safe fill (W.C × FR) is recomputed live for the
   // overfill check and on submit.
 
-  const key = bottle?.id ?? 'new'
-  const [lastKey, setLastKey] = useState(key)
-  if (open && lastKey !== key) {
-    setLastKey(key)
+  // Reset the form whenever the modal opens, OR when switching between
+  // two different bottles within a single open lifecycle. The previous
+  // logic keyed only on bottle.id, so adding two new bottles in a row
+  // ('new' → 'new') skipped the reset and the second form still had the
+  // first bottle's values in it.
+  const resetKey = `${open ? 'open' : 'closed'}:${bottle?.id ?? 'new'}`
+  const [lastResetKey, setLastResetKey] = useState(resetKey)
+  if (open && resetKey !== lastResetKey) {
+    setLastResetKey(resetKey)
     setBottleNumber(bottle?.bottleNumber ?? '')
     setRefrigerantType(bottle?.refrigerantType ?? types[0] ?? 'R410A')
     setTareWeight(initialDisplay(bottle?.tareWeight ?? 0))
@@ -1364,9 +1366,11 @@ function BottleForm({
         wcFromSafeFill(bottle?.initialNetWeight ?? 0, bottle?.refrigerantType),
       ),
     )
-    setAppliedPresetId('')
     setLastHydro(bottle?.lastHydroTestDate ?? '')
     setNextHydro(bottle?.nextHydroTestDate ?? '')
+  } else if (!open && lastResetKey !== resetKey) {
+    // Track the closed state too so the next open transition is detected.
+    setLastResetKey(resetKey)
   }
 
   // Reactive snap: if the user is editing weights and the bottle's
@@ -1405,32 +1409,10 @@ function BottleForm({
     })
   }
 
-  function applyPreset(preset: BottlePreset) {
-    setTareWeight(kgToDisplay(preset.tareKg, unit).toFixed(2))
-    // The W.C field holds stamped water capacity. Legacy custom presets
-    // saved only safeFillKg (no WC) — back-derive an approximate WC from
-    // it using the current refrigerant's FR.
-    const wcKg =
-      preset.waterCapacityKg ??
-      (preset.safeFillKg ? preset.safeFillKg / fillingRatio(refrigerantType) : 0)
-    setCapacityWeight(kgToDisplay(wcKg, unit).toFixed(2))
-    setAppliedPresetId(preset.id)
-  }
 
   return (
     <Modal open={open} title={title} onClose={onClose}>
       <form onSubmit={submit} className="space-y-3">
-        <Field
-          label="Cylinder preset"
-          hint="Optional — tap to apply a standard size's tare and safe-fill capacity. Star presets you use often, or add your own."
-        >
-          <CylinderPresetSelect
-            value={appliedPresetId}
-            onApply={applyPreset}
-            refrigerantType={refrigerantType}
-          />
-        </Field>
-
         <Field label="Bottle ID / number" hint="Label or serial of the bottle">
           <TextInput
             required
@@ -1454,10 +1436,7 @@ function BottleForm({
               inputMode="decimal"
               step="0.01"
               value={tareWeight}
-              onChange={(e) => {
-                setTareWeight(e.target.value)
-                setAppliedPresetId('')
-              }}
+              onChange={(e) => setTareWeight(e.target.value)}
               placeholder="e.g. 5.20"
             />
           </Field>
@@ -1525,10 +1504,7 @@ function BottleForm({
             inputMode="decimal"
             step="0.01"
             value={capacityWeight}
-            onChange={(e) => {
-              setCapacityWeight(e.target.value)
-              setAppliedPresetId('')
-            }}
+            onChange={(e) => setCapacityWeight(e.target.value)}
             placeholder={`e.g. ${unit === 'kg' ? '11.10' : '24.47'}`}
           />
         </Field>
@@ -1546,7 +1522,20 @@ function BottleForm({
             <Field label="Last test">
               <DateInput
                 value={lastHydro}
-                onChange={setLastHydro}
+                onChange={(v) => {
+                  setLastHydro(v)
+                  // Auto-fill the 10-year next-test due date when the
+                  // last test is set. AS 2030.5 requires periodic
+                  // inspection every 10 years for steel refrigerant
+                  // recovery cylinders. Don't overwrite a date the tech
+                  // has already typed unless it was the previously
+                  // auto-derived one.
+                  if (!v) return
+                  const auto = plusYearsIso(v, 10)
+                  const prevAuto =
+                    lastHydro && plusYearsIso(lastHydro, 10) === nextHydro
+                  if (!nextHydro || prevAuto) setNextHydro(auto)
+                }}
                 ariaLabel="Last hydro test date"
               />
             </Field>
@@ -1558,6 +1547,10 @@ function BottleForm({
               />
             </Field>
           </div>
+          <p className="mt-2 text-xs text-slate-500">
+            Next test auto-fills to 10 years after the last test (AS
+            2030.5). Edit it if your cylinder has a different stamp.
+          </p>
         </div>
 
         <Field label="Status">
@@ -1679,4 +1672,25 @@ function BottleForm({
 function wcFromSafeFill(safeFillKg: number, refrigerant?: string): number {
   if (!safeFillKg) return 0
   return safeFillKg / fillingRatio(refrigerant)
+}
+
+// Add `years` to an ISO YYYY-MM-DD date string. Handles Feb 29 by
+// rolling forward to Mar 1 in non-leap years. Returns '' for empty
+// input or invalid parses so the caller can no-op safely.
+function plusYearsIso(iso: string, years: number): string {
+  if (!iso) return ''
+  const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+  if (!m) return ''
+  const y = Number(m[1]) + years
+  const mo = Number(m[2])
+  const d = Number(m[3])
+  const date = new Date(y, mo - 1, d)
+  if (date.getMonth() !== mo - 1) {
+    // Feb 29 → Mar 1 in non-leap years.
+    date.setDate(d - 1)
+  }
+  const yyyy = String(date.getFullYear()).padStart(4, '0')
+  const mm = String(date.getMonth() + 1).padStart(2, '0')
+  const dd = String(date.getDate()).padStart(2, '0')
+  return `${yyyy}-${mm}-${dd}`
 }
