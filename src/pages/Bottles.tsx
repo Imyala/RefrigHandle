@@ -13,10 +13,12 @@ import { Picker } from '../components/Picker'
 import { useStore } from '../lib/store'
 import {
   type Bottle,
+  type BottleKind,
   type BottleStatus,
   type TransactionKind,
   type TransactionReason,
   type Unit,
+  BOTTLE_KIND_LABELS,
   REFRIGERANT_TYPES,
   REASON_LABELS,
   fillingRatio,
@@ -197,6 +199,9 @@ export default function Bottles() {
                       <Pill tone={statusTone[b.status]}>
                         {statusLabel(b.status)}
                       </Pill>
+                      {b.bottleKind === 'pump_down' && (
+                        <Pill tone="blue">Pump-down</Pill>
+                      )}
                       {over > 0 && (
                         <Pill tone="amber">Overfill +{formatWeight(over, unit)}</Pill>
                       )}
@@ -1272,6 +1277,9 @@ function BottleForm({
     kg ? kgToDisplay(kg, unit).toFixed(2) : ''
 
   const [bottleNumber, setBottleNumber] = useState(bottle?.bottleNumber ?? '')
+  const [bottleKind, setBottleKind] = useState<BottleKind>(
+    bottle?.bottleKind ?? 'standard',
+  )
   const [refrigerantType, setRefrigerantType] = useState(
     bottle?.refrigerantType ?? types[0] ?? 'R410A',
   )
@@ -1355,6 +1363,7 @@ function BottleForm({
   if (open && resetKey !== lastResetKey) {
     setLastResetKey(resetKey)
     setBottleNumber(bottle?.bottleNumber ?? '')
+    setBottleKind(bottle?.bottleKind ?? 'standard')
     setRefrigerantType(bottle?.refrigerantType ?? types[0] ?? 'R410A')
     setTareWeight(initialDisplay(bottle?.tareWeight ?? 0))
     setGrossWeight(initialDisplay(bottle?.grossWeight ?? 0))
@@ -1403,6 +1412,7 @@ function BottleForm({
         : currentNet
     onSave({
       bottleNumber: bottleNumber.trim(),
+      bottleKind: bottleKind === 'standard' ? undefined : bottleKind,
       refrigerantType,
       tareWeight: tare,
       grossWeight: gross,
@@ -1427,7 +1437,33 @@ function BottleForm({
             placeholder="e.g. B-102"
           />
         </Field>
-        <Field label="Refrigerant type">
+        <Field label="Bottle type">
+          <Picker
+            title="Bottle type"
+            value={bottleKind}
+            onChange={(v) => setBottleKind(v as BottleKind)}
+            options={[
+              {
+                value: 'standard',
+                label: BOTTLE_KIND_LABELS.standard,
+                hint: 'Single-refrigerant cylinder',
+              },
+              {
+                value: 'pump_down',
+                label: BOTTLE_KIND_LABELS.pump_down,
+                hint: 'Holds refrigerant pumped down / recovered from a system',
+              },
+            ]}
+          />
+        </Field>
+        <Field
+          label="Refrigerant type"
+          hint={
+            bottleKind === 'pump_down'
+              ? 'Pick "Unknown" if the recovered gas isn’t identified.'
+              : undefined
+          }
+        >
           <RefrigerantSelect
             required
             value={refrigerantType}

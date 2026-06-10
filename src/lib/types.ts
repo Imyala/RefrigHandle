@@ -40,6 +40,9 @@ export const REFRIGERANT_TYPES = [
   // Naturals
   'R717',
   'R744',
+  // Unknown / unidentified — e.g. a pump-down or recovery bottle holding
+  // mixed or unlabelled refrigerant that hasn't been identified yet.
+  'Unknown',
 ] as const
 
 export type RefrigerantType = (typeof REFRIGERANT_TYPES)[number] | string
@@ -51,6 +54,17 @@ export type BottleStatus =
   | 'returned'
   | 'empty'
 
+// What kind of cylinder this is. A "pump-down" bottle is a dedicated
+// cylinder used to pump down / recover a system's charge (its contents
+// are often mixed or unidentified). Defaults to a standard single-
+// refrigerant cylinder when unset.
+export type BottleKind = 'standard' | 'pump_down'
+
+export const BOTTLE_KIND_LABELS: Record<BottleKind, string> = {
+  standard: 'Standard',
+  pump_down: 'Pump-down',
+}
+
 export interface Bottle {
   id: string
   bottleNumber: string
@@ -59,6 +73,8 @@ export interface Bottle {
   grossWeight: number // current total mass (tare + refrigerant), kg
   initialNetWeight: number // refrigerant mass when first received, kg
   status: BottleStatus
+  // Cylinder kind — defaults to 'standard' when unset (older bottles).
+  bottleKind?: BottleKind
   currentSiteId?: string
   notes?: string
   // AS 2030 cylinder periodic test dates (ISO YYYY-MM-DD). Recovery
