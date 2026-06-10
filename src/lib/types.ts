@@ -753,24 +753,37 @@ export const AU_REGIONS: readonly string[] = [
 // authoritative — but we surface "due soon" / "overdue" so the tech
 // doesn't take a non-compliant cylinder to a job.
 
-export const HYDRO_DUE_SOON_DAYS = 60
-
 export type HydroStatus = 'unknown' | 'ok' | 'due_soon' | 'overdue'
 
 export interface HydroState {
   status: HydroStatus
-  daysUntilDue?: number // negative if overdue
+  // Whole-month delta from "this month" to the due month. Positive =
+  // months remaining; 0 = due this month; negative = months overdue.
+  monthsUntilDue?: number
 }
 
+// Hydro test dates are stored as YYYY-MM (the stamp on the cylinder is
+// month/year only). Legacy YYYY-MM-DD values are also accepted and
+// truncated to YYYY-MM here.
 export function hydroStatusFor(
   b: Bottle,
   nowISO: string = new Date().toISOString(),
 ): HydroState {
-  if (!b.nextHydroTestDate) return { status: 'unknown' }
+  const raw = b.nextHydroTestDate
+  if (!raw) return { status: 'unknown' }
+  const due = raw.slice(0, 7) // "YYYY-MM"
+  const m = due.match(/^(\d{4})-(\d{2})$/)
+  if (!m) return { status: 'unknown' }
+  const dueY = Number(m[1])
+  const dueM = Number(m[2])
   const now = new Date(nowISO)
-  const due = new Date(b.nextHydroTestDate)
-  const diffDays = Math.floor((due.getTime() - now.getTime()) / 86400000)
-  if (diffDays < 0) return { status: 'overdue', daysUntilDue: diffDays }
-  if (diffDays <= HYDRO_DUE_SOON_DAYS) return { status: 'due_soon', daysUntilDue: diffDays }
-  return { status: 'ok', daysUntilDue: diffDays }
+  const curY = now.getFullYear()
+  const curM = now.getMonth() + 1
+  // Whole-month diff: how many months from "now" to "due".
+  // due_soon fires the month BEFORE due (months=1) and the due month
+  // itself (months=0). overdue once we're past the due month.
+  const months = (dueY - curY) * 12 + (dueM - curM)
+  if (months < 0) return { status: 'overdue', monthsUntilDue: months }
+  if (months <= 1) return { status: 'due_soon', monthsUntilDue: months }
+  return { status: 'ok', monthsUntilDue: months }
 }

@@ -38,7 +38,9 @@ export default function Dashboard() {
   const hydroAlerts = bottles
     .map((b) => ({ b, h: hydroStatusFor(b) }))
     .filter((x) => x.h.status === 'overdue' || x.h.status === 'due_soon')
-    .sort((a, b) => (a.h.daysUntilDue ?? 0) - (b.h.daysUntilDue ?? 0))
+    .sort(
+      (a, b) => (a.h.monthsUntilDue ?? 0) - (b.h.monthsUntilDue ?? 0),
+    )
 
   return (
     <div className="space-y-4">
@@ -226,9 +228,13 @@ export default function Dashboard() {
                   <strong>{b.bottleNumber}</strong> · {b.refrigerantType}
                 </span>
                 {h.status === 'overdue' ? (
-                  <Pill tone="red">Overdue {Math.abs(h.daysUntilDue ?? 0)}d</Pill>
+                  <Pill tone="red">
+                    Overdue {pluralMonths(Math.abs(h.monthsUntilDue ?? 0))}
+                  </Pill>
+                ) : h.monthsUntilDue === 0 ? (
+                  <Pill tone="amber">Due this month</Pill>
                 ) : (
-                  <Pill tone="amber">In {h.daysUntilDue}d</Pill>
+                  <Pill tone="amber">Due next month</Pill>
                 )}
               </li>
             ))}
@@ -260,4 +266,8 @@ export default function Dashboard() {
       )}
     </div>
   )
+}
+
+function pluralMonths(n: number): string {
+  return `${n} ${n === 1 ? 'month' : 'months'}`
 }

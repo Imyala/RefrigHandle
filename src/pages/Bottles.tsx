@@ -30,7 +30,7 @@ import {
 } from '../lib/types'
 import { RefrigerantSelect } from '../components/RefrigerantSelect'
 import { BottleSelect } from '../components/BottleSelect'
-import { DateInput } from '../components/DateInput'
+import { MonthInput } from '../components/MonthInput'
 import { SiteForm } from './Sites'
 import { useToast } from '../lib/toast'
 import { useConfirm } from '../lib/confirm'
@@ -207,7 +207,9 @@ export default function Bottles() {
                         if (h.status === 'due_soon')
                           return (
                             <Pill tone="amber">
-                              Hydro in {h.daysUntilDue}d
+                              {h.monthsUntilDue === 0
+                                ? 'Hydro due this month'
+                                : 'Hydro due next month'}
                             </Pill>
                           )
                         return null
@@ -1299,8 +1301,12 @@ function BottleForm({
   )
   const [currentSiteId, setCurrentSiteId] = useState(bottle?.currentSiteId ?? '')
   const [notes, setNotes] = useState(bottle?.notes ?? '')
-  const [lastHydro, setLastHydro] = useState(bottle?.lastHydroTestDate ?? '')
-  const [nextHydro, setNextHydro] = useState(bottle?.nextHydroTestDate ?? '')
+  const [lastHydro, setLastHydro] = useState(
+    toYearMonth(bottle?.lastHydroTestDate ?? ''),
+  )
+  const [nextHydro, setNextHydro] = useState(
+    toYearMonth(bottle?.nextHydroTestDate ?? ''),
+  )
   const [addingSite, setAddingSite] = useState(false)
 
   // "Manual capacity" only matters for bottles received partially used.
@@ -1366,8 +1372,8 @@ function BottleForm({
         wcFromSafeFill(bottle?.initialNetWeight ?? 0, bottle?.refrigerantType),
       ),
     )
-    setLastHydro(bottle?.lastHydroTestDate ?? '')
-    setNextHydro(bottle?.nextHydroTestDate ?? '')
+    setLastHydro(toYearMonth(bottle?.lastHydroTestDate ?? ''))
+    setNextHydro(toYearMonth(bottle?.nextHydroTestDate ?? ''))
   } else if (!open && lastResetKey !== resetKey) {
     // Track the closed state too so the next open transition is detected.
     setLastResetKey(resetKey)
@@ -1514,36 +1520,37 @@ function BottleForm({
             Cylinder test (AS 2030)
           </div>
           <p className="mb-2 text-xs text-slate-500">
-            Optional — copy the dates stamped on the cylinder collar.
-            We'll warn you when the next test is within 60 days or
-            overdue, so you don't take a non-compliant cylinder to a job.
+            Optional — copy the month and year stamped on the cylinder
+            collar. We'll warn you the month before the next test is due
+            (and once it's overdue), so you don't take a non-compliant
+            cylinder to a job.
           </p>
           <div className="grid grid-cols-2 gap-3">
             <Field label="Last test">
-              <DateInput
+              <MonthInput
                 value={lastHydro}
                 onChange={(v) => {
                   setLastHydro(v)
-                  // Auto-fill the 10-year next-test due date when the
+                  // Auto-fill the 10-year next-test due month when the
                   // last test is set. AS 2030.5 requires periodic
                   // inspection every 10 years for steel refrigerant
-                  // recovery cylinders. Don't overwrite a date the tech
+                  // recovery cylinders. Don't overwrite a value the tech
                   // has already typed unless it was the previously
                   // auto-derived one.
                   if (!v) return
-                  const auto = plusYearsIso(v, 10)
+                  const auto = plusYearsYm(v, 10)
                   const prevAuto =
-                    lastHydro && plusYearsIso(lastHydro, 10) === nextHydro
+                    lastHydro && plusYearsYm(lastHydro, 10) === nextHydro
                   if (!nextHydro || prevAuto) setNextHydro(auto)
                 }}
-                ariaLabel="Last hydro test date"
+                ariaLabel="Last hydro test (month and year)"
               />
             </Field>
             <Field label="Next test due">
-              <DateInput
+              <MonthInput
                 value={nextHydro}
                 onChange={setNextHydro}
-                ariaLabel="Next hydro test due date"
+                ariaLabel="Next hydro test due (month and year)"
               />
             </Field>
           </div>
@@ -1674,23 +1681,23 @@ function wcFromSafeFill(safeFillKg: number, refrigerant?: string): number {
   return safeFillKg / fillingRatio(refrigerant)
 }
 
-// Add `years` to an ISO YYYY-MM-DD date string. Handles Feb 29 by
-// rolling forward to Mar 1 in non-leap years. Returns '' for empty
-// input or invalid parses so the caller can no-op safely.
-function plusYearsIso(iso: string, years: number): string {
-  if (!iso) return ''
-  const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+// Truncate a stored cylinder test date to YYYY-MM. Accepts both legacy
+// YYYY-MM-DD values and the current YYYY-MM. Returns '' for anything
+// unrecognised so callers can no-op safely.
+function toYearMonth(s: string): string {
+  if (!s) return ''
+  if (/^\d{4}-\d{2}$/.test(s)) return s
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s.slice(0, 7)
+  return ''
+}
+
+// Add `years` to a YYYY-MM string. Returns '' on bad input so the
+// caller can no-op safely.
+function plusYearsYm(ym: string, years: number): string {
+  if (!ym) return ''
+  const m = ym.match(/^(\d{4})-(\d{2})$/)
   if (!m) return ''
   const y = Number(m[1]) + years
   const mo = Number(m[2])
-  const d = Number(m[3])
-  const date = new Date(y, mo - 1, d)
-  if (date.getMonth() !== mo - 1) {
-    // Feb 29 → Mar 1 in non-leap years.
-    date.setDate(d - 1)
-  }
-  const yyyy = String(date.getFullYear()).padStart(4, '0')
-  const mm = String(date.getMonth() + 1).padStart(2, '0')
-  const dd = String(date.getDate()).padStart(2, '0')
-  return `${yyyy}-${mm}-${dd}`
+  return `${String(y).padStart(4, '0')}-${String(mo).padStart(2, '0')}`
 }
