@@ -100,8 +100,27 @@ export default function Bottles() {
   }, [grouping])
   // Track which groups are EXPANDED (default: none) so the list opens
   // fully collapsed and a long inventory doesn't overwhelm the screen —
-  // the tech taps a heading to reveal that group.
-  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set())
+  // the tech taps a heading to reveal that group. Persisted per browser
+  // tab so anything manually expanded stays open across navigation.
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(() => {
+    try {
+      const saved = sessionStorage.getItem('bottles.expandedGroups')
+      if (saved) return new Set(JSON.parse(saved) as string[])
+    } catch {
+      /* sessionStorage unavailable — start collapsed */
+    }
+    return new Set()
+  })
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(
+        'bottles.expandedGroups',
+        JSON.stringify([...expandedGroups]),
+      )
+    } catch {
+      /* ignore quota / privacy-mode errors */
+    }
+  }, [expandedGroups])
   function toggleGroup(key: string) {
     setExpandedGroups((prev) => {
       const next = new Set(prev)

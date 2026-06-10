@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   Button,
   Card,
@@ -57,7 +57,27 @@ export default function Sites() {
   const [adding, setAdding] = useState(false)
   // Track which region groups are EXPANDED (default: none) so the Sites
   // page opens fully collapsed — tap a region heading to reveal it.
-  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set())
+  // Persisted per browser tab so a manually expanded region stays open
+  // across navigation.
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(() => {
+    try {
+      const saved = sessionStorage.getItem('sites.expandedGroups')
+      if (saved) return new Set(JSON.parse(saved) as string[])
+    } catch {
+      /* sessionStorage unavailable — start collapsed */
+    }
+    return new Set()
+  })
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(
+        'sites.expandedGroups',
+        JSON.stringify([...expandedGroups]),
+      )
+    } catch {
+      /* ignore quota / privacy-mode errors */
+    }
+  }, [expandedGroups])
 
   // Bundle sites under a heading by their `group` label (case-insensitive),
   // sites in the same group sorted by name, groups sorted alphabetically
