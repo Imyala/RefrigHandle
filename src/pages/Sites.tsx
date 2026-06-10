@@ -42,6 +42,42 @@ export default function Sites() {
 
   const [openSite, setOpenSite] = useState<Site | null>(null)
   const [adding, setAdding] = useState(false)
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set())
+
+  // Bundle sites under a heading by their `group` label (case-insensitive),
+  // sites in the same group sorted by name, groups sorted alphabetically
+  // with the "Ungrouped" bucket last.
+  const groups = useMemo(() => {
+    const map = new Map<string, { label: string; sites: Site[] }>()
+    for (const s of sites) {
+      const raw = s.group?.trim() ?? ''
+      const key = raw.toLowerCase()
+      if (!map.has(key)) map.set(key, { label: raw, sites: [] })
+      map.get(key)!.sites.push(s)
+    }
+    const entries = Array.from(map.entries()).map(([key, v]) => ({
+      key,
+      label: v.label,
+      sites: v.sites.slice().sort((a, b) => a.name.localeCompare(b.name)),
+    }))
+    entries.sort((a, b) => {
+      if (a.key === '') return 1
+      if (b.key === '') return -1
+      return a.label.localeCompare(b.label)
+    })
+    return entries
+  }, [sites])
+
+  const hasGroups = groups.some((g) => g.key !== '')
+
+  function toggleGroup(key: string) {
+    setCollapsedGroups((prev) => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
+  }
 
   return (
     <div className="space-y-4">
@@ -58,14 +94,37 @@ export default function Sites() {
           body="A site is anywhere with HVAC/R equipment — a home, business, factory, or shop. Each site can hold multiple units."
           action={<Button onClick={() => setAdding(true)}>+ Add site</Button>}
         />
-      ) : (
+      ) : !hasGroups ? (
         <div className="space-y-2">
-          {sites
-            .slice()
-            .sort((a, b) => a.name.localeCompare(b.name))
-            .map((s) => (
-              <SiteCard key={s.id} site={s} onOpen={() => setOpenSite(s)} />
-            ))}
+          {groups[0].sites.map((s) => (
+            <SiteCard key={s.id} site={s} onOpen={() => setOpenSite(s)} />
+          ))}
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {groups.map((g) => {
+            const collapsed = collapsedGroups.has(g.key)
+            return (
+              <div key={g.key || '__ungrouped__'}>
+                <SectionHeader
+                  title={`${g.label || 'Ungrouped'} (${g.sites.length})`}
+                  open={!collapsed}
+                  onToggle={() => toggleGroup(g.key)}
+                />
+                {!collapsed && (
+                  <div className="space-y-2">
+                    {g.sites.map((s) => (
+                      <SiteCard
+                        key={s.id}
+                        site={s}
+                        onOpen={() => setOpenSite(s)}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+            )
+          })}
         </div>
       )}
 
@@ -244,8 +303,9 @@ function SiteDetail({
             <dl className="space-y-2">
               <DetailRow label="Client" value={site.client} />
               <DetailRow label="Address" value={site.address} />
+              <DetailRow label="Group / area" value={site.group} />
               <DetailRow label="Notes" value={site.notes} italic />
-              {!site.client && !site.address && !site.notes && (
+              {!site.client && !site.address && !site.group && !site.notes && (
                 <div className="text-sm text-slate-500">
                   No details added — tap Edit site to fill in client and address.
                 </div>
@@ -781,10 +841,24 @@ export function SiteForm({
   onClose: () => void
   onSave: (data: Omit<Site, 'id' | 'createdAt'>) => void
 }) {
+  const { state } = useStore()
   const [name, setName] = useState(site?.name ?? '')
   const [client, setClient] = useState(site?.client ?? '')
   const [address, setAddress] = useState(site?.address ?? '')
+  const [group, setGroup] = useState(site?.group ?? '')
   const [notes, setNotes] = useState(site?.notes ?? '')
+
+  // Groups already used on other sites — offered as quick-pick chips so
+  // spelling stays consistent (so "Brisbane" sites all land in one
+  // heading instead of "Brisbane" / "brisbane" / "BNE").
+  const existingGroups = useMemo(() => {
+    const seen = new Map<string, string>()
+    for (const s of state.sites) {
+      const g = s.group?.trim()
+      if (g && !seen.has(g.toLowerCase())) seen.set(g.toLowerCase(), g)
+    }
+    return Array.from(seen.values()).sort((a, b) => a.localeCompare(b))
+  }, [state.sites])
 
   const key = site?.id ?? 'new'
   const [lastKey, setLastKey] = useState(key)
@@ -793,6 +867,7 @@ export function SiteForm({
     setName(site?.name ?? '')
     setClient(site?.client ?? '')
     setAddress(site?.address ?? '')
+    setGroup(site?.group ?? '')
     setNotes(site?.notes ?? '')
   }
 
@@ -802,6 +877,7 @@ export function SiteForm({
       name: name.trim(),
       client: client.trim() || undefined,
       address: address.trim() || undefined,
+      group: group.trim() || undefined,
       notes: notes.trim() || undefined,
     })
   }
@@ -826,6 +902,37 @@ export function SiteForm({
         </Field>
         <Field label="Address">
           <TextInput value={address} onChange={(e) => setAddress(e.target.value)} />
+        </Field>
+        <Field
+          label="Group / area"
+          hint="Sites with the same group are bundled under one heading on the Sites page."
+        >
+          <TextInput
+            value={group}
+            onChange={(e) => setGroup(e.target.value)}
+            placeholder="e.g. Brisbane, North region, Westfield campus"
+          />
+          {existingGroups.length > 0 && (
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {existingGroups.map((g) => {
+                const active = g.toLowerCase() === group.trim().toLowerCase()
+                return (
+                  <button
+                    key={g}
+                    type="button"
+                    onClick={() => setGroup(active ? '' : g)}
+                    className={`rounded-full px-2.5 py-1 text-xs font-medium transition ${
+                      active
+                        ? 'bg-brand-600 text-white'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700'
+                    }`}
+                  >
+                    {g}
+                  </button>
+                )
+              })}
+            </div>
+          )}
         </Field>
         <Field label="Notes">
           <TextArea value={notes} onChange={(e) => setNotes(e.target.value)} />
@@ -1389,6 +1496,7 @@ function SiteAuditModal({
           </div>
           <div className="mt-1 grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
             <Kv label="Site" v={site.name} />
+            {site.group && <Kv label="Group / area" v={site.group} />}
             {site.client && <Kv label="Client" v={site.client} />}
             {site.address && <Kv label="Address" v={site.address} />}
             {!isBottles && (

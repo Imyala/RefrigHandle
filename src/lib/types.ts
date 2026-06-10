@@ -82,6 +82,10 @@ export interface Site {
   name: string
   client?: string
   address?: string
+  // Optional grouping label so sites can be bundled under one heading
+  // on the Sites page (e.g. a city like "Brisbane", a region, or a
+  // client campus). Free text; the Sites list groups case-insensitively.
+  group?: string
   notes?: string
   createdAt: string
 }
