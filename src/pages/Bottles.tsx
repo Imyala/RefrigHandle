@@ -82,19 +82,30 @@ export default function Bottles() {
   const [query, setQuery] = useState('')
 
   // How the list is bundled. Persisted per browser tab like the filter
-  // so it survives navigation. Defaults to grouping by location so a
-  // long list collapses into one heading per site.
+  // Defaults to grouping by location so a long list collapses into one
+  // heading per site. Persisted in localStorage (not sessionStorage) so a
+  // tech's choice sticks across app restarts, not just tab navigation —
+  // and so a fresh install starts on Location as intended. A stale
+  // sessionStorage value from older builds is ignored.
   const [grouping, setGrouping] = useState<'none' | 'location' | 'refrigerant'>(
     () => {
-      const saved = sessionStorage.getItem('bottles.grouping')
-      if (saved === 'none' || saved === 'location' || saved === 'refrigerant') {
-        return saved
+      try {
+        const saved = localStorage.getItem('bottles.grouping')
+        if (saved === 'none' || saved === 'location' || saved === 'refrigerant') {
+          return saved
+        }
+      } catch {
+        /* localStorage unavailable — fall back to default */
       }
       return 'location'
     },
   )
   useEffect(() => {
-    sessionStorage.setItem('bottles.grouping', grouping)
+    try {
+      localStorage.setItem('bottles.grouping', grouping)
+    } catch {
+      /* ignore quota / privacy-mode errors */
+    }
   }, [grouping])
   // Track which groups are EXPANDED (default: none) so the list opens
   // fully collapsed and a long inventory doesn't overwhelm the screen —
