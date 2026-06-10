@@ -167,11 +167,10 @@ export default function Bottles() {
       .filter((b) => filter === 'all' || b.status === filter)
       .filter((b) => {
         if (!q) return true
-        return (
-          b.bottleNumber.toLowerCase().includes(q) ||
-          b.refrigerantType.toLowerCase().includes(q) ||
-          (b.notes ?? '').toLowerCase().includes(q)
-        )
+        // Bottle search is intentionally bottle-number-only — a tech
+        // looking for a cylinder knows its number, and matching against
+        // refrigerant/notes just produced noisy hits.
+        return b.bottleNumber.toLowerCase().includes(q)
       })
       .sort((a, b) => a.bottleNumber.localeCompare(b.bottleNumber))
   }, [bottles, filter, query])
@@ -320,7 +319,7 @@ export default function Bottles() {
         <TextInput
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search by number, type, or notes…"
+          placeholder="Search by Bottle Number"
         />
       )}
 

@@ -60,6 +60,7 @@ export default function Transactions() {
 
   const [adding, setAdding] = useState(false)
   const [filterKind, setFilterKind] = useState<'all' | TransactionKind>('all')
+  const [query, setQuery] = useState('')
   // Replace native prompt() with an in-app Modal so the delete flow
   // looks consistent with the rest of the UI. Tracks the transaction
   // being deleted + the typed reason; null means closed.
@@ -67,17 +68,40 @@ export default function Transactions() {
     null,
   )
 
-  const sorted = useMemo(
-    () =>
+  const sorted = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    return (
       [...transactions]
         // Soft-deleted rows are kept in storage for the audit trail
         // but hidden from the working activity log. Admins can review
         // and restore them from Settings → Deleted transactions.
         .filter((t) => !t.deletedAt)
         .filter((t) => filterKind === 'all' || t.kind === filterKind)
-        .sort((a, b) => b.date.localeCompare(a.date)),
-    [transactions, filterKind],
-  )
+        .filter((t) => {
+          if (!q) return true
+          // Log search spans the bottle, equipment, where it happened,
+          // and the note — everything a tech might remember a job by.
+          const bottle = bottles.find((b) => b.id === t.bottleId)
+          const site = sites.find((j) => j.id === t.siteId)
+          const txUnit = t.unitId
+            ? state.units.find((u) => u.id === t.unitId)
+            : undefined
+          return [
+            bottle?.bottleNumber,
+            txUnit?.name,
+            t.equipment,
+            site?.name,
+            site?.address,
+            t.notes,
+          ]
+            .filter(Boolean)
+            .join(' ')
+            .toLowerCase()
+            .includes(q)
+        })
+        .sort((a, b) => b.date.localeCompare(a.date))
+    )
+  }, [transactions, filterKind, query, bottles, sites, state.units])
 
   return (
     <div className="space-y-3">
@@ -91,6 +115,14 @@ export default function Transactions() {
       </div>
 
       <Alerts />
+
+      {transactions.length > 0 && (
+        <TextInput
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Search by bottle number, unit, address, name, notes"
+        />
+      )}
 
       {transactions.length > 0 && (
         <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">

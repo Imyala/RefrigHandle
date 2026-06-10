@@ -79,12 +79,27 @@ export default function Sites() {
     }
   }, [expandedGroups])
 
+  const [query, setQuery] = useState('')
+
+  // Search matches the site name (its functional location) and address
+  // only — deliberately not client/notes, so a search for a location
+  // code or street returns just the matching sites.
+  const filteredSites = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    if (!q) return sites
+    return sites.filter(
+      (s) =>
+        s.name.toLowerCase().includes(q) ||
+        (s.address ?? '').toLowerCase().includes(q),
+    )
+  }, [sites, query])
+
   // Bundle sites under a heading by their `group` label (case-insensitive),
   // sites in the same group sorted by name, groups sorted alphabetically
   // with the "Ungrouped" bucket last.
   const groups = useMemo(() => {
     const map = new Map<string, { label: string; sites: Site[] }>()
-    for (const s of sites) {
+    for (const s of filteredSites) {
       const raw = s.group?.trim() ?? ''
       const key = raw.toLowerCase()
       if (!map.has(key)) map.set(key, { label: raw, sites: [] })
@@ -101,7 +116,7 @@ export default function Sites() {
       return a.label.localeCompare(b.label)
     })
     return entries
-  }, [sites])
+  }, [filteredSites])
 
   const hasGroups = groups.some((g) => g.key !== '')
 
@@ -123,11 +138,24 @@ export default function Sites() {
         <Button onClick={() => setAdding(true)}>+ Add site</Button>
       </div>
 
+      {sites.length > 0 && (
+        <TextInput
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Search by address or functional location"
+        />
+      )}
+
       {sites.length === 0 ? (
         <EmptyState
           title="No sites yet"
           body="A site is anywhere with HVAC/R equipment — a home, business, factory, or shop. Each site can hold multiple units."
           action={<Button onClick={() => setAdding(true)}>+ Add site</Button>}
+        />
+      ) : filteredSites.length === 0 ? (
+        <EmptyState
+          title="No matches"
+          body="No site matches that address or functional location. Try a different search."
         />
       ) : !hasGroups ? (
         <div className="space-y-2">
