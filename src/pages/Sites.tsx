@@ -17,9 +17,11 @@ import {
   gwpFor,
   leakStatusFor,
   netWeight,
+  statusLabel,
   tonnesCO2eFor,
   transactionLabel,
   transactionLoss,
+  type Bottle,
   type LeakStatus,
   type Site,
   type Transaction,
@@ -186,12 +188,15 @@ function SiteDetail({
     deleteUnit,
     decommissionUnit,
     reactivateUnit,
+    updateBottle,
+    addTransaction,
   } = useStore()
   const toast = useToast()
   const confirm = useConfirm()
 
   const [editing, setEditing] = useState(false)
   const [addingUnit, setAddingUnit] = useState(false)
+  const [addingBottle, setAddingBottle] = useState(false)
   const [editUnit, setEditUnit] = useState<Unit | null>(null)
   const [decommissionTarget, setDecommissionTarget] = useState<Unit | null>(null)
   const [showDecommissioned, setShowDecommissioned] = useState(true)
@@ -268,21 +273,61 @@ function SiteDetail({
             </div>
           </Card>
 
-          {bottlesOnSite.length > 0 && (
-            <div className="rounded-xl bg-amber-50 p-3 text-sm dark:bg-amber-900/20">
-              <div className="font-semibold text-amber-900 dark:text-amber-100">
-                Bottles currently on site
-              </div>
-              <ul className="mt-1 text-amber-900 dark:text-amber-100">
-                {bottlesOnSite.map((b) => (
-                  <li key={b.id}>
-                    {b.bottleNumber} · {b.refrigerantType} ·{' '}
-                    {formatWeight(netWeight(b), state.unit)}
-                  </li>
-                ))}
-              </ul>
+          <div>
+            <div className="mb-2 flex items-center justify-between px-1">
+              <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                Bottles on site ({bottlesOnSite.length})
+              </h3>
+              <Button onClick={() => setAddingBottle(true)}>+ Add bottle</Button>
             </div>
-          )}
+            {bottlesOnSite.length === 0 ? (
+              <Card className="!p-3">
+                <p className="text-sm text-slate-500">
+                  No bottles here yet — add a cylinder so its location and
+                  refrigerant on site are tracked.
+                </p>
+              </Card>
+            ) : (
+              <div className="space-y-2">
+                {bottlesOnSite.map((b) => (
+                  <Card key={b.id} className="!p-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0 flex-1">
+                        <div className="font-semibold text-slate-900 dark:text-slate-100">
+                          {b.bottleNumber}
+                        </div>
+                        <div className="text-sm text-slate-600 dark:text-slate-300">
+                          {b.refrigerantType} ·{' '}
+                          {formatWeight(netWeight(b), state.unit)} ·{' '}
+                          {statusLabel(b.status)}
+                        </div>
+                      </div>
+                      <Button
+                        variant="secondary"
+                        onClick={async () => {
+                          const ok = await confirm({
+                            title: `Remove bottle ${b.bottleNumber}?`,
+                            message:
+                              'It will be unassigned from this site and moved back to In stock. The bottle and its history are kept.',
+                            confirmLabel: 'Remove',
+                          })
+                          if (ok) {
+                            updateBottle(b.id, {
+                              status: 'in_stock',
+                              currentSiteId: undefined,
+                            })
+                            toast.show('Bottle removed from site', 'info')
+                          }
+                        }}
+                      >
+                        Remove
+                      </Button>
+                    </div>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </div>
 
           <div>
             <div className="mb-2 flex items-center justify-between px-1">
@@ -395,6 +440,27 @@ function SiteDetail({
         }}
       />
 
+      <AssignBottleModal
+        open={addingBottle}
+        site={site}
+        onClose={() => setAddingBottle(false)}
+        onAssign={(bottle) => {
+          updateBottle(bottle.id, {
+            status: 'on_site',
+            currentSiteId: site.id,
+          })
+          addTransaction({
+            bottleId: bottle.id,
+            kind: 'transfer',
+            siteId: site.id,
+            amount: 0,
+            date: new Date().toISOString(),
+          })
+          setAddingBottle(false)
+          toast.show('Bottle added to site')
+        }}
+      />
+
       <UnitForm
         open={!!editUnit}
         siteId={site.id}
@@ -426,6 +492,92 @@ function SiteDetail({
         onClose={() => setLogbookUnit(null)}
       />
     </>
+  )
+}
+
+function AssignBottleModal({
+  open,
+  site,
+  onClose,
+  onAssign,
+}: {
+  open: boolean
+  site: Site
+  onClose: () => void
+  onAssign: (bottle: Bottle) => void
+}) {
+  const { state } = useStore()
+
+  // Candidates: any bottle not already on this site and not retired
+  // (empty / returned). A bottle currently on another site can still be
+  // moved here — the hint shows where it is now.
+  const candidates = useMemo(
+    () =>
+      state.bottles
+        .filter(
+          (b) =>
+            b.currentSiteId !== site.id &&
+            b.status !== 'empty' &&
+            b.status !== 'returned',
+        )
+        .sort((a, b) => a.bottleNumber.localeCompare(b.bottleNumber)),
+    [state.bottles, site.id],
+  )
+
+  const siteName = (id?: string) =>
+    state.sites.find((s) => s.id === id)?.name ?? null
+
+  return (
+    <Modal open={open} title="Add bottle to site" onClose={onClose}>
+      {candidates.length === 0 ? (
+        <div className="space-y-3">
+          <p className="text-sm text-slate-500">
+            No bottles available to add. Create a bottle on the Bottles tab
+            first, or free one up from another site.
+          </p>
+          <Button full variant="secondary" onClick={onClose}>
+            Close
+          </Button>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          <p className="text-sm text-slate-500">
+            Pick a cylinder to place at {site.name}. It will be marked “On
+            site” and a move is recorded in the log.
+          </p>
+          <div className="-mx-1 max-h-[60svh] space-y-2 overflow-y-auto px-1">
+            {candidates.map((b) => {
+              const loc = siteName(b.currentSiteId)
+              return (
+                <button
+                  key={b.id}
+                  type="button"
+                  onClick={() => onAssign(b)}
+                  className="flex w-full items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-3 py-3 text-left transition hover:bg-slate-50 active:scale-[0.99] dark:border-slate-700 dark:bg-slate-900 dark:hover:bg-slate-800/70"
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="font-semibold text-slate-900 dark:text-slate-100">
+                      {b.bottleNumber}
+                    </div>
+                    <div className="text-sm text-slate-600 dark:text-slate-300">
+                      {b.refrigerantType} ·{' '}
+                      {formatWeight(netWeight(b), state.unit)} ·{' '}
+                      {loc ? `At ${loc}` : statusLabel(b.status)}
+                    </div>
+                  </div>
+                  <span className="shrink-0 text-sm font-medium text-brand-600 dark:text-brand-300">
+                    Add
+                  </span>
+                </button>
+              )
+            })}
+          </div>
+          <Button full variant="secondary" onClick={onClose}>
+            Cancel
+          </Button>
+        </div>
+      )}
+    </Modal>
   )
 }
 
