@@ -574,6 +574,57 @@ export function transactionLoss(t: Transaction): number {
   return 0
 }
 
+// The kinds that move a bottle between locations. Only these change a
+// bottle's currentSiteId (see the store) — charge/recover/adjust leave
+// the bottle where it is.
+export function isMovement(k: TransactionKind): boolean {
+  return k === 'transfer' || k === 'station' || k === 'return'
+}
+
+// The site a bottle was located at immediately BEFORE the given movement
+// (transfer / station / return) transaction. Movement rows only store the
+// destination, so the origin has to be derived from history: it's the
+// destination of the bottle's previous movement, or undefined when the
+// bottle wasn't on any site then (fresh from stock, or its last move was
+// a return). Pass the full, unsorted transactions array so the original
+// insertion order can break ties between same-timestamp rows.
+export function siteIdBeforeMovement(
+  tx: Transaction,
+  transactions: readonly Transaction[],
+): string | undefined {
+  const moves = transactions
+    .map((t, i) => ({ t, i }))
+    .filter(({ t }) => t.bottleId === tx.bottleId && isMovement(t.kind))
+  // Chronological ascending. The store prepends new rows, so within an
+  // identical timestamp a higher array index means it was added earlier.
+  moves.sort((a, b) => {
+    if (a.t.date !== b.t.date) return a.t.date < b.t.date ? -1 : 1
+    return b.i - a.i
+  })
+  const idx = moves.findIndex((m) => m.t.id === tx.id)
+  if (idx <= 0) return undefined
+  const prev = moves[idx - 1].t
+  if (prev.kind === 'return') return undefined
+  return prev.siteId
+}
+
+// A human-readable "from → to" for a movement transaction, using a
+// caller-supplied site-name resolver. Returns null for non-movement
+// kinds. "Stock" stands in for "not on any site" (in stock / supplier).
+export function movementSummary(
+  tx: Transaction,
+  transactions: readonly Transaction[],
+  siteName: (id: string | undefined) => string | undefined,
+): { from: string; to: string } | null {
+  if (!isMovement(tx.kind)) return null
+  const from = siteName(siteIdBeforeMovement(tx, transactions)) ?? 'Stock'
+  const to =
+    tx.kind === 'return'
+      ? tx.returnDestination?.trim() || 'Stock'
+      : siteName(tx.siteId) ?? 'Stock'
+  return { from, to }
+}
+
 // Global Warming Potential (100-year, AR4 — IPCC Fourth Assessment).
 // AR4 is the GWP basis used by Australia's Ozone Protection and
 // Synthetic Greenhouse Gas Management Act 1989 / Regulations 1995, the

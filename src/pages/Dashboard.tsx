@@ -1,13 +1,19 @@
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Button, Card, Pill } from '../components/ui'
 import { CollapsibleSection } from '../components/CollapsibleSection'
 import { useStore } from '../lib/store'
 import {
+  REASON_LABELS,
   hydroStatusFor,
+  movementSummary,
   netWeight,
   pluralize,
   transactionLabel,
+  transactionLoss,
+  type Transaction,
 } from '../lib/types'
+import { formatDateTime } from '../lib/datetime'
 import { formatWeight, kgToDisplay } from '../lib/units'
 
 export default function Dashboard() {
@@ -173,30 +179,9 @@ export default function Dashboard() {
           </Card>
         ) : (
           <div className="space-y-2">
-            {recent.map((t) => {
-              const bottle = bottles.find((b) => b.id === t.bottleId)
-              const site = sites.find((j) => j.id === t.siteId)
-              return (
-                <Card key={t.id} className="!p-3">
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="min-w-0">
-                      <div className="font-medium text-slate-900 dark:text-slate-100">
-                        {transactionLabel(t.kind)}
-                        {t.amount > 0 && ` · ${formatWeight(t.amount, unit)}`}
-                      </div>
-                      <div className="truncate text-sm text-slate-500">
-                        {bottle?.bottleNumber ?? '?'} ·{' '}
-                        {bottle?.refrigerantType ?? '?'}
-                        {site ? ` · ${site.name}` : ''}
-                      </div>
-                    </div>
-                    <div className="shrink-0 text-xs text-slate-500">
-                      {new Date(t.date).toLocaleDateString()}
-                    </div>
-                  </div>
-                </Card>
-              )
-            })}
+            {recent.map((t) => (
+              <RecentActivityItem key={t.id} t={t} />
+            ))}
           </div>
         )}
       </CollapsibleSection>
@@ -270,4 +255,140 @@ export default function Dashboard() {
 
 function pluralMonths(n: number): string {
   return `${n} ${n === 1 ? 'month' : 'months'}`
+}
+
+// A recent-activity row that expands on tap to show the full detail of a
+// transaction — most importantly the from → to of a transfer, which the
+// one-line summary can't fully convey.
+function RecentActivityItem({ t }: { t: Transaction }) {
+  const { state } = useStore()
+  const { bottles, sites, units, transactions, unit } = state
+  const [open, setOpen] = useState(false)
+
+  const bottle = bottles.find((b) => b.id === t.bottleId)
+  const sourceBottle = t.sourceBottleId
+    ? bottles.find((b) => b.id === t.sourceBottleId)
+    : null
+  const site = sites.find((j) => j.id === t.siteId)
+  const txUnit = units.find((u) => u.id === t.unitId)
+  const move = movementSummary(
+    t,
+    transactions,
+    (id) => sites.find((j) => j.id === id)?.name,
+  )
+  const loss = transactionLoss(t)
+
+  return (
+    <Card className="!p-0">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        className="flex w-full items-center justify-between gap-2 p-3 text-left"
+      >
+        <div className="min-w-0">
+          <div className="font-medium text-slate-900 dark:text-slate-100">
+            {transactionLabel(t.kind)}
+            {t.amount > 0 && ` · ${formatWeight(t.amount, unit)}`}
+          </div>
+          <div className="truncate text-sm text-slate-500">
+            {bottle?.bottleNumber ?? '?'} · {bottle?.refrigerantType ?? '?'}
+            {move ? ` · ${move.from} → ${move.to}` : site ? ` · ${site.name}` : ''}
+          </div>
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          <span className="text-xs text-slate-500">
+            {new Date(t.date).toLocaleDateString()}
+          </span>
+          <svg
+            aria-hidden
+            viewBox="0 0 24 24"
+            className={`h-4 w-4 shrink-0 text-slate-400 transition-transform ${open ? '' : '-rotate-90'}`}
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M6 9l6 6 6-6" />
+          </svg>
+        </div>
+      </button>
+
+      {open && (
+        <dl className="space-y-1.5 border-t border-slate-200 px-3 py-3 text-sm dark:border-slate-800">
+          {move && (
+            <DetailLine label="Movement" value={`${move.from} → ${move.to}`} />
+          )}
+          {sourceBottle && (
+            <DetailLine
+              label="From bottle"
+              value={sourceBottle.bottleNumber}
+            />
+          )}
+          {!move && site && <DetailLine label="Site" value={site.name} />}
+          {(txUnit || t.equipment) && (
+            <DetailLine
+              label="Equipment"
+              value={txUnit?.name ?? t.equipment ?? ''}
+            />
+          )}
+          {t.reason && (
+            <DetailLine label="Reason" value={REASON_LABELS[t.reason]} />
+          )}
+          {t.kind === 'return' && t.returnDestination && (
+            <DetailLine label="Returned to" value={t.returnDestination} />
+          )}
+          {t.amount > 0 && (
+            <DetailLine
+              label="Bottle gross"
+              value={`${kgToDisplay(t.weightBefore, unit).toFixed(2)} → ${formatWeight(t.weightAfter, unit)}`}
+            />
+          )}
+          {loss > 0 && (
+            <DetailLine label="Loss" value={formatWeight(loss, unit)} />
+          )}
+          <DetailLine
+            label="When"
+            value={formatDateTime(t.date, state.location.timezone, state.clock)}
+          />
+          {(t.technician || t.technicianLicence) && (
+            <DetailLine
+              label="Technician"
+              value={[
+                t.technician,
+                t.technicianLicence && `RHL ${t.technicianLicence}`,
+              ]
+                .filter(Boolean)
+                .join(' · ')}
+            />
+          )}
+          {t.notes && <DetailLine label="Notes" value={t.notes} italic />}
+        </dl>
+      )}
+    </Card>
+  )
+}
+
+function DetailLine({
+  label,
+  value,
+  italic,
+}: {
+  label: string
+  value: string
+  italic?: boolean
+}) {
+  return (
+    <div className="flex gap-2">
+      <dt className="w-24 shrink-0 text-xs font-semibold uppercase tracking-wider text-slate-400">
+        {label}
+      </dt>
+      <dd
+        className={`min-w-0 flex-1 text-slate-700 dark:text-slate-300 ${italic ? 'italic text-slate-500' : ''}`}
+      >
+        {value}
+      </dd>
+    </div>
+  )
 }

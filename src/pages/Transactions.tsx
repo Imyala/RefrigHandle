@@ -15,6 +15,7 @@ import {
   type TransactionKind,
   type TransactionReason,
   REASON_LABELS,
+  movementSummary,
   netWeight,
   overfillKg,
   transactionLabel,
@@ -142,6 +143,11 @@ export default function Transactions() {
               : null
             const site = sites.find((j) => j.id === t.siteId)
             const txUnit = state.units.find((u) => u.id === t.unitId)
+            const move = movementSummary(
+              t,
+              transactions,
+              (id) => sites.find((j) => j.id === id)?.name,
+            )
             return (
               <Card key={t.id} className="!p-3">
                 <div className="flex items-start justify-between gap-3">
@@ -160,8 +166,23 @@ export default function Transactions() {
                     <div className="mt-1 text-sm text-slate-700 dark:text-slate-300">
                       {bottle?.bottleNumber ?? '(deleted)'}
                       {sourceBottle && ` ← ${sourceBottle.bottleNumber}`}
-                      {site ? ` · ${site.name}` : ''}
+                      {!move && site ? ` · ${site.name}` : ''}
                     </div>
+                    {move && (
+                      <div className="mt-0.5 flex flex-wrap items-center gap-1 text-sm text-slate-700 dark:text-slate-300">
+                        <span className="text-xs uppercase tracking-wider text-slate-400">
+                          From
+                        </span>
+                        <span className="font-medium">{move.from}</span>
+                        <span aria-hidden className="text-slate-400">
+                          →
+                        </span>
+                        <span className="text-xs uppercase tracking-wider text-slate-400">
+                          to
+                        </span>
+                        <span className="font-medium">{move.to}</span>
+                      </div>
+                    )}
                     {(txUnit || t.equipment || t.reason) && (
                       <div className="text-xs text-slate-500">
                         {txUnit && txUnit.name}
