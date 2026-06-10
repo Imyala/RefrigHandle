@@ -1,11 +1,11 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Button, Card, Pill } from '../components/ui'
+import { Button, Card } from '../components/ui'
 import { CollapsibleSection } from '../components/CollapsibleSection'
+import { Alerts } from '../components/Alerts'
 import { useStore } from '../lib/store'
 import {
   REASON_LABELS,
-  hydroStatusFor,
   movementSummary,
   netWeight,
   pluralize,
@@ -40,13 +40,6 @@ export default function Dashboard() {
 
   const liveTransactions = transactions.filter((t) => !t.deletedAt)
   const recent = liveTransactions.slice(0, 5)
-
-  const hydroAlerts = bottles
-    .map((b) => ({ b, h: hydroStatusFor(b) }))
-    .filter((x) => x.h.status === 'overdue' || x.h.status === 'due_soon')
-    .sort(
-      (a, b) => (a.h.monthsUntilDue ?? 0) - (b.h.monthsUntilDue ?? 0),
-    )
 
   return (
     <div className="space-y-4">
@@ -92,6 +85,8 @@ export default function Dashboard() {
         </div>
       </Card>
 
+      <Alerts />
+
       <div className="grid grid-cols-2 gap-3">
         <Link to="/bottles" className="block">
           <Card className="!p-4 transition active:scale-[0.98]">
@@ -117,7 +112,7 @@ export default function Dashboard() {
 
       <CollapsibleSection
         title="By refrigerant type"
-        storageKey="dashboard.byType"
+        storageKey="dashboard.byType.v2"
       >
         {sortedTypes.length === 0 ? (
           <Card>
@@ -161,7 +156,7 @@ export default function Dashboard() {
 
       <CollapsibleSection
         title="Recent activity"
-        storageKey="dashboard.recent"
+        storageKey="dashboard.recent.v2"
         trailing={
           liveTransactions.length > 5 ? (
             <Link
@@ -186,52 +181,6 @@ export default function Dashboard() {
         )}
       </CollapsibleSection>
 
-      {hydroAlerts.length > 0 && (
-        <Card className="!border-red-300 !bg-red-50 dark:!border-red-900/50 dark:!bg-red-900/20">
-          <div className="flex items-center justify-between gap-2">
-            <div className="text-sm font-semibold text-red-900 dark:text-red-200">
-              Cylinder hydrostatic test (AS 2030)
-            </div>
-            <Link
-              to="/bottles"
-              className="text-xs font-medium text-red-900 hover:underline dark:text-red-200"
-            >
-              View bottles
-            </Link>
-          </div>
-          <p className="mt-1 text-xs text-red-900/80 dark:text-red-100/80">
-            Don't take a non-compliant cylinder to a job — periodic test is
-            mandatory under AS 2030.
-          </p>
-          <ul className="mt-2 space-y-1 text-sm">
-            {hydroAlerts.slice(0, 6).map(({ b, h }) => (
-              <li
-                key={b.id}
-                className="flex items-center justify-between gap-2 text-red-900 dark:text-red-100"
-              >
-                <span>
-                  <strong>{b.bottleNumber}</strong> · {b.refrigerantType}
-                </span>
-                {h.status === 'overdue' ? (
-                  <Pill tone="red">
-                    Overdue {pluralMonths(Math.abs(h.monthsUntilDue ?? 0))}
-                  </Pill>
-                ) : h.monthsUntilDue === 0 ? (
-                  <Pill tone="amber">Due this month</Pill>
-                ) : (
-                  <Pill tone="amber">Due next month</Pill>
-                )}
-              </li>
-            ))}
-            {hydroAlerts.length > 6 && (
-              <li className="text-xs text-red-900/70 dark:text-red-100/70">
-                +{hydroAlerts.length - 6} more
-              </li>
-            )}
-          </ul>
-        </Card>
-      )}
-
       {bottles.length > 0 && sites.length === 0 && (
         <Card className="!border-amber-300 !bg-amber-50 dark:!border-amber-900/50 dark:!bg-amber-900/20">
           <div className="text-sm font-semibold text-amber-900 dark:text-amber-200">
@@ -251,10 +200,6 @@ export default function Dashboard() {
       )}
     </div>
   )
-}
-
-function pluralMonths(n: number): string {
-  return `${n} ${n === 1 ? 'month' : 'months'}`
 }
 
 // A recent-activity row that expands on tap to show the full detail of a

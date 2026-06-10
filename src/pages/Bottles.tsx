@@ -98,9 +98,12 @@ export default function Bottles() {
   useEffect(() => {
     sessionStorage.setItem('bottles.grouping', grouping)
   }, [grouping])
-  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set())
+  // Track which groups are EXPANDED (default: none) so the list opens
+  // fully collapsed and a long inventory doesn't overwhelm the screen —
+  // the tech taps a heading to reveal that group.
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set())
   function toggleGroup(key: string) {
-    setCollapsedGroups((prev) => {
+    setExpandedGroups((prev) => {
       const next = new Set(prev)
       if (next.has(key)) next.delete(key)
       else next.add(key)
@@ -361,16 +364,16 @@ export default function Bottles() {
       ) : groups ? (
         <div className="space-y-3">
           {groups.map((g) => {
-            const isCollapsed = collapsedGroups.has(g.key)
+            const isOpen = expandedGroups.has(g.key)
             return (
               <div key={g.key}>
                 <BottleGroupHeader
                   label={g.label}
                   count={g.rows.length}
-                  open={!isCollapsed}
+                  open={isOpen}
                   onToggle={() => toggleGroup(g.key)}
                 />
-                {!isCollapsed && (
+                {isOpen && (
                   <div className="space-y-2">{g.rows.map(renderBottle)}</div>
                 )}
               </div>

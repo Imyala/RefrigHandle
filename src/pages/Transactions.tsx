@@ -31,6 +31,7 @@ import {
   localDateTimeInput,
 } from '../lib/datetime'
 import { PasswordPromptModal } from '../components/PasswordPromptModal'
+import { Alerts } from '../components/Alerts'
 import type { Technician } from '../lib/types'
 
 const KIND_OPTIONS: readonly PickerOption[] = [
@@ -90,6 +91,8 @@ export default function Transactions() {
           + Log
         </Button>
       </div>
+
+      <Alerts />
 
       {transactions.length > 0 && (
         <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">

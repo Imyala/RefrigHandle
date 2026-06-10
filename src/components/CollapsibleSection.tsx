@@ -18,7 +18,9 @@ interface CollapsibleSectionProps {
 export function CollapsibleSection({
   title,
   trailing,
-  defaultOpen = true,
+  // Collapsed by default so a freshly opened page stays tidy even when
+  // it holds a lot of content — the user expands only what they want.
+  defaultOpen = false,
   storageKey,
   children,
 }: CollapsibleSectionProps) {

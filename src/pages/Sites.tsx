@@ -55,7 +55,9 @@ export default function Sites() {
     [sites, openSiteId],
   )
   const [adding, setAdding] = useState(false)
-  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set())
+  // Track which region groups are EXPANDED (default: none) so the Sites
+  // page opens fully collapsed — tap a region heading to reveal it.
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set())
 
   // Bundle sites under a heading by their `group` label (case-insensitive),
   // sites in the same group sorted by name, groups sorted alphabetically
@@ -84,7 +86,7 @@ export default function Sites() {
   const hasGroups = groups.some((g) => g.key !== '')
 
   function toggleGroup(key: string) {
-    setCollapsedGroups((prev) => {
+    setExpandedGroups((prev) => {
       const next = new Set(prev)
       if (next.has(key)) next.delete(key)
       else next.add(key)
@@ -116,15 +118,15 @@ export default function Sites() {
       ) : (
         <div className="space-y-4">
           {groups.map((g) => {
-            const collapsed = collapsedGroups.has(g.key)
+            const open = expandedGroups.has(g.key)
             return (
               <div key={g.key || '__ungrouped__'}>
                 <SectionHeader
                   title={`${g.label || 'No region'} (${g.sites.length})`}
-                  open={!collapsed}
+                  open={open}
                   onToggle={() => toggleGroup(g.key)}
                 />
-                {!collapsed && (
+                {open && (
                   <div className="space-y-2">
                     {g.sites.map((s) => (
                       <SiteCard
@@ -272,10 +274,10 @@ function SiteDetail({
   const [addingBottle, setAddingBottle] = useState(false)
   const [editUnit, setEditUnit] = useState<Unit | null>(null)
   const [decommissionTarget, setDecommissionTarget] = useState<Unit | null>(null)
-  const [showDecommissioned, setShowDecommissioned] = useState(true)
+  const [showDecommissioned, setShowDecommissioned] = useState(false)
   const [logbookUnit, setLogbookUnit] = useState<Unit | null>(null)
-  const [bottlesOpen, setBottlesOpen] = useState(true)
-  const [unitsOpen, setUnitsOpen] = useState(true)
+  const [bottlesOpen, setBottlesOpen] = useState(false)
+  const [unitsOpen, setUnitsOpen] = useState(false)
   const [auditScope, setAuditScope] = useState<'site' | 'bottles' | null>(null)
 
   const siteId = site?.id ?? ''
