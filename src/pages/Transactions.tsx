@@ -133,7 +133,7 @@ export default function Transactions() {
     <div className="space-y-3">
       <div className="flex items-center justify-between gap-2">
         <h2 className="text-xl font-semibold text-slate-900 dark:text-slate-100">
-          Activity log
+          Refrigerant log
         </h2>
         <Button onClick={() => setAdding(true)} disabled={bottles.length === 0}>
           + Log

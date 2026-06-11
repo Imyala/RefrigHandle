@@ -4,8 +4,8 @@ const tabs = [
   { to: '/', label: 'Home', end: true },
   { to: '/bottles', label: 'Bottles' },
   { to: '/sites', label: 'Sites' },
-  { to: '/transactions', label: 'Log' },
-  { to: '/history', label: 'History' },
+  { to: '/transactions', label: 'Refrigerant' },
+  { to: '/history', label: 'Changes' },
   { to: '/settings', label: 'Settings' },
 ]
 
@@ -41,7 +41,7 @@ export function Layout() {
               to={t.to}
               end={t.end}
               className={({ isActive }) =>
-                `flex items-center justify-center py-4 text-xs font-medium transition sm:text-sm ${
+                `flex items-center justify-center whitespace-nowrap px-0.5 py-4 text-[11px] font-medium leading-tight tracking-tight transition sm:text-sm ${
                   isActive
                     ? 'text-brand-600 dark:text-brand-500'
                     : 'text-slate-500 dark:text-slate-400'

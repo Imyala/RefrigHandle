@@ -22,7 +22,6 @@ import {
   type Transaction,
   type Unit,
   type WeightUnit,
-  movementSummary,
   transactionLabel,
 } from './types'
 import {
@@ -33,7 +32,6 @@ import {
   diffFields,
 } from './audit'
 import { loadState, requestPersistentStorage, saveState, uid } from './storage'
-import { formatWeight } from './units'
 import {
   isSyncConfigured,
   pullState,
@@ -580,36 +578,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         )
       }
 
-      const nextTransactions = [tx, ...s.transactions]
-      const bottleNo = bottle.bottleNumber
-      const isMove = tx.kind === 'transfer' || tx.kind === 'return'
-      const move = isMove
-        ? movementSummary(
-            tx,
-            nextTransactions,
-            (id) => s.sites.find((j) => j.id === id)?.name,
-          )
-        : null
-      const summary = move
-        ? `${transactionLabel(tx.kind)} bottle ${bottleNo}: ${move.from} → ${move.to}`
-        : `${transactionLabel(tx.kind)}${
-            tx.amount > 0 ? ` ${formatWeight(tx.amount, s.unit)}` : ''
-          } · bottle ${bottleNo}`
-
+      // Refrigerant movements live in the transactions array and surface
+      // on the Refrigerant log — they're deliberately NOT mirrored into
+      // the change log, which is reserved for every *other* app action.
       return {
         ...s,
         bottles: nextBottles,
-        transactions: nextTransactions,
-        auditLog: withAudit(s, {
-          // Bottle relocations (transfer / return) read as 'relocate' in
-          // the history; charge / recover / adjust read as 'create' (a
-          // new log entry was recorded).
-          action: isMove ? 'relocate' : 'create',
-          entity: 'transaction',
-          entityId: tx.id,
-          target: bottleNo,
-          summary,
-        }),
+        transactions: [tx, ...s.transactions],
       }
     })
     return result

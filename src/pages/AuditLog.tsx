@@ -90,11 +90,11 @@ export default function AuditLog() {
     <div className="space-y-3">
       <div>
         <h2 className="text-xl font-semibold text-slate-900 dark:text-slate-100">
-          Change history
+          Change log
         </h2>
         <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">
-          Every add, edit, removal, relocation and setting change — who
-          did it and when.
+          Every other app action — bottles, sites, units, technicians and
+          settings. Refrigerant movements live on the Refrigerant log.
         </p>
       </div>
 
@@ -175,7 +175,7 @@ export default function AuditLog() {
       {auditLog.length === 0 ? (
         <EmptyState
           title="No changes recorded yet"
-          body="From now on, anything you add, edit, remove or relocate is logged here automatically."
+          body="From now on, every non-refrigerant action — adding or editing bottles, sites, units, technicians and settings — is logged here automatically."
         />
       ) : rows.length === 0 ? (
         <EmptyState title="No matches for this filter" />
