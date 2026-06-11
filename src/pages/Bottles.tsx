@@ -588,11 +588,32 @@ function BottleActionSheet({
   onLog: (kind: TransactionKind) => void
   onEdit: () => void
 }) {
-  const { state } = useStore()
+  const { state, updateBottle } = useStore()
+  const toast = useToast()
+  // Inline cylinder-test-date editor, revealed by "Update test dates".
+  // Seeded from the bottle and reset whenever the sheet opens or switches
+  // bottles (render-adjustment pattern, no effect needed).
+  const [showTestEdit, setShowTestEdit] = useState(false)
+  const [lastYm, setLastYm] = useState('')
+  const [nextYm, setNextYm] = useState('')
+  const openKey = bottle ? `open:${bottle.id}` : 'closed'
+  const [seenKey, setSeenKey] = useState('')
+  if (openKey !== seenKey) {
+    setSeenKey(openKey)
+    if (bottle) {
+      setShowTestEdit(false)
+      setLastYm(toYearMonth(bottle.lastHydroTestDate ?? ''))
+      setNextYm(toYearMonth(bottle.nextHydroTestDate ?? ''))
+    }
+  }
   if (!bottle) return null
   const unit = state.unit
   const site = state.sites.find((j) => j.id === bottle.currentSiteId)
   const net = netWeight(bottle)
+  const hydro = hydroStatusFor(bottle)
+  const lastTested = formatYearMonth(toYearMonth(bottle.lastHydroTestDate ?? ''))
+  const nextDue = formatYearMonth(toYearMonth(bottle.nextHydroTestDate ?? ''))
+  const sentForRetest = bottle.sentForRetestAt
   const history = state.transactions
     .filter((t) => t.bottleId === bottle.id || t.sourceBottleId === bottle.id)
     .slice(0, 5)
@@ -617,6 +638,141 @@ function BottleActionSheet({
           </div>
           {site && (
             <div className="mt-1 text-sm text-brand-100">{site.name}</div>
+          )}
+        </div>
+
+        {/* Cylinder hydrostatic test (AS 2030): dates, overdue alarm,
+            sent-for-retest flag, and inline date updating. */}
+        <div className="rounded-2xl border border-slate-200 p-3 dark:border-slate-800">
+          <div className="flex items-center justify-between gap-2">
+            <div className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+              Cylinder test (AS 2030)
+            </div>
+            {sentForRetest ? (
+              <Pill tone="blue">Awaiting retest</Pill>
+            ) : hydro.status === 'overdue' ? (
+              <Pill tone="red">Overdue</Pill>
+            ) : hydro.status === 'due_soon' ? (
+              <Pill tone="amber">
+                {hydro.monthsUntilDue === 0 ? 'Due this month' : 'Due next month'}
+              </Pill>
+            ) : hydro.status === 'ok' ? (
+              <Pill tone="green">In date</Pill>
+            ) : (
+              <Pill tone="slate">No date</Pill>
+            )}
+          </div>
+
+          <div className="mt-2 grid grid-cols-2 gap-2 text-sm">
+            <div>
+              <div className="text-xs text-slate-500">Last tested</div>
+              <div className="font-medium text-slate-900 dark:text-slate-100">
+                {lastTested || '—'}
+              </div>
+            </div>
+            <div>
+              <div className="text-xs text-slate-500">Next due</div>
+              <div className="font-medium text-slate-900 dark:text-slate-100">
+                {nextDue || '—'}
+              </div>
+            </div>
+          </div>
+
+          {sentForRetest ? (
+            <div className="mt-2 rounded-xl bg-blue-50 p-2.5 text-xs font-medium text-blue-900 dark:bg-blue-900/20 dark:text-blue-100">
+              Sent for retest on{' '}
+              {formatDateTime(sentForRetest, state.location.timezone, state.clock)}
+              . Enter the new test dates below when it's back.
+            </div>
+          ) : hydro.status === 'overdue' ? (
+            <div className="mt-2 rounded-xl bg-red-50 p-2.5 text-xs font-medium text-red-900 dark:bg-red-900/20 dark:text-red-100">
+              ⛔ Hydrostatic test overdue
+              {hydro.monthsUntilDue != null
+                ? ` by ${Math.abs(hydro.monthsUntilDue)} ${
+                    Math.abs(hydro.monthsUntilDue) === 1 ? 'month' : 'months'
+                  }`
+                : ''}{' '}
+              — don't take this cylinder to a job until it's retested.
+            </div>
+          ) : hydro.status === 'due_soon' ? (
+            <div className="mt-2 rounded-xl bg-amber-50 p-2.5 text-xs font-medium text-amber-900 dark:bg-amber-900/20 dark:text-amber-100">
+              ⚠ Hydrostatic test due{' '}
+              {hydro.monthsUntilDue === 0 ? 'this month' : 'next month'} — plan a
+              retest soon.
+            </div>
+          ) : null}
+
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => {
+                if (sentForRetest) {
+                  updateBottle(bottle.id, { sentForRetestAt: undefined })
+                  toast.show('Retest flag cleared', 'info')
+                } else {
+                  updateBottle(bottle.id, {
+                    sentForRetestAt: new Date().toISOString(),
+                  })
+                  toast.show('Marked as sent for retest')
+                }
+              }}
+            >
+              {sentForRetest ? 'Cancel retest' : 'Sent for retest'}
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => setShowTestEdit((v) => !v)}
+            >
+              {showTestEdit ? 'Cancel' : 'Update test dates'}
+            </Button>
+          </div>
+
+          {showTestEdit && (
+            <div className="mt-3 space-y-2 rounded-xl bg-slate-50 p-3 dark:bg-slate-800/50">
+              <div className="grid grid-cols-2 gap-2">
+                <Field label="Last test">
+                  <MonthInput
+                    value={lastYm}
+                    onChange={(v) => {
+                      setLastYm(v)
+                      // Auto-fill next due 10 years on (AS 2030.5), unless
+                      // the tech already set a custom next date.
+                      if (!v) return
+                      const auto = plusYearsYm(v, 10)
+                      const prevAuto =
+                        lastYm && plusYearsYm(lastYm, 10) === nextYm
+                      if (!nextYm || prevAuto) setNextYm(auto)
+                    }}
+                    ariaLabel="Last hydro test (month and year)"
+                  />
+                </Field>
+                <Field label="Next due">
+                  <MonthInput
+                    value={nextYm}
+                    onChange={setNextYm}
+                    ariaLabel="Next hydro test due (month and year)"
+                  />
+                </Field>
+              </div>
+              <Button
+                type="button"
+                full
+                onClick={() => {
+                  updateBottle(bottle.id, {
+                    lastHydroTestDate: lastYm || undefined,
+                    nextHydroTestDate: nextYm || undefined,
+                    // New dates entered → the retest is done, clear the flag.
+                    sentForRetestAt: undefined,
+                  })
+                  setShowTestEdit(false)
+                  toast.show('Test dates updated')
+                }}
+              >
+                Save test dates
+              </Button>
+            </div>
           )}
         </div>
 
@@ -1901,6 +2057,19 @@ function toYearMonth(s: string): string {
   if (/^\d{4}-\d{2}$/.test(s)) return s
   if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s.slice(0, 7)
   return ''
+}
+
+// Render a stored YYYY-MM (or legacy YYYY-MM-DD) cylinder test date as
+// "Jul 2035" for display. Returns '' for anything unrecognised.
+const MONTH_LABELS_SHORT = [
+  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+]
+function formatYearMonth(s: string): string {
+  const ym = toYearMonth(s)
+  const m = ym.match(/^(\d{4})-(\d{2})$/)
+  if (!m) return ''
+  return `${MONTH_LABELS_SHORT[Number(m[2]) - 1] ?? ''} ${m[1]}`
 }
 
 // Add `years` to a YYYY-MM string. Returns '' on bad input so the

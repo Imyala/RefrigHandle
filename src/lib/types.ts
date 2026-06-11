@@ -82,6 +82,11 @@ export interface Bottle {
   // standard (typically 10 years for refrigerant recovery cylinders).
   lastHydroTestDate?: string
   nextHydroTestDate?: string
+  // Set (to an ISO timestamp) when the cylinder has been sent away for
+  // its periodic hydrostatic retest. While set, the bottle shows
+  // "Awaiting retest" in place of the overdue alarm. Cleared when new
+  // test dates are saved (the retest is done) or the tech cancels it.
+  sentForRetestAt?: string
   createdAt: string
   // Tech name + RHL frozen at the time the bottle was added to the
   // system. Useful when a crew shares a device — anyone glancing at

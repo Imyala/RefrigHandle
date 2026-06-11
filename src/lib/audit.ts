@@ -76,6 +76,7 @@ export const BOTTLE_FIELDS: FieldLabels<Bottle> = {
   notes: 'Notes',
   lastHydroTestDate: 'Last test',
   nextHydroTestDate: 'Next test',
+  sentForRetestAt: 'Retest',
 }
 
 export const SITE_FIELDS: FieldLabels<Site> = {

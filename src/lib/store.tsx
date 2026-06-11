@@ -247,6 +247,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         v ? (s.sites.find((x) => x.id === v)?.name ?? String(v)) : '—'
       const changes = diffFields(before, patch, BOTTLE_FIELDS, {
         currentSiteId: siteName,
+        // Audit the retest flag as a readable state, not a raw timestamp.
+        sentForRetestAt: (v) => (v ? 'Sent for retest' : 'Not sent'),
       })
       // No tracked field changed (e.g. form saved untouched) — don't
       // clutter the history with an empty edit.
