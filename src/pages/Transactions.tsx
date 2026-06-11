@@ -52,6 +52,7 @@ const kindTone: Record<
   transfer: 'blue',
   return: 'slate',
   adjust: 'red',
+  intake: 'green',
 }
 
 export default function Transactions() {
@@ -200,7 +201,7 @@ export default function Transactions() {
 
       {transactions.length > 0 && (
         <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
-          {(['all', 'charge', 'recover', 'transfer', 'return', 'adjust'] as const).map(
+          {(['all', 'intake', 'charge', 'recover', 'transfer', 'return', 'adjust'] as const).map(
             (k) => (
               <button
                 key={k}

@@ -1052,6 +1052,7 @@ function QuickLogModal({
     transfer: 'Transfer bottle to a site',
     return: 'Return bottle to store',
     adjust: 'Manual adjustment',
+    intake: 'Bottle intake',
   }
 
   return (

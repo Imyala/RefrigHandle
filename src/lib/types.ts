@@ -186,6 +186,7 @@ export type TransactionKind =
   | 'transfer' // bottle moved to a site (no weight change)
   | 'return' // bottle returned to stock / supplier
   | 'adjust' // manual correction
+  | 'intake' // a new bottle entered the system, bringing its net charge
 
 export type TransactionReason =
   | 'install'
@@ -629,6 +630,8 @@ export function transactionLabel(k: TransactionKind): string {
       return 'Return'
     case 'adjust':
       return 'Adjust'
+    case 'intake':
+      return 'Intake'
   }
 }
 

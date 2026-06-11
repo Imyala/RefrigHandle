@@ -221,9 +221,33 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         createdByLicence:
           bottle.createdByLicence ?? activeTech?.arcLicenceNumber,
       }
+      // A new bottle brings its net charge into the system, so it also
+      // gets a refrigerant-log entry ('intake') alongside the change-log
+      // entry below — adding a bottle shows up in BOTH logs. weightBefore
+      // is 0: the bottle didn't exist before this moment.
+      const net = Math.max(
+        0,
+        Math.round((bottle.grossWeight - bottle.tareWeight) * 1000) / 1000,
+      )
+      const intake: Transaction = {
+        id: uid(),
+        bottleId: bottle.id,
+        kind: 'intake',
+        amount: net,
+        weightBefore: 0,
+        weightAfter: bottle.grossWeight,
+        date: bottle.createdAt,
+        technician: activeTech?.name ?? (s.technician || undefined),
+        technicianLicence:
+          (activeTech?.arcLicenceNumber || undefined) ??
+          (s.arcLicenceNumber || undefined),
+        businessName: s.businessName || undefined,
+        arcAuthorisationNumber: s.arcAuthorisationNumber || undefined,
+      }
       return {
         ...s,
         bottles: [...s.bottles, bottle],
+        transactions: [intake, ...s.transactions],
         auditLog: withAudit(s, {
           action: 'create',
           entity: 'bottle',
