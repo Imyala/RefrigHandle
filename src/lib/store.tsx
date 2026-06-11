@@ -10,6 +10,7 @@ import {
 } from 'react'
 import {
   type AppState,
+  type AuditEntry,
   type Bottle,
   type BottlePreset,
   type ClockFormat,
@@ -21,8 +22,18 @@ import {
   type Transaction,
   type Unit,
   type WeightUnit,
+  movementSummary,
+  transactionLabel,
 } from './types'
+import {
+  BOTTLE_FIELDS,
+  SITE_FIELDS,
+  TECH_FIELDS,
+  UNIT_FIELDS,
+  diffFields,
+} from './audit'
 import { loadState, requestPersistentStorage, saveState, uid } from './storage'
+import { formatWeight } from './units'
 import {
   isSyncConfigured,
   pullState,
@@ -30,6 +41,27 @@ import {
   subscribeToState,
 } from './sync'
 import { useToast } from './toast'
+
+// Build the next auditLog array with a fresh entry prepended (newest
+// first). Stamps "who" from the active tech profile, falling back to
+// the legacy single-tech identity — same resolution the transaction
+// log uses, so the two records agree on attribution. Pure w.r.t. `s`
+// so it's safe to call inside a setState updater (StrictMode double
+// invocation just discards the first result).
+function withAudit(
+  s: AppState,
+  e: Omit<AuditEntry, 'id' | 'at' | 'by' | 'byLicence'>,
+): AuditEntry[] {
+  const tech = s.technicians.find((x) => x.id === s.activeTechnicianId)
+  const entry: AuditEntry = {
+    ...e,
+    id: uid(),
+    at: new Date().toISOString(),
+    by: tech?.name || s.technician || undefined,
+    byLicence: tech?.arcLicenceNumber || s.arcLicenceNumber || undefined,
+  }
+  return [entry, ...s.auditLog]
+}
 
 interface StoreApi {
   state: AppState
@@ -191,26 +223,73 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         createdByLicence:
           bottle.createdByLicence ?? activeTech?.arcLicenceNumber,
       }
-      return { ...s, bottles: [...s.bottles, bottle] }
+      return {
+        ...s,
+        bottles: [...s.bottles, bottle],
+        auditLog: withAudit(s, {
+          action: 'create',
+          entity: 'bottle',
+          entityId: bottle.id,
+          target: bottle.bottleNumber,
+          summary: `Added bottle ${bottle.bottleNumber} · ${bottle.refrigerantType}`,
+        }),
+      }
     })
     return bottle
   }, [])
 
   const updateBottle: StoreApi['updateBottle'] = useCallback((id, patch) => {
-    setState((s) => ({
-      ...s,
-      bottles: s.bottles.map((b) =>
+    setState((s) => {
+      const before = s.bottles.find((b) => b.id === id)
+      const bottles = s.bottles.map((b) =>
         b.id === id ? { ...b, ...patch, updatedAt: new Date().toISOString() } : b,
-      ),
-    }))
+      )
+      if (!before) return { ...s, bottles }
+      const siteName = (v: unknown) =>
+        v ? (s.sites.find((x) => x.id === v)?.name ?? String(v)) : '—'
+      const changes = diffFields(before, patch, BOTTLE_FIELDS, {
+        currentSiteId: siteName,
+      })
+      // No tracked field changed (e.g. form saved untouched) — don't
+      // clutter the history with an empty edit.
+      if (changes.length === 0) return { ...s, bottles }
+      const relocated =
+        'currentSiteId' in patch && patch.currentSiteId !== before.currentSiteId
+      return {
+        ...s,
+        bottles,
+        auditLog: withAudit(s, {
+          action: relocated ? 'relocate' : 'update',
+          entity: 'bottle',
+          entityId: id,
+          target: before.bottleNumber,
+          summary: relocated
+            ? `Relocated bottle ${before.bottleNumber} to ${siteName(patch.currentSiteId)}`
+            : `Edited bottle ${before.bottleNumber}`,
+          changes,
+        }),
+      }
+    })
   }, [])
 
   const deleteBottle: StoreApi['deleteBottle'] = useCallback((id) => {
-    setState((s) => ({
-      ...s,
-      bottles: s.bottles.filter((b) => b.id !== id),
-      transactions: s.transactions.filter((t) => t.bottleId !== id),
-    }))
+    setState((s) => {
+      const before = s.bottles.find((b) => b.id === id)
+      return {
+        ...s,
+        bottles: s.bottles.filter((b) => b.id !== id),
+        transactions: s.transactions.filter((t) => t.bottleId !== id),
+        auditLog: before
+          ? withAudit(s, {
+              action: 'delete',
+              entity: 'bottle',
+              entityId: id,
+              target: before.bottleNumber,
+              summary: `Removed bottle ${before.bottleNumber} and its log entries`,
+            })
+          : s.auditLog,
+      }
+    })
   }, [])
 
   const addSite: StoreApi['addSite'] = useCallback((s) => {
@@ -219,29 +298,66 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       id: uid(),
       createdAt: new Date().toISOString(),
     }
-    setState((cur) => ({ ...cur, sites: [...cur.sites, site] }))
+    setState((cur) => ({
+      ...cur,
+      sites: [...cur.sites, site],
+      auditLog: withAudit(cur, {
+        action: 'create',
+        entity: 'site',
+        entityId: site.id,
+        target: site.name,
+        summary: `Added site ${site.name}`,
+      }),
+    }))
     return site
   }, [])
 
   const updateSite: StoreApi['updateSite'] = useCallback((id, patch) => {
-    setState((s) => ({
-      ...s,
-      sites: s.sites.map((x) => (x.id === id ? { ...x, ...patch } : x)),
-    }))
+    setState((s) => {
+      const before = s.sites.find((x) => x.id === id)
+      const sites = s.sites.map((x) => (x.id === id ? { ...x, ...patch } : x))
+      if (!before) return { ...s, sites }
+      const changes = diffFields(before, patch, SITE_FIELDS)
+      if (changes.length === 0) return { ...s, sites }
+      return {
+        ...s,
+        sites,
+        auditLog: withAudit(s, {
+          action: 'update',
+          entity: 'site',
+          entityId: id,
+          target: before.name,
+          summary: `Edited site ${before.name}`,
+          changes,
+        }),
+      }
+    })
   }, [])
 
   const deleteSite: StoreApi['deleteSite'] = useCallback((id) => {
-    setState((s) => ({
-      ...s,
-      sites: s.sites.filter((x) => x.id !== id),
-      units: s.units.filter((u) => u.siteId !== id),
-      bottles: s.bottles.map((b) =>
-        b.currentSiteId === id ? { ...b, currentSiteId: undefined } : b,
-      ),
-      transactions: s.transactions.map((t) =>
-        t.siteId === id ? { ...t, siteId: undefined } : t,
-      ),
-    }))
+    setState((s) => {
+      const before = s.sites.find((x) => x.id === id)
+      return {
+        ...s,
+        sites: s.sites.filter((x) => x.id !== id),
+        units: s.units.filter((u) => u.siteId !== id),
+        bottles: s.bottles.map((b) =>
+          b.currentSiteId === id ? { ...b, currentSiteId: undefined } : b,
+        ),
+        transactions: s.transactions.map((t) =>
+          t.siteId === id ? { ...t, siteId: undefined } : t,
+        ),
+        auditLog: before
+          ? withAudit(s, {
+              action: 'delete',
+              entity: 'site',
+              entityId: id,
+              target: before.name,
+              summary: `Removed site ${before.name} — its units were deleted and bottle/log links cleared`,
+            })
+          : s.auditLog,
+      }
+    })
   }, [])
 
   const addUnit: StoreApi['addUnit'] = useCallback((u) => {
@@ -251,60 +367,126 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       status: 'active',
       createdAt: new Date().toISOString(),
     }
-    setState((cur) => ({ ...cur, units: [...cur.units, unit] }))
+    setState((cur) => {
+      const site = cur.sites.find((x) => x.id === unit.siteId)
+      return {
+        ...cur,
+        units: [...cur.units, unit],
+        auditLog: withAudit(cur, {
+          action: 'create',
+          entity: 'unit',
+          entityId: unit.id,
+          target: unit.name,
+          summary: `Added unit ${unit.name}${site ? ` at ${site.name}` : ''}`,
+        }),
+      }
+    })
     return unit
   }, [])
 
   const updateUnit: StoreApi['updateUnit'] = useCallback((id, patch) => {
-    setState((s) => ({
-      ...s,
-      units: s.units.map((u) => (u.id === id ? { ...u, ...patch } : u)),
-    }))
+    setState((s) => {
+      const before = s.units.find((u) => u.id === id)
+      const units = s.units.map((u) => (u.id === id ? { ...u, ...patch } : u))
+      if (!before) return { ...s, units }
+      const changes = diffFields(before, patch, UNIT_FIELDS)
+      if (changes.length === 0) return { ...s, units }
+      return {
+        ...s,
+        units,
+        auditLog: withAudit(s, {
+          action: 'update',
+          entity: 'unit',
+          entityId: id,
+          target: before.name,
+          summary: `Edited unit ${before.name}`,
+          changes,
+        }),
+      }
+    })
   }, [])
 
   const deleteUnit: StoreApi['deleteUnit'] = useCallback((id) => {
-    setState((s) => ({
-      ...s,
-      units: s.units.filter((u) => u.id !== id),
-      transactions: s.transactions.map((t) =>
-        t.unitId === id ? { ...t, unitId: undefined } : t,
-      ),
-    }))
+    setState((s) => {
+      const before = s.units.find((u) => u.id === id)
+      return {
+        ...s,
+        units: s.units.filter((u) => u.id !== id),
+        transactions: s.transactions.map((t) =>
+          t.unitId === id ? { ...t, unitId: undefined } : t,
+        ),
+        auditLog: before
+          ? withAudit(s, {
+              action: 'delete',
+              entity: 'unit',
+              entityId: id,
+              target: before.name,
+              summary: `Removed unit ${before.name}`,
+            })
+          : s.auditLog,
+      }
+    })
   }, [])
 
   const decommissionUnit: StoreApi['decommissionUnit'] = useCallback(
     (id, reason) => {
-      setState((s) => ({
-        ...s,
-        units: s.units.map((u) =>
+      setState((s) => {
+        const before = s.units.find((u) => u.id === id)
+        const units = s.units.map((u) =>
           u.id === id
             ? {
                 ...u,
-                status: 'decommissioned',
+                status: 'decommissioned' as const,
                 decommissionedAt: new Date().toISOString(),
                 decommissionedReason: reason?.trim() || u.decommissionedReason,
               }
             : u,
-        ),
-      }))
+        )
+        if (!before) return { ...s, units }
+        return {
+          ...s,
+          units,
+          auditLog: withAudit(s, {
+            action: 'decommission',
+            entity: 'unit',
+            entityId: id,
+            target: before.name,
+            summary: `Decommissioned unit ${before.name}${
+              reason?.trim() ? ` — ${reason.trim()}` : ''
+            }`,
+          }),
+        }
+      })
     },
     [],
   )
 
   const reactivateUnit: StoreApi['reactivateUnit'] = useCallback((id) => {
-    setState((s) => ({
-      ...s,
-      units: s.units.map((u) =>
+    setState((s) => {
+      const before = s.units.find((u) => u.id === id)
+      const units = s.units.map((u) =>
         u.id === id
           ? {
               ...u,
-              status: 'active',
+              status: 'active' as const,
               decommissionedAt: undefined,
               decommissionedReason: undefined,
             }
           : u,
-      ),
-    }))
+      )
+      if (!before) return { ...s, units }
+      return {
+        ...s,
+        units,
+        auditLog: withAudit(s, {
+          action: 'reactivate',
+          entity: 'unit',
+          entityId: id,
+          target: before.name,
+          summary: `Reactivated unit ${before.name}`,
+        }),
+      }
+    })
   }, [])
 
   const addTransaction: StoreApi['addTransaction'] = useCallback((t) => {
@@ -398,10 +580,36 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         )
       }
 
+      const nextTransactions = [tx, ...s.transactions]
+      const bottleNo = bottle.bottleNumber
+      const isMove = tx.kind === 'transfer' || tx.kind === 'return'
+      const move = isMove
+        ? movementSummary(
+            tx,
+            nextTransactions,
+            (id) => s.sites.find((j) => j.id === id)?.name,
+          )
+        : null
+      const summary = move
+        ? `${transactionLabel(tx.kind)} bottle ${bottleNo}: ${move.from} → ${move.to}`
+        : `${transactionLabel(tx.kind)}${
+            tx.amount > 0 ? ` ${formatWeight(tx.amount, s.unit)}` : ''
+          } · bottle ${bottleNo}`
+
       return {
         ...s,
         bottles: nextBottles,
-        transactions: [tx, ...s.transactions],
+        transactions: nextTransactions,
+        auditLog: withAudit(s, {
+          // Bottle relocations (transfer / return) read as 'relocate' in
+          // the history; charge / recover / adjust read as 'create' (a
+          // new log entry was recorded).
+          action: isMove ? 'relocate' : 'create',
+          entity: 'transaction',
+          entityId: tx.id,
+          target: bottleNo,
+          summary,
+        }),
       }
     })
     return result
@@ -414,6 +622,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           (x) => x.id === s.activeTechnicianId,
         )
         const now = new Date().toISOString()
+        const target = s.transactions.find((t) => t.id === id)
+        const bottleNo =
+          s.bottles.find((b) => b.id === target?.bottleId)?.bottleNumber ??
+          '(deleted bottle)'
         return {
           ...s,
           transactions: s.transactions.map((t) =>
@@ -431,6 +643,17 @@ export function StoreProvider({ children }: { children: ReactNode }) {
                 }
               : t,
           ),
+          auditLog: target
+            ? withAudit(s, {
+                action: 'delete',
+                entity: 'transaction',
+                entityId: id,
+                target: bottleNo,
+                summary: `Deleted ${transactionLabel(target.kind)} log entry for bottle ${bottleNo}${
+                  reason?.trim() ? ` — ${reason.trim()}` : ''
+                }`,
+              })
+            : s.auditLog,
         }
       })
     },
@@ -439,20 +662,35 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const restoreTransaction: StoreApi['restoreTransaction'] = useCallback(
     (id) => {
-      setState((s) => ({
-        ...s,
-        transactions: s.transactions.map((t) =>
-          t.id === id
-            ? {
-                ...t,
-                deletedAt: undefined,
-                deletedBy: undefined,
-                deletedByLicence: undefined,
-                deletedReason: undefined,
-              }
-            : t,
-        ),
-      }))
+      setState((s) => {
+        const target = s.transactions.find((t) => t.id === id)
+        const bottleNo =
+          s.bottles.find((b) => b.id === target?.bottleId)?.bottleNumber ??
+          '(deleted bottle)'
+        return {
+          ...s,
+          transactions: s.transactions.map((t) =>
+            t.id === id
+              ? {
+                  ...t,
+                  deletedAt: undefined,
+                  deletedBy: undefined,
+                  deletedByLicence: undefined,
+                  deletedReason: undefined,
+                }
+              : t,
+          ),
+          auditLog: target
+            ? withAudit(s, {
+                action: 'restore',
+                entity: 'transaction',
+                entityId: id,
+                target: bottleNo,
+                summary: `Restored ${transactionLabel(target.kind)} log entry for bottle ${bottleNo}`,
+              })
+            : s.auditLog,
+        }
+      })
     },
     [],
   )
@@ -471,15 +709,24 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       // First profile added becomes active automatically — saves a tap
       // for single-tech businesses, which is the common case today.
       activeTechnicianId: s.activeTechnicianId ?? tech.id,
+      auditLog: withAudit(s, {
+        action: 'create',
+        entity: 'technician',
+        entityId: tech.id,
+        target: tech.name,
+        summary: `Added technician ${tech.name}${
+          tech.arcLicenceNumber ? ` · RHL ${tech.arcLicenceNumber}` : ''
+        }`,
+      }),
     }))
     return tech
   }, [])
 
   const updateTechnician: StoreApi['updateTechnician'] = useCallback(
     (id, patch) => {
-      setState((s) => ({
-        ...s,
-        technicians: s.technicians.map((t) =>
+      setState((s) => {
+        const before = s.technicians.find((t) => t.id === id)
+        const technicians = s.technicians.map((t) =>
           t.id === id
             ? {
                 ...t,
@@ -490,14 +737,39 @@ export function StoreProvider({ children }: { children: ReactNode }) {
                 ).trim(),
               }
             : t,
-        ),
-      }))
+        )
+        if (!before) return { ...s, technicians }
+        // Diff name/RHL; also note a password being set/cleared without
+        // ever putting the hash itself in the trail.
+        const changes = diffFields(before, patch, TECH_FIELDS)
+        if ('passwordHash' in patch && patch.passwordHash !== before.passwordHash) {
+          changes.push({
+            field: 'Password lock',
+            from: before.passwordHash ? 'Set' : 'None',
+            to: patch.passwordHash ? 'Set' : 'None',
+          })
+        }
+        if (changes.length === 0) return { ...s, technicians }
+        return {
+          ...s,
+          technicians,
+          auditLog: withAudit(s, {
+            action: 'update',
+            entity: 'technician',
+            entityId: id,
+            target: before.name,
+            summary: `Edited technician ${before.name}`,
+            changes,
+          }),
+        }
+      })
     },
     [],
   )
 
   const deleteTechnician: StoreApi['deleteTechnician'] = useCallback((id) => {
     setState((s) => {
+      const before = s.technicians.find((t) => t.id === id)
       const remaining = s.technicians.filter((t) => t.id !== id)
       const nextActive =
         s.activeTechnicianId === id ? remaining[0]?.id : s.activeTechnicianId
@@ -505,6 +777,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         ...s,
         technicians: remaining,
         activeTechnicianId: nextActive,
+        auditLog: before
+          ? withAudit(s, {
+              action: 'delete',
+              entity: 'technician',
+              entityId: id,
+              target: before.name,
+              summary: `Removed technician ${before.name}`,
+            })
+          : s.auditLog,
       }
     })
   }, [])
@@ -514,48 +795,147 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     [],
   )
 
+  // Settings setters share one shape: update a single field, and record
+  // a 'settings' audit entry with a before/after — but only when the
+  // value actually changed, so opening and closing a form doesn't spam
+  // the history.
+  function settingsChange(
+    s: AppState,
+    label: string,
+    from: string,
+    to: string,
+  ): AuditEntry[] {
+    return withAudit(s, {
+      action: 'settings',
+      entity: 'settings',
+      target: label,
+      summary: `${label}: ${from || '—'} → ${to || '—'}`,
+      changes: [{ field: label, from: from || '—', to: to || '—' }],
+    })
+  }
+
   const setTechnician = useCallback(
-    (name: string) => setState((s) => ({ ...s, technician: name })),
+    (name: string) =>
+      setState((s) =>
+        s.technician === name
+          ? s
+          : {
+              ...s,
+              technician: name,
+              auditLog: settingsChange(s, 'Default technician', s.technician, name),
+            },
+      ),
     [],
   )
 
   const setArcLicenceNumber = useCallback(
-    (n: string) => setState((s) => ({ ...s, arcLicenceNumber: n.trim() })),
+    (n: string) =>
+      setState((s) =>
+        s.arcLicenceNumber === n.trim()
+          ? s
+          : {
+              ...s,
+              arcLicenceNumber: n.trim(),
+              auditLog: settingsChange(s, 'RHL licence', s.arcLicenceNumber, n.trim()),
+            },
+      ),
     [],
   )
 
   const setArcAuthorisationNumber = useCallback(
-    (n: string) => setState((s) => ({ ...s, arcAuthorisationNumber: n.trim() })),
+    (n: string) =>
+      setState((s) =>
+        s.arcAuthorisationNumber === n.trim()
+          ? s
+          : {
+              ...s,
+              arcAuthorisationNumber: n.trim(),
+              auditLog: settingsChange(
+                s,
+                'ARC authorisation (RTA)',
+                s.arcAuthorisationNumber,
+                n.trim(),
+              ),
+            },
+      ),
     [],
   )
 
   const setBusinessName = useCallback(
-    (n: string) => setState((s) => ({ ...s, businessName: n.trim() })),
+    (n: string) =>
+      setState((s) =>
+        s.businessName === n.trim()
+          ? s
+          : {
+              ...s,
+              businessName: n.trim(),
+              auditLog: settingsChange(s, 'Business name', s.businessName, n.trim()),
+            },
+      ),
     [],
   )
 
   const setLocation = useCallback(
-    (location: LocationSettings) => setState((s) => ({ ...s, location })),
+    (location: LocationSettings) =>
+      setState((s) => {
+        const fmt = (l: LocationSettings) =>
+          [l.country, l.region, l.city, l.timezone].filter(Boolean).join(', ')
+        const from = fmt(s.location)
+        const to = fmt(location)
+        if (from === to) return { ...s, location }
+        return {
+          ...s,
+          location,
+          auditLog: settingsChange(s, 'Location', from, to),
+        }
+      }),
     [],
   )
 
   const setUnit = useCallback(
-    (unit: WeightUnit) => setState((s) => ({ ...s, unit })),
+    (unit: WeightUnit) =>
+      setState((s) =>
+        s.unit === unit
+          ? s
+          : { ...s, unit, auditLog: settingsChange(s, 'Weight unit', s.unit, unit) },
+      ),
     [],
   )
 
   const setTheme = useCallback(
-    (theme: Theme) => setState((s) => ({ ...s, theme })),
+    (theme: Theme) =>
+      setState((s) =>
+        s.theme === theme
+          ? s
+          : { ...s, theme, auditLog: settingsChange(s, 'Theme', s.theme, theme) },
+      ),
     [],
   )
 
   const setClock = useCallback(
-    (clock: ClockFormat) => setState((s) => ({ ...s, clock })),
+    (clock: ClockFormat) =>
+      setState((s) =>
+        s.clock === clock
+          ? s
+          : {
+              ...s,
+              clock,
+              auditLog: settingsChange(s, 'Clock format', s.clock, clock),
+            },
+      ),
     [],
   )
 
   const setSyncSettings = useCallback(
-    (sync: SyncSettings) => setState((s) => ({ ...s, sync })),
+    (sync: SyncSettings) =>
+      setState((s) => {
+        const fmt = (x: SyncSettings) =>
+          `${x.enabled ? 'on' : 'off'}${x.teamId ? ` · team ${x.teamId}` : ''}`
+        const from = fmt(s.sync)
+        const to = fmt(sync)
+        if (from === to) return { ...s, sync }
+        return { ...s, sync, auditLog: settingsChange(s, 'Cloud sync', from, to) }
+      }),
     [],
   )
 
@@ -565,25 +945,53 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setState((s) =>
       s.customRefrigerants.includes(trimmed)
         ? s
-        : { ...s, customRefrigerants: [...s.customRefrigerants, trimmed] },
+        : {
+            ...s,
+            customRefrigerants: [...s.customRefrigerants, trimmed],
+            auditLog: withAudit(s, {
+              action: 'create',
+              entity: 'refrigerant',
+              target: trimmed,
+              summary: `Added custom refrigerant ${trimmed}`,
+            }),
+          },
     )
   }, [])
 
   const removeCustomRefrigerant = useCallback((name: string) => {
-    setState((s) => ({
-      ...s,
-      customRefrigerants: s.customRefrigerants.filter((r) => r !== name),
-      favoriteRefrigerants: s.favoriteRefrigerants.filter((r) => r !== name),
-    }))
+    setState((s) =>
+      s.customRefrigerants.includes(name)
+        ? {
+            ...s,
+            customRefrigerants: s.customRefrigerants.filter((r) => r !== name),
+            favoriteRefrigerants: s.favoriteRefrigerants.filter((r) => r !== name),
+            auditLog: withAudit(s, {
+              action: 'delete',
+              entity: 'refrigerant',
+              target: name,
+              summary: `Removed custom refrigerant ${name}`,
+            }),
+          }
+        : s,
+    )
   }, [])
 
   const toggleFavoriteRefrigerant = useCallback((name: string) => {
-    setState((s) => ({
-      ...s,
-      favoriteRefrigerants: s.favoriteRefrigerants.includes(name)
-        ? s.favoriteRefrigerants.filter((r) => r !== name)
-        : [...s.favoriteRefrigerants, name],
-    }))
+    setState((s) => {
+      const on = !s.favoriteRefrigerants.includes(name)
+      return {
+        ...s,
+        favoriteRefrigerants: on
+          ? [...s.favoriteRefrigerants, name]
+          : s.favoriteRefrigerants.filter((r) => r !== name),
+        auditLog: withAudit(s, {
+          action: 'settings',
+          entity: 'refrigerant',
+          target: name,
+          summary: `${on ? 'Favourited' : 'Unfavourited'} refrigerant ${name}`,
+        }),
+      }
+    })
   }, [])
 
   const addCustomBottlePreset: StoreApi['addCustomBottlePreset'] = useCallback(
@@ -592,6 +1000,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setState((s) => ({
         ...s,
         customBottlePresets: [...s.customBottlePresets, preset],
+        auditLog: withAudit(s, {
+          action: 'create',
+          entity: 'preset',
+          entityId: preset.id,
+          target: preset.label,
+          summary: `Added bottle preset ${preset.label}`,
+        }),
       }))
       return preset
     },
@@ -599,20 +1014,44 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   )
 
   const removeCustomBottlePreset = useCallback((id: string) => {
-    setState((s) => ({
-      ...s,
-      customBottlePresets: s.customBottlePresets.filter((p) => p.id !== id),
-      favoriteBottlePresets: s.favoriteBottlePresets.filter((x) => x !== id),
-    }))
+    setState((s) => {
+      const before = s.customBottlePresets.find((p) => p.id === id)
+      return {
+        ...s,
+        customBottlePresets: s.customBottlePresets.filter((p) => p.id !== id),
+        favoriteBottlePresets: s.favoriteBottlePresets.filter((x) => x !== id),
+        auditLog: before
+          ? withAudit(s, {
+              action: 'delete',
+              entity: 'preset',
+              entityId: id,
+              target: before.label,
+              summary: `Removed bottle preset ${before.label}`,
+            })
+          : s.auditLog,
+      }
+    })
   }, [])
 
   const toggleFavoriteBottlePreset = useCallback((id: string) => {
-    setState((s) => ({
-      ...s,
-      favoriteBottlePresets: s.favoriteBottlePresets.includes(id)
-        ? s.favoriteBottlePresets.filter((x) => x !== id)
-        : [...s.favoriteBottlePresets, id],
-    }))
+    setState((s) => {
+      const on = !s.favoriteBottlePresets.includes(id)
+      const label =
+        s.customBottlePresets.find((p) => p.id === id)?.label ?? id
+      return {
+        ...s,
+        favoriteBottlePresets: on
+          ? [...s.favoriteBottlePresets, id]
+          : s.favoriteBottlePresets.filter((x) => x !== id),
+        auditLog: withAudit(s, {
+          action: 'settings',
+          entity: 'preset',
+          entityId: id,
+          target: label,
+          summary: `${on ? 'Favourited' : 'Unfavourited'} bottle preset ${label}`,
+        }),
+      }
+    })
   }, [])
 
   const resetAll = useCallback(() => {
@@ -623,6 +1062,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       sites: [],
       units: [],
       transactions: [],
+      // The audit trail deliberately SURVIVES a reset — the record that
+      // a wipe happened (and everything before it) is exactly what an
+      // owner would want to keep. Prepend the reset itself.
+      auditLog: withAudit(s, {
+        action: 'reset',
+        entity: 'data',
+        target: 'All data',
+        summary:
+          'Wiped all bottles, sites, units and transactions (settings and tech roster kept)',
+      }),
       customRefrigerants: [],
       favoriteRefrigerants: [],
       customBottlePresets: [],
@@ -645,7 +1094,20 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     }))
   }, [])
 
-  const importState = useCallback((s: AppState) => setState(s), [])
+  const importState = useCallback((next: AppState) => {
+    // Importing replaces the whole dataset (a restore-from-backup). We
+    // keep the imported file's own history and prepend an 'import' entry
+    // so the join point is visible in the trail.
+    setState(() => ({
+      ...next,
+      auditLog: withAudit(next, {
+        action: 'import',
+        entity: 'data',
+        target: 'All data',
+        summary: 'Imported data from a backup file',
+      }),
+    }))
+  }, [])
 
   const api = useMemo<StoreApi>(
     () => ({

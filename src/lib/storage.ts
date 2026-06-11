@@ -1,6 +1,7 @@
 import {
   EMPTY_STATE,
   type AppState,
+  type AuditEntry,
   type Bottle,
   type Site,
   type Technician,
@@ -41,9 +42,12 @@ interface LegacyState
     | 'clock'
     | 'technicians'
     | 'activeTechnicianId'
+    | 'auditLog'
   > {
   bottles?: LegacyBottle[]
   transactions?: LegacyTransaction[]
+  // Older installs predate the change log — default to empty on load.
+  auditLog?: AuditEntry[]
   sites?: Site[]
   jobs?: Site[]
   locations?: Site[]
@@ -155,6 +159,7 @@ function normalize(parsed: LegacyState): AppState {
     sites,
     units,
     transactions,
+    auditLog: parsed.auditLog ?? [],
     customRefrigerants: parsed.customRefrigerants ?? [],
     favoriteRefrigerants: parsed.favoriteRefrigerants ?? [],
     customBottlePresets: parsed.customBottlePresets ?? [],

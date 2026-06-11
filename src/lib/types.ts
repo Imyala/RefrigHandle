@@ -261,6 +261,63 @@ export interface Transaction {
   deletedReason?: string
 }
 
+// --- Audit / change log ----------------------------------------------
+//
+// Every mutating action in the store appends an AuditEntry, giving the
+// business owner a single history of who changed what and when. This is
+// deliberately separate from the refrigerant activity log
+// (Transactions): that only covers cylinder movements, whereas the
+// audit log covers *everything* — adds, edits, removals, relocations,
+// decommissions, settings changes and bulk import/reset operations.
+
+export type AuditAction =
+  | 'create'
+  | 'update'
+  | 'delete'
+  | 'relocate'
+  | 'restore'
+  | 'decommission'
+  | 'reactivate'
+  | 'settings'
+  | 'reset'
+  | 'import'
+
+export type AuditEntity =
+  | 'bottle'
+  | 'site'
+  | 'unit'
+  | 'transaction'
+  | 'technician'
+  | 'settings'
+  | 'refrigerant'
+  | 'preset'
+  | 'data'
+
+// A single before/after for one field in an update.
+export interface AuditChange {
+  field: string
+  from?: string
+  to?: string
+}
+
+export interface AuditEntry {
+  id: string
+  at: string // ISO timestamp the change happened
+  action: AuditAction
+  entity: AuditEntity
+  entityId?: string
+  // Human label of the affected record (bottle number, site name…).
+  target: string
+  // One-line description of what happened.
+  summary: string
+  // Field-level before/after, populated for update-style actions.
+  changes?: AuditChange[]
+  // Who was in the seat when the change was made (active tech profile,
+  // falling back to legacy single-tech identity). Frozen at the time.
+  by?: string
+  byLicence?: string
+}
+
 export type WeightUnit = 'kg' | 'lb'
 
 export type Theme = 'system' | 'light' | 'dark'
@@ -313,6 +370,10 @@ export interface AppState {
   sites: Site[]
   units: Unit[]
   transactions: Transaction[]
+  // Append-only change history covering every mutation in the app.
+  // Newest entries first (the store prepends). Survives a data reset so
+  // the record of the reset itself is preserved.
+  auditLog: AuditEntry[]
   customRefrigerants: string[]
   favoriteRefrigerants: string[]
   customBottlePresets: BottlePreset[]
@@ -347,6 +408,7 @@ export const EMPTY_STATE: AppState = {
   sites: [],
   units: [],
   transactions: [],
+  auditLog: [],
   customRefrigerants: [],
   favoriteRefrigerants: [],
   customBottlePresets: [],

@@ -8,6 +8,7 @@ import Dashboard from './pages/Dashboard'
 import Bottles from './pages/Bottles'
 import Sites from './pages/Sites'
 import Transactions from './pages/Transactions'
+import AuditLog from './pages/AuditLog'
 import Settings from './pages/Settings'
 
 export default function App() {
@@ -28,6 +29,7 @@ export default function App() {
                 <Route path="/jobs" element={<Navigate to="/sites" replace />} />
                 <Route path="/locations" element={<Navigate to="/sites" replace />} />
                 <Route path="/transactions" element={<Transactions />} />
+                <Route path="/history" element={<AuditLog />} />
                 <Route path="/settings" element={<Settings />} />
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Route>

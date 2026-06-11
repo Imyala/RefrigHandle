@@ -5,6 +5,7 @@ const tabs = [
   { to: '/bottles', label: 'Bottles' },
   { to: '/sites', label: 'Sites' },
   { to: '/transactions', label: 'Log' },
+  { to: '/history', label: 'History' },
   { to: '/settings', label: 'Settings' },
 ]
 
@@ -31,7 +32,7 @@ export function Layout() {
 
       <nav className="fixed bottom-0 left-0 right-0 z-30 border-t border-slate-200 bg-white/95 backdrop-blur dark:border-slate-800 dark:bg-slate-950/95">
         <div
-          className="mx-auto grid max-w-3xl grid-cols-5"
+          className="mx-auto grid max-w-3xl grid-cols-6"
           style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
         >
           {tabs.map((t) => (
@@ -40,7 +41,7 @@ export function Layout() {
               to={t.to}
               end={t.end}
               className={({ isActive }) =>
-                `flex items-center justify-center py-4 text-sm font-medium transition ${
+                `flex items-center justify-center py-4 text-xs font-medium transition sm:text-sm ${
                   isActive
                     ? 'text-brand-600 dark:text-brand-500'
                     : 'text-slate-500 dark:text-slate-400'
