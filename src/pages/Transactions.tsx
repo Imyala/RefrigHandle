@@ -10,6 +10,7 @@ import {
   TextInput,
 } from '../components/ui'
 import { Picker, type PickerOption } from '../components/Picker'
+import { DateInput } from '../components/DateInput'
 import { useStore } from '../lib/store'
 import {
   type TransactionKind,
@@ -61,12 +62,23 @@ export default function Transactions() {
   const [adding, setAdding] = useState(false)
   const [filterKind, setFilterKind] = useState<'all' | TransactionKind>('all')
   const [query, setQuery] = useState('')
+  // Date-range filter (ISO YYYY-MM-DD, inclusive on both ends). Empty
+  // strings mean "open ended" so you can search "everything since March"
+  // or "everything up to a date" as well as a closed window. Kept behind
+  // a toggle so the common case (just typing in the search box) stays
+  // uncluttered. Useful once the log spans years — pick a year+month
+  // range to pull a specific period for an audit.
+  const [showDateRange, setShowDateRange] = useState(false)
+  const [fromDate, setFromDate] = useState('')
+  const [toDate, setToDate] = useState('')
   // Replace native prompt() with an in-app Modal so the delete flow
   // looks consistent with the rest of the UI. Tracks the transaction
   // being deleted + the typed reason; null means closed.
   const [deleting, setDeleting] = useState<{ id: string; reason: string } | null>(
     null,
   )
+
+  const tz = state.location.timezone
 
   const sorted = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -78,9 +90,20 @@ export default function Transactions() {
         .filter((t) => !t.deletedAt)
         .filter((t) => filterKind === 'all' || t.kind === filterKind)
         .filter((t) => {
+          // Date-range gate: compare the transaction's *local* calendar
+          // day (in the configured tz) against the inclusive from/to
+          // bounds. Both bounds are optional so a one-sided range works.
+          if (!fromDate && !toDate) return true
+          const day = localDateTimeInput(new Date(t.date), tz).slice(0, 10)
+          if (fromDate && day < fromDate) return false
+          if (toDate && day > toDate) return false
+          return true
+        })
+        .filter((t) => {
           if (!q) return true
           // Log search spans the bottle, equipment, where it happened,
-          // and the note — everything a tech might remember a job by.
+          // who logged it (name + RHL licence) and the note — everything
+          // a tech might remember a job by.
           const bottle = bottles.find((b) => b.id === t.bottleId)
           const site = sites.find((j) => j.id === t.siteId)
           const txUnit = t.unitId
@@ -92,6 +115,9 @@ export default function Transactions() {
             t.equipment,
             site?.name,
             site?.address,
+            t.technician,
+            t.technicianLicence,
+            t.businessName,
             t.notes,
           ]
             .filter(Boolean)
@@ -101,7 +127,7 @@ export default function Transactions() {
         })
         .sort((a, b) => b.date.localeCompare(a.date))
     )
-  }, [transactions, filterKind, query, bottles, sites, state.units])
+  }, [transactions, filterKind, query, fromDate, toDate, tz, bottles, sites, state.units])
 
   return (
     <div className="space-y-3">
@@ -120,8 +146,56 @@ export default function Transactions() {
         <TextInput
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search by bottle number, unit, address, name, notes"
+          placeholder="Search by bottle number, unit, address, technician, notes"
         />
+      )}
+
+      {transactions.length > 0 && (
+        <div>
+          <button
+            type="button"
+            onClick={() => setShowDateRange((v) => !v)}
+            className="text-sm font-medium text-brand-600 hover:underline"
+            aria-expanded={showDateRange}
+          >
+            {showDateRange ? 'Hide date range' : 'Filter by date range'}
+            {!showDateRange && (fromDate || toDate) ? ' ·' : ''}
+          </button>
+          {showDateRange && (
+            <div className="mt-2 space-y-2 rounded-xl bg-slate-50 p-3 dark:bg-slate-800/50">
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <Field label="From" className="flex-1">
+                  <DateInput
+                    value={fromDate}
+                    onChange={setFromDate}
+                    max={toDate || undefined}
+                    ariaLabel="Filter from date"
+                  />
+                </Field>
+                <Field label="To" className="flex-1">
+                  <DateInput
+                    value={toDate}
+                    onChange={setToDate}
+                    min={fromDate || undefined}
+                    ariaLabel="Filter to date"
+                  />
+                </Field>
+              </div>
+              {(fromDate || toDate) && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFromDate('')
+                    setToDate('')
+                  }}
+                  className="text-xs font-medium text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
+                >
+                  Clear date range
+                </button>
+              )}
+            </div>
+          )}
+        </div>
       )}
 
       {transactions.length > 0 && (

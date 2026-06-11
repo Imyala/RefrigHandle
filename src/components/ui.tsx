@@ -39,13 +39,15 @@ export function Field({
   label,
   hint,
   children,
+  className = '',
 }: {
   label: string
   hint?: string
   children: ReactNode
+  className?: string
 }) {
   return (
-    <label className="flex flex-col gap-1.5">
+    <label className={`flex flex-col gap-1.5 ${className}`}>
       <span className="text-sm font-medium text-slate-700 dark:text-slate-200">
         {label}
       </span>
