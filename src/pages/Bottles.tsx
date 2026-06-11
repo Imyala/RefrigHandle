@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useLocation } from 'react-router-dom'
 import {
   Button,
   Card,
@@ -151,6 +152,23 @@ export default function Bottles() {
     [bottles, sheetBottleId],
   )
   const [logKind, setLogKind] = useState<TransactionKind | null>(null)
+
+  // Deep-link target: the compliance alert panel (Home / Log) navigates
+  // here with `{ focusBottle: id }` in history state to open a specific
+  // cylinder. We key off location.key — which is unique per navigation —
+  // so tapping the same alert twice reopens the sheet, and an unrelated
+  // state change on this page doesn't retrigger it. Adjusting state
+  // during render (the React-blessed pattern) avoids a setState-in-effect.
+  const location = useLocation()
+  const focusBottleId = (location.state as { focusBottle?: string } | null)
+    ?.focusBottle
+  const [handledFocusKey, setHandledFocusKey] = useState<string | null>(null)
+  if (focusBottleId && location.key !== handledFocusKey) {
+    setHandledFocusKey(location.key)
+    if (bottles.some((b) => b.id === focusBottleId)) {
+      setSheetBottleId(focusBottleId)
+    }
+  }
 
   const allTypes = useMemo(
     () =>

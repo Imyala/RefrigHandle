@@ -37,22 +37,29 @@ export function Alerts() {
       </p>
       <ul className="mt-2 space-y-1 text-sm">
         {hydroAlerts.slice(0, 6).map(({ b, h }) => (
-          <li
-            key={b.id}
-            className="flex items-center justify-between gap-2 text-red-900 dark:text-red-100"
-          >
-            <span>
-              <strong>{b.bottleNumber}</strong> · {b.refrigerantType}
-            </span>
-            {h.status === 'overdue' ? (
-              <Pill tone="red">
-                Overdue {pluralMonths(Math.abs(h.monthsUntilDue ?? 0))}
-              </Pill>
-            ) : h.monthsUntilDue === 0 ? (
-              <Pill tone="amber">Due this month</Pill>
-            ) : (
-              <Pill tone="amber">Due next month</Pill>
-            )}
+          <li key={b.id}>
+            {/* Tap a row to jump straight to that cylinder — the Bottles
+                page reads the focus id from navigation state and opens
+                the bottle's action sheet. Works from both Home and Log
+                since this panel is shared. */}
+            <Link
+              to="/bottles"
+              state={{ focusBottle: b.id }}
+              className="-mx-1 flex items-center justify-between gap-2 rounded-lg px-1 py-1 text-red-900 transition hover:bg-red-100/70 dark:text-red-100 dark:hover:bg-red-900/30"
+            >
+              <span>
+                <strong>{b.bottleNumber}</strong> · {b.refrigerantType}
+              </span>
+              {h.status === 'overdue' ? (
+                <Pill tone="red">
+                  Overdue {pluralMonths(Math.abs(h.monthsUntilDue ?? 0))}
+                </Pill>
+              ) : h.monthsUntilDue === 0 ? (
+                <Pill tone="amber">Due this month</Pill>
+              ) : (
+                <Pill tone="amber">Due next month</Pill>
+              )}
+            </Link>
           </li>
         ))}
         {hydroAlerts.length > 6 && (
