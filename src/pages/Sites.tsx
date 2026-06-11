@@ -80,11 +80,27 @@ export default function Sites() {
   }, [expandedGroups])
 
   const [query, setQuery] = useState('')
+  // Active state filter ('all' or a state code). Persisted like the
+  // Bottles filter so it survives navigation.
+  const [stateFilter, setStateFilter] = useState<string>(() => {
+    try {
+      return localStorage.getItem('sites.stateFilter') ?? 'all'
+    } catch {
+      return 'all'
+    }
+  })
+  useEffect(() => {
+    try {
+      localStorage.setItem('sites.stateFilter', stateFilter)
+    } catch {
+      /* ignore */
+    }
+  }, [stateFilter])
 
-  // Search matches the site name (its functional location) and address
+  // Search matches the site's functional location (name) and address
   // only — deliberately not client/notes, so a search for a location
   // code or street returns just the matching sites.
-  const filteredSites = useMemo(() => {
+  const searched = useMemo(() => {
     const q = query.trim().toLowerCase()
     if (!q) return sites
     return sites.filter(
@@ -94,13 +110,46 @@ export default function Sites() {
     )
   }, [sites, query])
 
-  // Bundle sites under a heading by their `group` label (case-insensitive),
-  // sites in the same group sorted by name, groups sorted alphabetically
-  // with the "Ungrouped" bucket last.
+  // State chips: every state present among the searched sites, ordered
+  // with the business's home state (Settings → location) first, then the
+  // rest in the standard AU order, then anything non-standard.
+  const homeState = state.location.region.trim().toUpperCase()
+  const stateChips = useMemo(() => {
+    const counts = new Map<string, number>()
+    for (const s of searched) {
+      const st = s.state?.trim()
+      if (st) counts.set(st, (counts.get(st) ?? 0) + 1)
+    }
+    const present = Array.from(counts.keys())
+    present.sort((a, b) => {
+      if (a.toUpperCase() === homeState) return -1
+      if (b.toUpperCase() === homeState) return 1
+      const ia = AU_REGIONS.indexOf(a as (typeof AU_REGIONS)[number])
+      const ib = AU_REGIONS.indexOf(b as (typeof AU_REGIONS)[number])
+      if (ia !== -1 && ib !== -1) return ia - ib
+      if (ia !== -1) return -1
+      if (ib !== -1) return 1
+      return a.localeCompare(b)
+    })
+    return present.map((st) => ({ state: st, count: counts.get(st) ?? 0 }))
+  }, [searched, homeState])
+
+  // Apply the state filter on top of the search.
+  const filteredSites = useMemo(
+    () =>
+      stateFilter === 'all'
+        ? searched
+        : searched.filter((s) => s.state === stateFilter),
+    [searched, stateFilter],
+  )
+
+  // Bundle the filtered sites under a Town/City heading. Sites in the same
+  // city are sorted by name; cities are sorted alphabetically with the
+  // "No town/city" bucket last.
   const groups = useMemo(() => {
     const map = new Map<string, { label: string; sites: Site[] }>()
     for (const s of filteredSites) {
-      const raw = s.group?.trim() ?? ''
+      const raw = s.city?.trim() ?? ''
       const key = raw.toLowerCase()
       if (!map.has(key)) map.set(key, { label: raw, sites: [] })
       map.get(key)!.sites.push(s)
@@ -146,16 +195,49 @@ export default function Sites() {
         />
       )}
 
+      {stateChips.length > 0 && (
+        <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
+          <button
+            onClick={() => setStateFilter('all')}
+            className={`shrink-0 rounded-full px-3 py-1.5 text-sm font-medium transition ${
+              stateFilter === 'all'
+                ? 'bg-brand-600 text-white'
+                : 'bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-200'
+            }`}
+          >
+            All · {searched.length}
+          </button>
+          {stateChips.map(({ state: st, count }) => (
+            <button
+              key={st}
+              onClick={() => setStateFilter(st)}
+              className={`shrink-0 rounded-full px-3 py-1.5 text-sm font-medium transition ${
+                stateFilter === st
+                  ? 'bg-brand-600 text-white'
+                  : 'bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-200'
+              }`}
+            >
+              {st} · {count}
+            </button>
+          ))}
+        </div>
+      )}
+
       {sites.length === 0 ? (
         <EmptyState
           title="No sites yet"
           body="A site is anywhere with HVAC/R equipment — a home, business, factory, or shop. Each site can hold multiple units."
           action={<Button onClick={() => setAdding(true)}>+ Add site</Button>}
         />
-      ) : filteredSites.length === 0 ? (
+      ) : searched.length === 0 ? (
         <EmptyState
           title="No matches"
           body="No site matches that address or functional location. Try a different search."
+        />
+      ) : filteredSites.length === 0 ? (
+        <EmptyState
+          title={`No sites in ${stateFilter}`}
+          body="No site matches that state and search. Pick another state or tap All."
         />
       ) : !hasGroups ? (
         <div className="space-y-2">
@@ -170,7 +252,7 @@ export default function Sites() {
             return (
               <div key={g.key || '__ungrouped__'}>
                 <SectionHeader
-                  title={`${g.label || 'No region'} (${g.sites.length})`}
+                  title={`${g.label || 'No town/city'} (${g.sites.length})`}
                   open={open}
                   onToggle={() => toggleGroup(g.key)}
                 />
@@ -237,6 +319,11 @@ function SiteCard({ site, onOpen }: { site: Site; onOpen: () => void }) {
             )}
             {site.address && (
               <div className="truncate text-xs text-slate-500">{site.address}</div>
+            )}
+            {(site.city || site.state) && (
+              <div className="truncate text-xs text-slate-500">
+                {[site.city, site.state].filter(Boolean).join(', ')}
+              </div>
             )}
           </div>
           <span className="shrink-0 text-slate-400" aria-hidden>
@@ -364,15 +451,20 @@ function SiteDetail({
         <div className="space-y-4">
           <Card className="!p-3">
             <dl className="space-y-2">
-              <DetailRow label="Client" value={site.client} />
+              <DetailRow label="Client / owner" value={site.client} />
               <DetailRow label="Address" value={site.address} />
-              <DetailRow label="Region" value={site.group} />
+              <DetailRow label="Town / city" value={site.city} />
+              <DetailRow label="State" value={site.state} />
               <DetailRow label="Notes" value={site.notes} italic />
-              {!site.client && !site.address && !site.group && !site.notes && (
-                <div className="text-sm text-slate-500">
-                  No details added — tap Edit site to fill in client and address.
-                </div>
-              )}
+              {!site.client &&
+                !site.address &&
+                !site.city &&
+                !site.state &&
+                !site.notes && (
+                  <div className="text-sm text-slate-500">
+                    No details added — tap Edit site to fill in client and address.
+                  </div>
+                )}
             </dl>
             <div className="mt-3 flex flex-wrap gap-2">
               <Button variant="secondary" onClick={() => setEditing(true)}>
@@ -930,11 +1022,33 @@ export function SiteForm({
   onClose: () => void
   onSave: (data: Omit<Site, 'id' | 'createdAt'>) => void
 }) {
+  const { state } = useStore()
+
+  // Company names available from Settings to auto-fill Client / owner
+  // when the site is the user's own facility. Only the business name is a
+  // name (the ARC authorisation is a number, not a name); if more get
+  // added later this picks them up automatically.
+  const companyOptions = useMemo(() => {
+    const names = [state.businessName]
+      .map((s) => (s ?? '').trim())
+      .filter(Boolean)
+    return Array.from(new Set(names))
+  }, [state.businessName])
+
   const [name, setName] = useState(site?.name ?? '')
   const [client, setClient] = useState(site?.client ?? '')
   const [address, setAddress] = useState(site?.address ?? '')
-  const [group, setGroup] = useState(site?.group ?? '')
+  const [stateVal, setStateVal] = useState(site?.state ?? '')
+  const [city, setCity] = useState(site?.city ?? '')
   const [notes, setNotes] = useState(site?.notes ?? '')
+  const [ownerIsUs, setOwnerIsUs] = useState(
+    !!site?.client && companyOptions.includes(site.client),
+  )
+  const [ownerName, setOwnerName] = useState(
+    site?.client && companyOptions.includes(site.client)
+      ? site.client
+      : companyOptions[0] ?? '',
+  )
 
   // Reset on every open transition (and when the edited site changes),
   // so adding a second site doesn't inherit the first one's values.
@@ -947,20 +1061,34 @@ export function SiteForm({
     setName(site?.name ?? '')
     setClient(site?.client ?? '')
     setAddress(site?.address ?? '')
-    setGroup(site?.group ?? '')
+    setStateVal(site?.state ?? '')
+    setCity(site?.city ?? '')
     setNotes(site?.notes ?? '')
+    setOwnerIsUs(!!site?.client && companyOptions.includes(site.client))
+    setOwnerName(
+      site?.client && companyOptions.includes(site.client)
+        ? site.client
+        : companyOptions[0] ?? '',
+    )
   } else if (!open && lastResetKey !== resetKey) {
     // Track the closed state too so the next open transition is detected.
     setLastResetKey(resetKey)
   }
 
+  const resolvedClient = ownerIsUs
+    ? companyOptions.length > 1
+      ? ownerName
+      : companyOptions[0]
+    : client.trim() || undefined
+
   function submit(e: React.FormEvent) {
     e.preventDefault()
     onSave({
       name: name.trim(),
-      client: client.trim() || undefined,
+      client: resolvedClient || undefined,
       address: address.trim() || undefined,
-      group: group.trim() || undefined,
+      state: stateVal.trim() || undefined,
+      city: city.trim() || undefined,
       notes: notes.trim() || undefined,
     })
   }
@@ -969,28 +1097,65 @@ export function SiteForm({
     <Modal open={open} title={title} onClose={onClose}>
       <form onSubmit={submit} className="space-y-3">
         <Field
-          label="Region"
-          hint="Sites in the same region are grouped under one heading on the Sites page."
+          label="State"
+          hint="Used by the state filter at the top of the Sites page."
         >
-          <GroupField key={resetKey} value={group} onChange={setGroup} />
+          <StateField
+            value={stateVal}
+            onChange={(v) => {
+              setStateVal(v)
+              setCity('')
+            }}
+          />
         </Field>
-        <Field label="Site name">
+        <Field label="Town / city">
+          <CityField key={resetKey} stateCode={stateVal} value={city} onChange={setCity} />
+        </Field>
+        <Field label="Functional location">
           <TextInput
             required
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="e.g. 12 High St, Westfield Mall, Acme Cold Store"
-          />
-        </Field>
-        <Field label="Client / owner">
-          <TextInput
-            value={client}
-            onChange={(e) => setClient(e.target.value)}
-            placeholder="e.g. Mr & Mrs Smith / Acme Foods Ltd"
+            placeholder="e.g. BN-ASAC-ATSC"
           />
         </Field>
         <Field label="Address">
-          <TextInput value={address} onChange={(e) => setAddress(e.target.value)} />
+          <TextInput
+            value={address}
+            onChange={(e) => setAddress(e.target.value)}
+            placeholder="e.g. 197 Airport Drive"
+          />
+        </Field>
+        <Field label="Client / owner">
+          {companyOptions.length > 0 && (
+            <label className="mb-1.5 flex items-center gap-2 text-sm text-slate-700 dark:text-slate-200">
+              <input
+                type="checkbox"
+                className="h-4 w-4 accent-brand-600"
+                checked={ownerIsUs}
+                onChange={(e) => setOwnerIsUs(e.target.checked)}
+              />
+              Our own facility — use our company name
+            </label>
+          )}
+          {ownerIsUs ? (
+            companyOptions.length > 1 ? (
+              <Picker
+                title="Our company"
+                value={ownerName}
+                onChange={setOwnerName}
+                options={companyOptions.map((n) => ({ value: n, label: n }))}
+              />
+            ) : (
+              <TextInput value={companyOptions[0]} disabled />
+            )
+          ) : (
+            <TextInput
+              value={client}
+              onChange={(e) => setClient(e.target.value)}
+              placeholder="e.g. Mr & Mrs Smith / Acme Foods Ltd"
+            />
+          )}
         </Field>
         <Field label="Notes">
           <TextArea value={notes} onChange={(e) => setNotes(e.target.value)} />
@@ -1003,13 +1168,9 @@ export function SiteForm({
   )
 }
 
-// Region picker for sites. Offers the curated city list (grouped by
-// state for Australia) plus any regions already used on other sites,
-// and an "Other — type my own" option (kept at the top) that reveals a
-// free-text box — so a tech can pick Brisbane from the list or type
-// anything they like. Mounted with key={resetKey} by the form so the
-// manual-entry mode resets cleanly between sites.
-function GroupField({
+// State / territory picker for sites. AU states for Australia (or no
+// country set); falls back to free text for other countries.
+function StateField({
   value,
   onChange,
 }: {
@@ -1018,14 +1179,55 @@ function GroupField({
 }) {
   const { state } = useStore()
   const country = state.location.country
-  // Explicit "typing my own" mode. Needed because picking Other leaves
-  // the value empty until the user types, and an empty value alone can't
-  // tell "No region" apart from "Other, mid-typing".
+
+  if (country && country !== 'Australia') {
+    return (
+      <TextInput
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder="State / region / province"
+      />
+    )
+  }
+
+  return (
+    <Picker
+      title="State"
+      value={value}
+      onChange={onChange}
+      emptyLabel="No state"
+      placeholder="— pick a state —"
+      options={AU_REGIONS.map((r) => ({ value: r, label: r }))}
+    />
+  )
+}
+
+// Town / city picker. Offers the curated list for the chosen state (AU)
+// or country, plus an "Other — type my own" option that reveals a free-
+// text box. Mounted with key={resetKey} by the form so the manual-entry
+// mode resets cleanly between sites.
+function CityField({
+  stateCode,
+  value,
+  onChange,
+}: {
+  stateCode: string
+  value: string
+  onChange: (v: string) => void
+}) {
+  const { state } = useStore()
+  const country = state.location.country
   const [manual, setManual] = useState(false)
 
   const cityOptions = useMemo<PickerOption[]>(() => {
-    // AU-first: fall back to Australian cities when no country is set.
     if (country === 'Australia' || country === '') {
+      // Cities for the picked state; if none picked yet, offer all.
+      if (stateCode && AU_CITIES_BY_REGION[stateCode]) {
+        return AU_CITIES_BY_REGION[stateCode].map((c) => ({
+          value: c,
+          label: c,
+        }))
+      }
       const opts: PickerOption[] = []
       for (const region of AU_REGIONS) {
         for (const city of AU_CITIES_BY_REGION[region] ?? []) {
@@ -1039,40 +1241,20 @@ function GroupField({
       label: c,
       group: country,
     }))
-  }, [country])
-
-  // Regions already used on other sites that aren't already curated
-  // cities — so custom buckets like "North region" stay pickable.
-  const customGroupOptions = useMemo<PickerOption[]>(() => {
-    const cityVals = new Set(cityOptions.map((o) => o.value.toLowerCase()))
-    const seen = new Map<string, string>()
-    for (const s of state.sites) {
-      const g = s.group?.trim()
-      if (g && !cityVals.has(g.toLowerCase()) && !seen.has(g.toLowerCase())) {
-        seen.set(g.toLowerCase(), g)
-      }
-    }
-    return Array.from(seen.values())
-      .sort((a, b) => a.localeCompare(b))
-      .map((g) => ({ value: g, label: g, group: 'Your regions' }))
-  }, [state.sites, cityOptions])
+  }, [country, stateCode])
 
   const options = useMemo<PickerOption[]>(
     () => [
-      // Kept first so manual entry is reachable without scrolling.
       { value: CITY_OTHER_VALUE, label: 'Other — type my own' },
-      ...customGroupOptions,
       ...cityOptions,
     ],
-    [customGroupOptions, cityOptions],
+    [cityOptions],
   )
 
   const known = useMemo(
     () =>
       new Set(
-        options
-          .filter((o) => o.value !== CITY_OTHER_VALUE)
-          .map((o) => o.value),
+        options.filter((o) => o.value !== CITY_OTHER_VALUE).map((o) => o.value),
       ),
     [options],
   )
@@ -1082,33 +1264,22 @@ function GroupField({
   const showManual = manual || isCustom
   const pickerValue = showManual ? CITY_OTHER_VALUE : trimmed
 
-  // No curated cities and no existing regions — plain text entry.
-  if (cityOptions.length === 0 && customGroupOptions.length === 0) {
-    return (
-      <TextInput
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder="e.g. Brisbane, North region, Westfield campus"
-      />
-    )
-  }
-
   return (
     <div className="space-y-2">
       <Picker
-        title="Region"
+        title="Town / city"
         value={pickerValue}
         onChange={(v) => {
           if (v === CITY_OTHER_VALUE) {
             setManual(true)
-            // Start the box empty when coming from a known list entry.
             if (known.has(trimmed)) onChange('')
             return
           }
           setManual(false)
           onChange(v)
         }}
-        emptyLabel="No region"
+        emptyLabel="No town/city"
+        placeholder="— pick a town / city —"
         options={options}
       />
       {showManual && (
@@ -1116,8 +1287,8 @@ function GroupField({
           autoFocus
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          placeholder="Type a region / area name"
-          aria-label="Custom region name"
+          placeholder="Type a town / city name"
+          aria-label="Custom town / city name"
         />
       )}
     </div>

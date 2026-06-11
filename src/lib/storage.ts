@@ -98,6 +98,19 @@ function normalize(parsed: LegacyState): AppState {
     }
   })
 
+  // Sites: migrate the legacy free-text `group` label into `city`, which
+  // is the new grouping dimension on the Sites page. Preserves the
+  // existing headings (e.g. "BN", "RK") without the user re-entering them.
+  const sites: Site[] = (parsed.sites ?? parsed.jobs ?? parsed.locations ?? []).map(
+    (s) => {
+      const next = s as Site
+      if (!next.city && !next.state && next.group) {
+        return { ...next, city: next.group }
+      }
+      return next
+    },
+  )
+
   const units = (parsed.units ?? []).map((u) => {
     const legacyKind = (u as { kind?: string }).kind
     let kind = legacyKind
@@ -139,7 +152,7 @@ function normalize(parsed: LegacyState): AppState {
     ...EMPTY_STATE,
     ...parsed,
     bottles,
-    sites: parsed.sites ?? parsed.jobs ?? parsed.locations ?? [],
+    sites,
     units,
     transactions,
     customRefrigerants: parsed.customRefrigerants ?? [],

@@ -94,12 +94,20 @@ export interface Bottle {
 
 export interface Site {
   id: string
+  // The site's identifier — its functional location (e.g. an FLOC code
+  // like "BN-ASAC-ATSC"). Shown everywhere a site is referenced.
   name: string
   client?: string
   address?: string
-  // Optional grouping label so sites can be bundled under one heading
-  // on the Sites page (e.g. a city like "Brisbane", a region, or a
-  // client campus). Free text; the Sites list groups case-insensitively.
+  // State/territory the site is in (NSW, QLD, ...). Drives the Sites
+  // page state filter bar.
+  state?: string
+  // Town / city within the state. Drives the collapsible grouping on
+  // the Sites page.
+  city?: string
+  // Legacy free-text grouping label (pre state/city). Migrated into
+  // `city` on load and no longer written by the form, but kept on the
+  // type so old exports import cleanly.
   group?: string
   notes?: string
   createdAt: string
