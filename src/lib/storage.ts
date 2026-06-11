@@ -152,6 +152,24 @@ function normalize(parsed: LegacyState): AppState {
     activeTechnicianId = technicians[0]?.id
   }
 
+  // Grandfather existing installs past the first-run onboarding gate.
+  // A saved blob that carries any real data or business/compliance
+  // identity belongs to someone who has already used the app, so we
+  // stamp setupCompletedAt (if it isn't already set) rather than locking
+  // them behind the setup screen after an upgrade. Only a genuinely
+  // pristine install (no data, no identity) is left unstamped.
+  const hasPriorUse =
+    bottles.length > 0 ||
+    sites.length > 0 ||
+    units.length > 0 ||
+    transactions.length > 0 ||
+    technicians.length > 0 ||
+    (parsed.auditLog?.length ?? 0) > 0 ||
+    (parsed.businessName ?? '').trim() !== '' ||
+    (parsed.arcAuthorisationNumber ?? '').trim() !== ''
+  const setupCompletedAt =
+    parsed.setupCompletedAt ?? (hasPriorUse ? new Date().toISOString() : undefined)
+
   return {
     ...EMPTY_STATE,
     ...parsed,
@@ -190,6 +208,7 @@ function normalize(parsed: LegacyState): AppState {
       enabled: parsed.sync?.enabled ?? false,
       teamId: parsed.sync?.teamId ?? '',
     },
+    setupCompletedAt,
   }
 }
 

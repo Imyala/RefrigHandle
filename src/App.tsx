@@ -1,5 +1,6 @@
 import { HashRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { Layout } from './components/Layout'
+import { OnboardingGate } from './components/Onboarding'
 import { StoreProvider } from './lib/store'
 import { ToastProvider } from './lib/toast'
 import { ConfirmProvider } from './lib/confirm'
@@ -20,21 +21,23 @@ export default function App() {
       <ConfirmProvider>
         <StoreProvider>
           <ThemeApplier />
-          <HashRouter>
-            <Routes>
-              <Route element={<Layout />}>
-                <Route index element={<Dashboard />} />
-                <Route path="/bottles" element={<Bottles />} />
-                <Route path="/sites" element={<Sites />} />
-                <Route path="/jobs" element={<Navigate to="/sites" replace />} />
-                <Route path="/locations" element={<Navigate to="/sites" replace />} />
-                <Route path="/transactions" element={<Transactions />} />
-                <Route path="/history" element={<AuditLog />} />
-                <Route path="/settings" element={<Settings />} />
-                <Route path="*" element={<Navigate to="/" replace />} />
-              </Route>
-            </Routes>
-          </HashRouter>
+          <OnboardingGate>
+            <HashRouter>
+              <Routes>
+                <Route element={<Layout />}>
+                  <Route index element={<Dashboard />} />
+                  <Route path="/bottles" element={<Bottles />} />
+                  <Route path="/sites" element={<Sites />} />
+                  <Route path="/jobs" element={<Navigate to="/sites" replace />} />
+                  <Route path="/locations" element={<Navigate to="/sites" replace />} />
+                  <Route path="/transactions" element={<Transactions />} />
+                  <Route path="/history" element={<AuditLog />} />
+                  <Route path="/settings" element={<Settings />} />
+                  <Route path="*" element={<Navigate to="/" replace />} />
+                </Route>
+              </Routes>
+            </HashRouter>
+          </OnboardingGate>
         </StoreProvider>
       </ConfirmProvider>
     </ToastProvider>

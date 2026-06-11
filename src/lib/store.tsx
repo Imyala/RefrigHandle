@@ -92,6 +92,15 @@ interface StoreApi {
   updateTechnician: (id: string, patch: Partial<Technician>) => void
   deleteTechnician: (id: string) => void
   setActiveTechnicianId: (id: string | undefined) => void
+  // first-run onboarding — writes business identity, ARC RTA, the first
+  // technician and location together, then stamps setupCompletedAt so
+  // the onboarding gate stands down.
+  completeSetup: (data: {
+    businessName: string
+    arcAuthorisationNumber: string
+    technician: { name: string; arcLicenceNumber: string }
+    location: LocationSettings
+  }) => void
   // settings
   setTechnician: (name: string) => void
   setArcLicenceNumber: (n: string) => void
@@ -796,6 +805,56 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     [],
   )
 
+  const completeSetup: StoreApi['completeSetup'] = useCallback((data) => {
+    setState((s) => {
+      const now = new Date().toISOString()
+      const tech: Technician = {
+        id: uid(),
+        name: data.technician.name.trim(),
+        arcLicenceNumber: data.technician.arcLicenceNumber.trim(),
+        createdAt: now,
+      }
+      // Build the audit entries by hand: withAudit() would attribute
+      // them to the *previous* active tech (none, on a fresh install).
+      // The tech we're creating right now is the one in the seat, so we
+      // stamp the trail with them.
+      const by = tech.name || undefined
+      const byLicence = tech.arcLicenceNumber || undefined
+      const mk = (
+        e: Omit<AuditEntry, 'id' | 'at' | 'by' | 'byLicence'>,
+      ): AuditEntry => ({ ...e, id: uid(), at: now, by, byLicence })
+      const entries: AuditEntry[] = [
+        mk({
+          action: 'settings',
+          entity: 'settings',
+          target: 'First-time setup',
+          summary: `Completed first-time setup for ${
+            data.businessName.trim() || '(unnamed business)'
+          }`,
+        }),
+        mk({
+          action: 'create',
+          entity: 'technician',
+          entityId: tech.id,
+          target: tech.name,
+          summary: `Added technician ${tech.name}${
+            tech.arcLicenceNumber ? ` · RHL ${tech.arcLicenceNumber}` : ''
+          }`,
+        }),
+      ]
+      return {
+        ...s,
+        businessName: data.businessName.trim(),
+        arcAuthorisationNumber: data.arcAuthorisationNumber.trim(),
+        location: data.location,
+        technicians: [...s.technicians, tech],
+        activeTechnicianId: s.activeTechnicianId ?? tech.id,
+        setupCompletedAt: now,
+        auditLog: [...entries, ...s.auditLog],
+      }
+    })
+  }, [])
+
   // Settings setters share one shape: update a single field, and record
   // a 'settings' audit entry with a before/after — but only when the
   // value actually changed, so opening and closing a form doesn't spam
@@ -1092,6 +1151,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       theme: s.theme,
       clock: s.clock,
       sync: s.sync,
+      // A data wipe is not a "never used before" — keep the user past
+      // the onboarding gate so erasing data doesn't restart setup.
+      setupCompletedAt: s.setupCompletedAt,
     }))
   }, [])
 
@@ -1101,6 +1163,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     // so the join point is visible in the trail.
     setState(() => ({
       ...next,
+      // Import is only reachable from inside the app (past the gate). An
+      // older backup may predate setupCompletedAt — stamp it so a restore
+      // doesn't bounce the user back into onboarding.
+      setupCompletedAt: next.setupCompletedAt ?? new Date().toISOString(),
       auditLog: withAudit(next, {
         action: 'import',
         entity: 'data',
@@ -1131,6 +1197,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       updateTechnician,
       deleteTechnician,
       setActiveTechnicianId,
+      completeSetup,
       setTechnician,
       setArcLicenceNumber,
       setArcAuthorisationNumber,
@@ -1169,6 +1236,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       updateTechnician,
       deleteTechnician,
       setActiveTechnicianId,
+      completeSetup,
       setTechnician,
       setArcLicenceNumber,
       setArcAuthorisationNumber,

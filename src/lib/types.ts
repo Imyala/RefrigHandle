@@ -407,6 +407,12 @@ export interface AppState {
   theme: Theme
   clock: ClockFormat
   sync: SyncSettings
+  // ISO timestamp set once the one-time first-run setup is finished
+  // (business identity, ARC RTA, first technician and location all
+  // entered). Until this is set, the app shows the onboarding gate and
+  // blocks everything else. Existing installs are grandfathered in
+  // `normalize()` so an upgrade never locks a returning user out.
+  setupCompletedAt?: string
 }
 
 export const EMPTY_STATE: AppState = {
@@ -430,6 +436,26 @@ export const EMPTY_STATE: AppState = {
   theme: 'light',
   clock: '24h',
   sync: { enabled: false, teamId: '' },
+  setupCompletedAt: undefined,
+}
+
+// Location is "complete enough" for onboarding when we know the
+// country, city and timezone. Region (state/territory) is only forced
+// for Australia, where it's a clean dropdown and the Sites page leans
+// on it; elsewhere it's free-text and optional.
+export function isLocationComplete(l: LocationSettings): boolean {
+  const hasCore =
+    !!l.country.trim() && !!l.city.trim() && !!l.timezone.trim()
+  if (!hasCore) return false
+  return l.country !== 'Australia' || !!l.region.trim()
+}
+
+// True once the one-time first-run setup is done. We key off the
+// explicit setupCompletedAt flag rather than re-deriving from the
+// fields so that a later edit clearing, say, the business name can't
+// silently re-trigger onboarding for an established install.
+export function isSetupComplete(s: AppState): boolean {
+  return !!s.setupCompletedAt
 }
 
 // Returns the refrigerant list with favourites first (alphabetical),
