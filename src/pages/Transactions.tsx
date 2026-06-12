@@ -21,6 +21,7 @@ import {
   movementSummary,
   netWeight,
   overfillKg,
+  scaleDeltaKg,
   transactionLabel,
   transactionLoss,
 } from '../lib/types'
@@ -35,6 +36,12 @@ import {
 } from '../lib/datetime'
 import { PasswordPromptModal } from '../components/PasswordPromptModal'
 import { Alerts } from '../components/Alerts'
+import { ScanButton } from '../components/ScanButton'
+import {
+  EntryModeToggle,
+  ScaleReadingField,
+  type EntryMode,
+} from '../components/ScaleEntry'
 import type { Technician } from '../lib/types'
 
 const KIND_OPTIONS: readonly PickerOption[] = [
@@ -540,6 +547,32 @@ function TransactionForm({
   const { bottles, sites, unit } = state
   const tz = state.location.timezone
   const clock = state.clock
+  const toast = useToast()
+
+  // One pass over the live log for the two "repeat yourself less"
+  // defaults: the bottle used most recently (pre-picked on open) and
+  // the most recent job with a site (offered as a one-tap prefill).
+  const { lastJob, lastBottleId } = useMemo(() => {
+    let job: Transaction | null = null
+    let last: Transaction | null = null
+    for (const t of state.transactions) {
+      if (t.deletedAt) continue
+      if (!last || t.date > last.date) last = t
+      if (
+        t.siteId &&
+        (t.kind === 'charge' || t.kind === 'recover' || t.kind === 'transfer')
+      ) {
+        if (!job || t.date > job.date) job = t
+      }
+    }
+    return {
+      lastJob: job,
+      lastBottleId:
+        last && bottles.some((b) => b.id === last!.bottleId)
+          ? last.bottleId
+          : undefined,
+    }
+  }, [state.transactions, bottles])
 
   const [bottleId, setBottleId] = useState(bottles[0]?.id ?? '')
   const [siteId, setSiteId] = useState('')
@@ -548,6 +581,10 @@ function TransactionForm({
   const [amount, setAmount] = useState('')
   const [bottleAmount, setBottleAmount] = useState('')
   const [showLoss, setShowLoss] = useState(false)
+  // 'amount' = type the kg moved; 'scale' = type the bottle's new gross
+  // weight off the scale and the app derives the amount.
+  const [entryMode, setEntryMode] = useState<EntryMode>('amount')
+  const [newGross, setNewGross] = useState('')
   const [date, setDate] = useState(() => localDateTimeInput(new Date(), tz))
   // Tech selection: profile id, or '__other__' for free-text fallback.
   // Defaults to the active profile so single-tech crews don't have to
@@ -582,8 +619,8 @@ function TransactionForm({
     setLastOpen(true)
     // In correction mode, pin to the corrected entry's bottle and default
     // to a signed manual adjustment (the usual shape of a fix); otherwise
-    // start fresh on the first bottle with a charge.
-    setBottleId(correcting?.bottleId ?? bottles[0]?.id ?? '')
+    // start on the most recently used bottle (falling back to the first).
+    setBottleId(correcting?.bottleId ?? lastBottleId ?? bottles[0]?.id ?? '')
     setSiteId('')
     setUnitId('')
     setKind(correcting ? 'adjust' : 'charge')
@@ -591,6 +628,8 @@ function TransactionForm({
     setAmount('')
     setBottleAmount('')
     setShowLoss(false)
+    setEntryMode('amount')
+    setNewGross('')
     setDate(localDateTimeInput(new Date(), tz))
     setTechId(
       state.activeTechnicianId ??
@@ -614,15 +653,33 @@ function TransactionForm({
   const enteredAmount = parseFloat(amount) || 0
   const amountKg = displayToKg(enteredAmount, unit)
   const enteredBottle = parseFloat(bottleAmount) || 0
+  // Scale mode (charge / recover / adjust): the typed reading is the
+  // bottle's new gross weight; the moved amount is derived from it. For
+  // charge/recover the derived delta is the bottle side, and any gap to
+  // the equipment amount is recorded as loss automatically. For adjust
+  // the signed delta IS the adjustment (stocktake weigh-in).
+  const scaleKinds =
+    kind === 'charge' || kind === 'recover' || kind === 'adjust'
+  const scaleMode = entryMode === 'scale' && scaleKinds && !!bottle
+  const scaleReadingKg = displayToKg(parseFloat(newGross) || 0, unit)
+  const scaleDelta =
+    scaleMode && bottle ? scaleDeltaKg(kind, bottle.grossWeight, scaleReadingKg) : 0
+  const scaleInvalid =
+    scaleMode && (newGross === '' || (kind !== 'adjust' && scaleDelta <= 0))
   const bottleAmountKg =
-    showLoss && enteredBottle > 0 ? displayToKg(enteredBottle, unit) : amountKg
-  const lossKg = showLoss
-    ? kind === 'charge'
-      ? Math.max(0, bottleAmountKg - amountKg)
-      : kind === 'recover'
-        ? Math.max(0, amountKg - bottleAmountKg)
-        : 0
-    : 0
+    scaleMode && kind !== 'adjust'
+      ? Math.max(0, scaleDelta)
+      : showLoss && enteredBottle > 0
+        ? displayToKg(enteredBottle, unit)
+        : amountKg
+  const lossKg =
+    showLoss || scaleMode
+      ? kind === 'charge'
+        ? Math.max(0, bottleAmountKg - amountKg)
+        : kind === 'recover'
+          ? Math.max(0, amountKg - bottleAmountKg)
+          : 0
+      : 0
   let projectedAfter = bottle?.grossWeight ?? 0
   if (bottle) {
     if (kind === 'charge') projectedAfter = bottle.grossWeight - bottleAmountKg
@@ -680,7 +737,8 @@ function TransactionForm({
     missingReason ||
     missingLeakTest ||
     missingCorrectionReason ||
-    blockImplausible
+    blockImplausible ||
+    scaleInvalid
 
   // Resolve identity stamps from the picked profile (or the free-text
   // "Other" field). The store still adds fallbacks on top of these for
@@ -706,9 +764,11 @@ function TransactionForm({
       kind,
       amount: showAmount ? signedAmountKg : 0,
       bottleAmount:
-        supportsLoss && showLoss && enteredBottle > 0
+        scaleMode && kind !== 'adjust'
           ? Math.abs(bottleAmountKg)
-          : undefined,
+          : supportsLoss && showLoss && enteredBottle > 0
+            ? Math.abs(bottleAmountKg)
+            : undefined,
       date: dateTimeInputToIso(date, tz),
       technician: stampedTechName,
       technicianLicence: stampedRhl,
@@ -790,18 +850,34 @@ function TransactionForm({
         </Field>
 
         <Field label="Bottle">
-          <Picker
-            required
-            title="Pick a bottle"
-            value={bottleId}
-            onChange={setBottleId}
-            placeholder="— pick a bottle —"
-            options={bottles.map((b) => ({
-              value: b.id,
-              label: `${b.bottleNumber} · ${b.refrigerantType}`,
-              hint: `${formatWeight(b.grossWeight, unit)} gross`,
-            }))}
-          />
+          <div className="flex gap-2">
+            <div className="min-w-0 flex-1">
+              <Picker
+                required
+                title="Pick a bottle"
+                value={bottleId}
+                onChange={setBottleId}
+                placeholder="— pick a bottle —"
+                options={bottles.map((b) => ({
+                  value: b.id,
+                  label: `${b.bottleNumber} · ${b.refrigerantType}`,
+                  hint: `${formatWeight(b.grossWeight, unit)} gross`,
+                }))}
+              />
+            </div>
+            <ScanButton
+              title="Scan a cylinder barcode"
+              onScan={(text) => {
+                const hit = bottles.find(
+                  (b) =>
+                    b.bottleNumber.trim().toLowerCase() ===
+                    text.trim().toLowerCase(),
+                )
+                if (hit) setBottleId(hit.id)
+                else toast.show(`No bottle matched “${text}”`, 'info')
+              }}
+            />
+          </div>
         </Field>
 
         {showSite && (
@@ -831,6 +907,33 @@ function TransactionForm({
                 </Button>
               </div>
             </Field>
+            {!siteId && !correcting && lastJob?.siteId && (() => {
+              const ls = sites.find((s) => s.id === lastJob.siteId)
+              if (!ls) return null
+              const lu = state.units.find(
+                (u) =>
+                  u.id === lastJob.unitId &&
+                  u.siteId === lastJob.siteId &&
+                  u.status === 'active',
+              )
+              return (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSiteId(lastJob.siteId!)
+                    setUnitId(lu ? lu.id : '')
+                    if (showCompliance && !reason && lastJob.reason) {
+                      setReason(lastJob.reason)
+                    }
+                  }}
+                  className="text-left text-xs font-medium text-brand-600 hover:underline"
+                >
+                  Same as last job: {ls.name}
+                  {lu ? ` · ${lu.name}` : ''}
+                  {lastJob.reason ? ` · ${REASON_LABELS[lastJob.reason]}` : ''}
+                </button>
+              )
+            })()}
             {(kind === 'charge' || kind === 'recover') && siteId && (
               <Field
                 label="Unit (optional)"
@@ -883,6 +986,29 @@ function TransactionForm({
           </>
         )}
 
+        {showAmount && scaleKinds && bottle && (
+          <EntryModeToggle mode={entryMode} onChange={setEntryMode} />
+        )}
+
+        {scaleMode && bottle && (
+          <ScaleReadingField
+            kind={kind}
+            unit={unit}
+            currentGrossKg={bottle.grossWeight}
+            value={newGross}
+            onChange={(v) => {
+              setNewGross(v)
+              // Auto-fill the amount from the reading. Charge/recover
+              // only fill plausible (positive) deltas; adjust takes the
+              // signed delta directly — that's the stocktake workflow.
+              const g = displayToKg(parseFloat(v) || 0, unit)
+              const d = scaleDeltaKg(kind, bottle.grossWeight, g)
+              if (kind === 'adjust') setAmount(kgToDisplay(d, unit).toFixed(2))
+              else if (d > 0) setAmount(kgToDisplay(d, unit).toFixed(2))
+            }}
+          />
+        )}
+
         {showAmount && (
           <Field
             label={
@@ -893,6 +1019,13 @@ function TransactionForm({
                   : kind === 'recover'
                     ? `How much came out of equipment? (${unit})`
                     : `Amount ${unit}`
+            }
+            hint={
+              scaleMode && kind !== 'adjust'
+                ? 'Auto-filled from the scale reading — adjust it if some refrigerant never made it between the bottle and the equipment (the gap is logged as loss).'
+                : scaleMode
+                  ? 'Auto-filled from the scale reading.'
+                  : undefined
             }
           >
             <TextInput
@@ -907,7 +1040,7 @@ function TransactionForm({
           </Field>
         )}
 
-        {supportsLoss && (
+        {supportsLoss && !scaleMode && (
           <button
             type="button"
             onClick={() => setShowLoss((v) => !v)}
@@ -921,7 +1054,7 @@ function TransactionForm({
           </button>
         )}
 
-        {supportsLoss && showLoss && (
+        {supportsLoss && showLoss && !scaleMode && (
           <Field
             label={
               kind === 'charge'
@@ -1187,19 +1320,21 @@ function TransactionForm({
         <Button type="submit" full disabled={submitBlocked}>
           {blockAlreadyReturned
             ? 'Already returned'
-            : blockOverdraw
-              ? 'Amount exceeds bottle contents'
-              : blockImplausible
-                ? 'Amount looks wrong — check it'
-                : missingCorrectionReason
-                  ? 'Add a correction reason'
-                  : missingReason
-                    ? 'Pick a reason'
-                    : missingLeakTest
-                      ? 'Answer leak test'
-                      : correcting
-                        ? 'Log correction'
-                        : 'Save'}
+            : scaleInvalid
+              ? 'Check the scale reading'
+              : blockOverdraw
+                ? 'Amount exceeds bottle contents'
+                : blockImplausible
+                  ? 'Amount looks wrong — check it'
+                  : missingCorrectionReason
+                    ? 'Add a correction reason'
+                    : missingReason
+                      ? 'Pick a reason'
+                      : missingLeakTest
+                        ? 'Answer leak test'
+                        : correcting
+                          ? 'Log correction'
+                          : 'Save'}
         </Button>
       </form>
 

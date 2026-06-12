@@ -16,6 +16,7 @@ import {
   type Bottle,
   type BottleKind,
   type BottleStatus,
+  type Transaction,
   type TransactionKind,
   type TransactionReason,
   type Unit,
@@ -28,6 +29,7 @@ import {
   netWeight,
   overfillKg,
   safeFillKgFor,
+  scaleDeltaKg,
   sortRefrigerants,
   statusLabel,
   transactionLabel,
@@ -36,6 +38,12 @@ import { RefrigerantSelect } from '../components/RefrigerantSelect'
 import { BottleSelect } from '../components/BottleSelect'
 import { MonthInput } from '../components/MonthInput'
 import { DateTimeInput } from '../components/DateTimeInput'
+import { ScanButton } from '../components/ScanButton'
+import {
+  EntryModeToggle,
+  ScaleReadingField,
+  type EntryMode,
+} from '../components/ScaleEntry'
 import { SiteForm } from './Sites'
 import { useToast } from '../lib/toast'
 import { useConfirm } from '../lib/confirm'
@@ -340,11 +348,35 @@ export default function Bottles() {
       </div>
 
       {bottles.length > 0 && (
-        <TextInput
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search by Bottle Number"
-        />
+        <div className="flex gap-2">
+          <div className="min-w-0 flex-1">
+            <TextInput
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search by Bottle Number"
+            />
+          </div>
+          <ScanButton
+            title="Scan a cylinder barcode"
+            onScan={(text) => {
+              // Exact (case-insensitive) match jumps straight to that
+              // cylinder's action sheet; otherwise drop the scanned text
+              // into the search box so a partial label still helps.
+              const hit = bottles.find(
+                (b) =>
+                  b.bottleNumber.trim().toLowerCase() ===
+                  text.trim().toLowerCase(),
+              )
+              if (hit) {
+                setQuery('')
+                setSheetBottleId(hit.id)
+              } else {
+                setQuery(text)
+                toast.show(`No bottle matched “${text}”`, 'info')
+              }
+            }}
+          />
+        </div>
       )}
 
       <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
@@ -891,6 +923,10 @@ function QuickLogModal({
   const [amount, setAmount] = useState('')
   const [bottleAmount, setBottleAmount] = useState('')
   const [showLoss, setShowLoss] = useState(false)
+  // 'amount' = type the kg moved; 'scale' = type the bottle's new gross
+  // weight straight off the scale and let the app derive the amount.
+  const [entryMode, setEntryMode] = useState<EntryMode>('amount')
+  const [newGross, setNewGross] = useState('')
   const [siteId, setSiteId] = useState(bottle?.currentSiteId ?? '')
   const [unitId, setUnitId] = useState('')
   const [equipment, setEquipment] = useState('')
@@ -920,6 +956,8 @@ function QuickLogModal({
     setAmount('')
     setBottleAmount('')
     setShowLoss(false)
+    setEntryMode('amount')
+    setNewGross('')
     setSiteId(bottle?.currentSiteId ?? '')
     setUnitId('')
     setEquipment('')
@@ -932,6 +970,19 @@ function QuickLogModal({
     setReturnDestination('')
     setDocketNumber('')
   }
+
+  // Most recent live job with a site — offered as a one-tap prefill,
+  // since a day's entries usually all happen at the same site.
+  const lastJob = useMemo(() => {
+    let best: Transaction | null = null
+    for (const t of state.transactions) {
+      if (t.deletedAt || !t.siteId) continue
+      if (t.kind !== 'charge' && t.kind !== 'recover' && t.kind !== 'transfer')
+        continue
+      if (!best || t.date > best.date) best = t
+    }
+    return best
+  }, [state.transactions])
 
   if (!open || !bottle || !kind) return null
 
@@ -953,17 +1004,29 @@ function QuickLogModal({
   const enteredAmountDisplay = parseFloat(amount) || 0
   const amountKg = displayToKg(enteredAmountDisplay, unit)
   const enteredBottleDisplay = parseFloat(bottleAmount) || 0
-  const bottleAmountKg =
-    showLoss && enteredBottleDisplay > 0
+  // Scale mode: the typed reading is the bottle's new gross — the
+  // bottle-side delta is derived from it, and any gap between that and
+  // the equipment amount is recorded as loss automatically.
+  const scaleMode =
+    entryMode === 'scale' && showAmount && !isBottleToBottleRecover
+  const scaleReadingKg = displayToKg(parseFloat(newGross) || 0, unit)
+  const scaleDelta = scaleMode
+    ? scaleDeltaKg(kind, bottle.grossWeight, scaleReadingKg)
+    : 0
+  const scaleInvalid = scaleMode && (newGross === '' || scaleDelta <= 0)
+  const bottleAmountKg = scaleMode
+    ? Math.max(0, scaleDelta)
+    : showLoss && enteredBottleDisplay > 0
       ? displayToKg(enteredBottleDisplay, unit)
       : amountKg
-  const lossKg = showLoss
-    ? kind === 'charge'
-      ? Math.max(0, bottleAmountKg - amountKg)
-      : kind === 'recover'
-        ? Math.max(0, amountKg - bottleAmountKg)
-        : 0
-    : 0
+  const lossKg =
+    showLoss || scaleMode
+      ? kind === 'charge'
+        ? Math.max(0, bottleAmountKg - amountKg)
+        : kind === 'recover'
+          ? Math.max(0, amountKg - bottleAmountKg)
+          : 0
+      : 0
   const projectedAfter =
     kind === 'charge'
       ? bottle.grossWeight - bottleAmountKg
@@ -1037,7 +1100,8 @@ function QuickLogModal({
     blockAlreadyReturned ||
     missingReason ||
     missingLeakTest ||
-    blockImplausible
+    blockImplausible ||
+    scaleInvalid
 
   function handleUnitChange(value: string) {
     if (value === '__new__') {
@@ -1058,8 +1122,9 @@ function QuickLogModal({
       unitId: showSite && unitId ? unitId : undefined,
       kind,
       amount: showAmount ? Math.abs(amountKg) : 0,
-      bottleAmount:
-        showAmount && showLoss && enteredBottleDisplay > 0
+      bottleAmount: scaleMode
+        ? Math.abs(bottleAmountKg)
+        : showAmount && showLoss && enteredBottleDisplay > 0
           ? Math.abs(bottleAmountKg)
           : undefined,
       // Interpret the typed wall-clock time in the configured timezone
@@ -1176,6 +1241,28 @@ function QuickLogModal({
             </div>
           )}
 
+          {showAmount && !isBottleToBottleRecover && (
+            <EntryModeToggle mode={entryMode} onChange={setEntryMode} />
+          )}
+
+          {scaleMode && (
+            <ScaleReadingField
+              kind={kind}
+              unit={unit}
+              currentGrossKg={bottle.grossWeight}
+              value={newGross}
+              onChange={(v) => {
+                setNewGross(v)
+                // The equipment amount defaults to the full bottle delta;
+                // the tech can still lower it (charge) / raise it
+                // (recover) and the gap is recorded as loss.
+                const g = displayToKg(parseFloat(v) || 0, unit)
+                const d = scaleDeltaKg(kind, bottle.grossWeight, g)
+                if (d > 0) setAmount(kgToDisplay(d, unit).toFixed(2))
+              }}
+            />
+          )}
+
           {showAmount && (
             <Field
               label={
@@ -1186,13 +1273,15 @@ function QuickLogModal({
                     : `How much came out of equipment? (${unit})`
               }
               hint={
-                kind === 'charge'
-                  ? 'The amount that ended up in the equipment'
-                  : isBottleToBottleRecover
-                    ? 'How much refrigerant moves from the source bottle to this one'
-                    : kind === 'recover'
-                      ? 'The amount pulled out of the equipment'
-                      : undefined
+                scaleMode
+                  ? 'Auto-filled from the scale reading — adjust it if some refrigerant never made it between the bottle and the equipment (the gap is logged as loss).'
+                  : kind === 'charge'
+                    ? 'The amount that ended up in the equipment'
+                    : isBottleToBottleRecover
+                      ? 'How much refrigerant moves from the source bottle to this one'
+                      : kind === 'recover'
+                        ? 'The amount pulled out of the equipment'
+                        : undefined
               }
             >
               <TextInput
@@ -1200,7 +1289,7 @@ function QuickLogModal({
                 inputMode="decimal"
                 step="0.01"
                 required
-                autoFocus
+                autoFocus={!scaleMode}
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
                 placeholder="e.g. 3.00"
@@ -1208,7 +1297,7 @@ function QuickLogModal({
             </Field>
           )}
 
-          {showAmount && !isBottleToBottleRecover && (
+          {showAmount && !isBottleToBottleRecover && !scaleMode && (
             <button
               type="button"
               onClick={() => setShowLoss((v) => !v)}
@@ -1222,7 +1311,7 @@ function QuickLogModal({
             </button>
           )}
 
-          {showAmount && showLoss && !isBottleToBottleRecover && (
+          {showAmount && showLoss && !isBottleToBottleRecover && !scaleMode && (
             <Field
               label={
                 kind === 'charge'
@@ -1321,6 +1410,33 @@ function QuickLogModal({
                   </Button>
                 </div>
               </Field>
+              {!siteId && lastJob?.siteId && (() => {
+                const ls = state.sites.find((s) => s.id === lastJob.siteId)
+                if (!ls) return null
+                const lu = state.units.find(
+                  (u) =>
+                    u.id === lastJob.unitId &&
+                    u.siteId === lastJob.siteId &&
+                    u.status === 'active',
+                )
+                return (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSiteId(lastJob.siteId!)
+                      setUnitId(lu ? lu.id : '')
+                      if (showCompliance && !reason && lastJob.reason) {
+                        setReason(lastJob.reason)
+                      }
+                    }}
+                    className="text-left text-xs font-medium text-brand-600 hover:underline"
+                  >
+                    Same as last job: {ls.name}
+                    {lu ? ` · ${lu.name}` : ''}
+                    {lastJob.reason ? ` · ${REASON_LABELS[lastJob.reason]}` : ''}
+                  </button>
+                )
+              })()}
               {(kind === 'charge' || kind === 'recover') && siteId && (
                 <Field
                   label="Unit (optional)"
@@ -1476,15 +1592,17 @@ function QuickLogModal({
           <Button type="submit" full disabled={submitBlocked}>
             {blockAlreadyReturned
               ? 'Already returned'
-              : blockOverdraw || blockSourceOverdraw
-                ? 'Amount exceeds bottle contents'
-                : blockImplausible
-                  ? 'Amount looks wrong — check it'
-                  : missingReason
-                    ? 'Pick a reason'
-                    : missingLeakTest
-                      ? 'Answer leak test'
-                      : 'Save'}
+              : scaleInvalid
+                ? 'Check the scale reading'
+                : blockOverdraw || blockSourceOverdraw
+                  ? 'Amount exceeds bottle contents'
+                  : blockImplausible
+                    ? 'Amount looks wrong — check it'
+                    : missingReason
+                      ? 'Pick a reason'
+                      : missingLeakTest
+                        ? 'Answer leak test'
+                        : 'Save'}
           </Button>
         </form>
       </Modal>
@@ -1592,13 +1710,21 @@ function BottleQuickAdd({
     <Modal open={open} title="Quick add bottle" onClose={onClose}>
       <form onSubmit={submit} className="space-y-3">
         <Field label="Bottle ID / number">
-          <TextInput
-            required
-            autoFocus
-            value={bottleNumber}
-            onChange={(e) => setBottleNumber(e.target.value)}
-            placeholder="e.g. B-205"
-          />
+          <div className="flex gap-2">
+            <div className="min-w-0 flex-1">
+              <TextInput
+                required
+                autoFocus
+                value={bottleNumber}
+                onChange={(e) => setBottleNumber(e.target.value)}
+                placeholder="e.g. B-205"
+              />
+            </div>
+            <ScanButton
+              title="Scan the cylinder barcode"
+              onScan={setBottleNumber}
+            />
+          </div>
         </Field>
         {duplicateNumber && (
           <div className="rounded-xl bg-amber-50 p-3 text-sm text-amber-900 dark:bg-amber-900/20 dark:text-amber-100">
@@ -1906,12 +2032,20 @@ function BottleForm({
     <Modal open={open} title={title} onClose={onClose}>
       <form onSubmit={submit} className="space-y-3">
         <Field label="Bottle ID / number" hint="Label or serial of the bottle">
-          <TextInput
-            required
-            value={bottleNumber}
-            onChange={(e) => setBottleNumber(e.target.value)}
-            placeholder="e.g. B-102"
-          />
+          <div className="flex gap-2">
+            <div className="min-w-0 flex-1">
+              <TextInput
+                required
+                value={bottleNumber}
+                onChange={(e) => setBottleNumber(e.target.value)}
+                placeholder="e.g. B-102"
+              />
+            </div>
+            <ScanButton
+              title="Scan the cylinder barcode"
+              onScan={setBottleNumber}
+            />
+          </div>
         </Field>
         {duplicateNumber && (
           <div className="rounded-xl bg-amber-50 p-3 text-sm text-amber-900 dark:bg-amber-900/20 dark:text-amber-100">

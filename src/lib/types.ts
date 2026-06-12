@@ -727,6 +727,21 @@ export function pluralize(n: number, singular: string, plural?: string): string 
   return n === 1 ? `${n} ${singular}` : `${n} ${plural ?? singular + 's'}`
 }
 
+// Bottle-side delta implied by a scale reading, in kg. Positive =
+// plausible for the kind; <= 0 means the reading contradicts the kind
+// (e.g. a charge where the bottle got heavier). For 'adjust' the delta
+// is signed — the reading IS the correction (stocktake weigh-in).
+export function scaleDeltaKg(
+  kind: TransactionKind,
+  currentGrossKg: number,
+  readingKg: number,
+): number {
+  if (kind === 'charge') return currentGrossKg - readingKg
+  if (kind === 'recover') return readingKg - currentGrossKg
+  if (kind === 'adjust') return readingKg - currentGrossKg
+  return 0
+}
+
 export function transactionLoss(t: Transaction): number {
   if (t.bottleAmount === undefined || t.bottleAmount === null) return 0
   if (t.kind === 'charge') return Math.max(0, t.bottleAmount - t.amount)

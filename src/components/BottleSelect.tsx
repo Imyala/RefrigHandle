@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { Modal, Button } from './ui'
+import { ScanButton } from './ScanButton'
 import { useStore } from '../lib/store'
+import { useToast } from '../lib/toast'
 import { netWeight, statusLabel } from '../lib/types'
 import { formatWeight } from '../lib/units'
 
@@ -27,6 +29,7 @@ export function BottleSelect({
   modalTitle?: string
 }) {
   const { state } = useStore()
+  const toast = useToast()
   const [open, setOpen] = useState(false)
 
   const candidates = state.bottles.filter((b) => b.id !== excludeId)
@@ -65,6 +68,24 @@ export function BottleSelect({
       )}
 
       <Modal open={open} title={modalTitle} onClose={() => setOpen(false)}>
+        <div className="mb-3">
+          <ScanButton
+            title="Scan a cylinder barcode"
+            onScan={(text) => {
+              const hit = candidates.find(
+                (b) =>
+                  b.bottleNumber.trim().toLowerCase() ===
+                  text.trim().toLowerCase(),
+              )
+              if (hit) {
+                onChange(hit.id)
+                setOpen(false)
+              } else {
+                toast.show(`No bottle matched “${text}”`, 'info')
+              }
+            }}
+          />
+        </div>
         <div className="space-y-2">
           {candidates.length === 0 ? (
             <div className="rounded-xl bg-slate-100 p-3 text-sm text-slate-500 dark:bg-slate-800">
