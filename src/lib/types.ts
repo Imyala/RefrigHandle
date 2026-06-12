@@ -123,6 +123,9 @@ export interface Site {
   group?: string
   notes?: string
   createdAt: string
+  // Stamped on every edit — drives last-write-wins per record when two
+  // devices sync (see lib/merge.ts). Optional: pre-sync records lack it.
+  updatedAt?: string
 }
 
 export type UnitKind =
@@ -185,6 +188,9 @@ export interface Unit {
   decommissionedReason?: string
   notes?: string
   createdAt: string
+  // Stamped on every edit — drives last-write-wins per record when two
+  // devices sync (see lib/merge.ts). Optional: pre-sync records lack it.
+  updatedAt?: string
 }
 
 export type TransactionKind =
@@ -360,6 +366,34 @@ export interface AuditEntry {
   // falling back to legacy single-tech identity). Frozen at the time.
   by?: string
   byLicence?: string
+  // --- Tamper-evidence (see lib/auditChain.ts) -------------------------
+  // Entries are sealed into a per-device hash chain shortly after they
+  // are written: each carries the device's chain id, its sequence number
+  // within that chain, the previous entry's hash, and its own SHA-256
+  // over the canonical content. Editing or deleting a sealed entry
+  // breaks every later link in its chain, which the verifier reports.
+  // Per-DEVICE chains (not one global chain) because multi-device sync
+  // merges logs by union — a single chain would fork on every merge.
+  chainId?: string
+  seq?: number
+  prevHash?: string
+  hash?: string
+}
+
+// Deletion marker for hard-deleted records (bottles / sites / units /
+// technicians / presets / custom refrigerants). Without these, syncing
+// with a device that still holds the record would silently resurrect
+// it. `id` is the record id (or the name, for custom refrigerants).
+export interface Tombstone {
+  entity:
+    | 'bottle'
+    | 'site'
+    | 'unit'
+    | 'technician'
+    | 'preset'
+    | 'refrigerant'
+  id: string
+  at: string // ISO timestamp of the deletion
 }
 
 export type WeightUnit = 'kg' | 'lb'
@@ -411,6 +445,9 @@ export interface Technician {
   // dev-tools access can still read every other tech's data.
   passwordHash?: string
   createdAt: string
+  // Stamped on every edit — drives last-write-wins per record when two
+  // devices sync (see lib/merge.ts). Optional: pre-sync records lack it.
+  updatedAt?: string
 }
 
 export interface AppState {
@@ -458,6 +495,17 @@ export interface AppState {
   // blocks everything else. Existing installs are grandfathered in
   // `normalize()` so an upgrade never locks a returning user out.
   setupCompletedAt?: string
+  // Deletion markers consumed by the sync merge — see Tombstone.
+  tombstones: Tombstone[]
+  // When the scalar settings block (business identity, location, units,
+  // theme…) was last changed. The merge takes the whole block from
+  // whichever side is newer.
+  settingsUpdatedAt?: string
+  // Stamped by "Erase all data" and by a backup import. During a merge,
+  // records that exist only on the OTHER side and predate this moment
+  // were erased here on purpose — they stay erased instead of being
+  // resurrected by the union.
+  dataResetAt?: string
 }
 
 export const EMPTY_STATE: AppState = {
@@ -484,6 +532,9 @@ export const EMPTY_STATE: AppState = {
   clock: '24h',
   sync: { enabled: false, teamId: '' },
   setupCompletedAt: undefined,
+  tombstones: [],
+  settingsUpdatedAt: undefined,
+  dataResetAt: undefined,
 }
 
 // ABN checksum per the ATO algorithm: subtract 1 from the first digit,

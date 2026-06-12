@@ -45,6 +45,7 @@ interface LegacyState
     | 'technicians'
     | 'activeTechnicianId'
     | 'auditLog'
+    | 'tombstones'
   > {
   bottles?: LegacyBottle[]
   transactions?: LegacyTransaction[]
@@ -68,6 +69,7 @@ interface LegacyState
   clock?: string
   technicians?: Technician[]
   activeTechnicianId?: string
+  tombstones?: AppState['tombstones']
 }
 
 export type LoadStatus = 'ok' | 'empty' | 'corrupted'
@@ -215,7 +217,16 @@ function normalize(parsed: LegacyState): AppState {
       teamId: parsed.sync?.teamId ?? '',
     },
     setupCompletedAt,
+    tombstones: parsed.tombstones ?? [],
   }
+}
+
+// Normalize a state blob that arrived from OUTSIDE this device — the
+// sync backend or an imported file. Same migrations/defaults as a local
+// load, so a payload written by an older app version can't crash the
+// merge with missing arrays.
+export function normalizeState(parsed: unknown): AppState {
+  return normalize(parsed as LegacyState)
 }
 
 export function loadState(): LoadResult {

@@ -31,13 +31,21 @@ import {
   UNIT_FIELDS,
   diffFields,
 } from './audit'
-import { loadState, requestPersistentStorage, saveState, uid } from './storage'
+import {
+  loadState,
+  normalizeState,
+  requestPersistentStorage,
+  saveState,
+  uid,
+} from './storage'
 import {
   isSyncConfigured,
   pullState,
   pushState,
   subscribeToState,
 } from './sync'
+import { mergeStates } from './merge'
+import { sealAuditLog } from './auditChain'
 import { useToast } from './toast'
 
 // Build the next auditLog array with a fresh entry prepended (newest
@@ -177,28 +185,72 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     }
   }, [state, toast])
 
+  // Seal new audit entries into this device's tamper-evident hash
+  // chain (lib/auditChain.ts). Runs after every state change; no-ops
+  // when everything is already sealed. Sealing is async (crypto.subtle)
+  // so it can't happen inside the synchronous reducers — entries are
+  // written unsealed and sealed within a tick.
+  useEffect(() => {
+    if (!state.auditLog.some((e) => !e.hash)) return
+    let cancelled = false
+    void sealAuditLog(state.auditLog).then((patch) => {
+      if (cancelled || patch.size === 0) return
+      setState((s) => ({
+        ...s,
+        auditLog: s.auditLog.map((e) => {
+          const seal = patch.get(e.id)
+          // Only apply to entries still unsealed — a concurrent seal
+          // (StrictMode double-run) must not overwrite an existing one.
+          return seal && !e.hash ? { ...e, ...seal } : e
+        }),
+      }))
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [state.auditLog])
+
   const lastPushedRef = useRef<string>('')
   const remoteApplyRef = useRef(false)
+  // Latest state, readable from sync callbacks without re-subscribing
+  // the realtime channel on every keystroke.
+  const stateRef = useRef(state)
+  useEffect(() => {
+    stateRef.current = state
+  }, [state])
+
+  // Merge-based remote apply. The old code REPLACED local state with
+  // the remote blob (last write wins) — two techs logging at once lost
+  // one tech's entries. Now every incoming snapshot is merged record-
+  // by-record (see lib/merge.ts): if the merge adds nothing we adopt it
+  // silently; if local rows survive that the remote lacks, the push
+  // effect uploads the merged superset so both devices converge.
+  const applyRemote = useCallback((remoteRaw: AppState) => {
+    const remote = normalizeState(remoteRaw)
+    const local = stateRef.current
+    const merged = mergeStates(local, remote)
+    const mergedStr = JSON.stringify(merged)
+    if (mergedStr === JSON.stringify(local)) return // nothing new
+    // Pure adoption (remote is a superset) → suppress the echo push.
+    remoteApplyRef.current = mergedStr === JSON.stringify(remote)
+    setState(merged)
+  }, [])
 
   useEffect(() => {
     if (!isSyncConfigured()) return
     if (!state.sync.enabled || !state.sync.teamId) return
     let cancelled = false
     pullState(state.sync.teamId).then((remote) => {
-      if (!cancelled && remote) {
-        remoteApplyRef.current = true
-        setState(remote)
-      }
+      if (!cancelled && remote) applyRemote(remote)
     })
     const unsub = subscribeToState(state.sync.teamId, (remote) => {
-      remoteApplyRef.current = true
-      setState(remote)
+      applyRemote(remote)
     })
     return () => {
       cancelled = true
       unsub()
     }
-  }, [state.sync.enabled, state.sync.teamId])
+  }, [state.sync.enabled, state.sync.teamId, applyRemote])
 
   useEffect(() => {
     if (!isSyncConfigured()) return
@@ -344,6 +396,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         ...s,
         bottles: s.bottles.filter((b) => b.id !== id),
         transactions,
+        // Tombstone so a sync with a device that still holds this
+        // bottle doesn't resurrect it (see lib/merge.ts).
+        tombstones: [...s.tombstones, { entity: 'bottle' as const, id, at: now }],
         auditLog: before
           ? withAudit(s, {
               action: 'delete',
@@ -380,7 +435,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const updateSite: StoreApi['updateSite'] = useCallback((id, patch) => {
     setState((s) => {
       const before = s.sites.find((x) => x.id === id)
-      const sites = s.sites.map((x) => (x.id === id ? { ...x, ...patch } : x))
+      const sites = s.sites.map((x) =>
+        x.id === id
+          ? { ...x, ...patch, updatedAt: new Date().toISOString() }
+          : x,
+      )
       if (!before) return { ...s, sites }
       const changes = diffFields(before, patch, SITE_FIELDS)
       if (changes.length === 0) return { ...s, sites }
@@ -409,10 +468,22 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const deletedUnitNames = new Map(
         s.units.filter((u) => u.siteId === id).map((u) => [u.id, u.name]),
       )
+      const now = new Date().toISOString()
       return {
         ...s,
         sites: s.sites.filter((x) => x.id !== id),
         units: s.units.filter((u) => u.siteId !== id),
+        // Tombstone the site AND its cascaded units so a sync can't
+        // resurrect any of them (see lib/merge.ts).
+        tombstones: [
+          ...s.tombstones,
+          { entity: 'site' as const, id, at: now },
+          ...[...deletedUnitNames.keys()].map((unitId) => ({
+            entity: 'unit' as const,
+            id: unitId,
+            at: now,
+          })),
+        ],
         bottles: s.bottles.map((b) =>
           b.currentSiteId === id ? { ...b, currentSiteId: undefined } : b,
         ),
@@ -470,7 +541,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const updateUnit: StoreApi['updateUnit'] = useCallback((id, patch) => {
     setState((s) => {
       const before = s.units.find((u) => u.id === id)
-      const units = s.units.map((u) => (u.id === id ? { ...u, ...patch } : u))
+      const units = s.units.map((u) =>
+        u.id === id
+          ? { ...u, ...patch, updatedAt: new Date().toISOString() }
+          : u,
+      )
       if (!before) return { ...s, units }
       const changes = diffFields(before, patch, UNIT_FIELDS)
       if (changes.length === 0) return { ...s, units }
@@ -495,6 +570,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       return {
         ...s,
         units: s.units.filter((u) => u.id !== id),
+        tombstones: [
+          ...s.tombstones,
+          { entity: 'unit' as const, id, at: new Date().toISOString() },
+        ],
         // Freeze the unit's name onto its log rows before clearing the
         // link — deleting equipment must not erase where past work
         // happened from the historical record.
@@ -527,6 +606,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
                 status: 'decommissioned' as const,
                 decommissionedAt: new Date().toISOString(),
                 decommissionedReason: reason?.trim() || u.decommissionedReason,
+                updatedAt: new Date().toISOString(),
               }
             : u,
         )
@@ -559,6 +639,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
               status: 'active' as const,
               decommissionedAt: undefined,
               decommissionedReason: undefined,
+              updatedAt: new Date().toISOString(),
             }
           : u,
       )
@@ -801,6 +882,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
                 arcLicenceNumber: (
                   patch.arcLicenceNumber ?? t.arcLicenceNumber
                 ).trim(),
+                updatedAt: new Date().toISOString(),
               }
             : t,
         )
@@ -843,6 +925,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         ...s,
         technicians: remaining,
         activeTechnicianId: nextActive,
+        tombstones: [
+          ...s.tombstones,
+          { entity: 'technician' as const, id, at: new Date().toISOString() },
+        ],
         auditLog: before
           ? withAudit(s, {
               action: 'delete',
@@ -907,6 +993,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         technicians: [...s.technicians, tech],
         activeTechnicianId: s.activeTechnicianId ?? tech.id,
         setupCompletedAt: now,
+        settingsUpdatedAt: now,
         auditLog: [...entries, ...s.auditLog],
       }
     })
@@ -939,6 +1026,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           : {
               ...s,
               technician: name,
+              settingsUpdatedAt: new Date().toISOString(),
               auditLog: settingsChange(s, 'Default technician', s.technician, name),
             },
       ),
@@ -953,6 +1041,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           : {
               ...s,
               arcLicenceNumber: n.trim(),
+              settingsUpdatedAt: new Date().toISOString(),
               auditLog: settingsChange(s, 'RHL licence', s.arcLicenceNumber, n.trim()),
             },
       ),
@@ -967,6 +1056,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           : {
               ...s,
               arcAuthorisationNumber: n.trim(),
+              settingsUpdatedAt: new Date().toISOString(),
               auditLog: settingsChange(
                 s,
                 'ARC authorisation (RTA)',
@@ -986,6 +1076,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           : {
               ...s,
               arcAuthorisationExpiry: d.trim(),
+              settingsUpdatedAt: new Date().toISOString(),
               auditLog: settingsChange(
                 s,
                 'RTA expiry',
@@ -1005,6 +1096,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           : {
               ...s,
               businessName: n.trim(),
+              settingsUpdatedAt: new Date().toISOString(),
               auditLog: settingsChange(s, 'Business name', s.businessName, n.trim()),
             },
       ),
@@ -1019,6 +1111,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           : {
               ...s,
               businessAbn: n.trim(),
+              settingsUpdatedAt: new Date().toISOString(),
               auditLog: settingsChange(s, 'Business ABN', s.businessAbn, n.trim()),
             },
       ),
@@ -1036,7 +1129,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         return {
           ...s,
           location,
-          auditLog: settingsChange(s, 'Location', from, to),
+          settingsUpdatedAt: new Date().toISOString(),
+              auditLog: settingsChange(s, 'Location', from, to),
         }
       }),
     [],
@@ -1047,7 +1141,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setState((s) =>
         s.unit === unit
           ? s
-          : { ...s, unit, auditLog: settingsChange(s, 'Weight unit', s.unit, unit) },
+          : { ...s, unit, settingsUpdatedAt: new Date().toISOString(),
+              auditLog: settingsChange(s, 'Weight unit', s.unit, unit) },
       ),
     [],
   )
@@ -1057,7 +1152,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setState((s) =>
         s.theme === theme
           ? s
-          : { ...s, theme, auditLog: settingsChange(s, 'Theme', s.theme, theme) },
+          : { ...s, theme, settingsUpdatedAt: new Date().toISOString(),
+              auditLog: settingsChange(s, 'Theme', s.theme, theme) },
       ),
     [],
   )
@@ -1070,6 +1166,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           : {
               ...s,
               clock,
+              settingsUpdatedAt: new Date().toISOString(),
               auditLog: settingsChange(s, 'Clock format', s.clock, clock),
             },
       ),
@@ -1084,6 +1181,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         const from = fmt(s.sync)
         const to = fmt(sync)
         if (from === to) return { ...s, sync }
+        // Note: no settingsUpdatedAt stamp — the sync switch is a
+        // per-device choice and must not claim the shared settings
+        // block (business identity, location…) as newer.
         return { ...s, sync, auditLog: settingsChange(s, 'Cloud sync', from, to) }
       }),
     [],
@@ -1115,6 +1215,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
             ...s,
             customRefrigerants: s.customRefrigerants.filter((r) => r !== name),
             favoriteRefrigerants: s.favoriteRefrigerants.filter((r) => r !== name),
+            tombstones: [
+              ...s.tombstones,
+              {
+                entity: 'refrigerant' as const,
+                id: name,
+                at: new Date().toISOString(),
+              },
+            ],
             auditLog: withAudit(s, {
               action: 'delete',
               entity: 'refrigerant',
@@ -1170,6 +1278,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         ...s,
         customBottlePresets: s.customBottlePresets.filter((p) => p.id !== id),
         favoriteBottlePresets: s.favoriteBottlePresets.filter((x) => x !== id),
+        tombstones: [
+          ...s.tombstones,
+          { entity: 'preset' as const, id, at: new Date().toISOString() },
+        ],
         auditLog: before
           ? withAudit(s, {
               action: 'delete',
@@ -1246,19 +1358,32 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       // A data wipe is not a "never used before" — keep the user past
       // the onboarding gate so erasing data doesn't restart setup.
       setupCompletedAt: s.setupCompletedAt,
+      settingsUpdatedAt: s.settingsUpdatedAt,
+      // Existing deletion markers stay; the reset watermark below stops
+      // the sync merge resurrecting the wiped records from another
+      // device (see lib/merge.ts).
+      tombstones: s.tombstones,
+      dataResetAt: new Date().toISOString(),
     }))
   }, [])
 
-  const importState = useCallback((next: AppState) => {
+  const importState = useCallback((nextRaw: AppState) => {
     // Importing replaces the whole dataset (a restore-from-backup). We
     // keep the imported file's own history and prepend an 'import' entry
-    // so the join point is visible in the trail.
+    // so the join point is visible in the trail. The file runs through
+    // the same normalization as a local load so an old backup can't
+    // land with missing arrays.
+    const next = normalizeState(nextRaw)
     setState(() => ({
       ...next,
       // Import is only reachable from inside the app (past the gate). An
       // older backup may predate setupCompletedAt — stamp it so a restore
       // doesn't bounce the user back into onboarding.
       setupCompletedAt: next.setupCompletedAt ?? new Date().toISOString(),
+      // A restore deliberately replaces the dataset — the watermark
+      // stops the sync merge re-adding records that the restored
+      // snapshot doesn't contain (see lib/merge.ts).
+      dataResetAt: new Date().toISOString(),
       auditLog: withAudit(next, {
         action: 'import',
         entity: 'data',

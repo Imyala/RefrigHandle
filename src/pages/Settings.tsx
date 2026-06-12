@@ -36,6 +36,7 @@ import { useConfirm } from '../lib/confirm'
 import { hashPassword } from '../lib/auth'
 import { PasswordPromptModal } from '../components/PasswordPromptModal'
 import { isSyncConfigured } from '../lib/sync'
+import { verifyAuditChains, type ChainReport } from '../lib/auditChain'
 import {
   deleteCorruptedBackup,
   getStorageEstimate,
@@ -835,6 +836,8 @@ export default function Settings() {
 
       <DeletedTransactionsCard onRestore={restoreTransaction} />
 
+      <AuditIntegrityCard />
+
       <Card>
         <div className="mb-1 flex items-center justify-between gap-2">
           <div className="text-sm font-semibold text-slate-700 dark:text-slate-200">
@@ -1292,6 +1295,84 @@ function TechnicianModal({
         </div>
       </form>
     </Modal>
+  )
+}
+
+// Tamper-evidence check for the change log. Every audit entry is
+// sealed into a per-device hash chain as it's written (lib/auditChain);
+// this card re-derives every chain on demand and reports any entry
+// that was edited, deleted or reordered after sealing.
+function AuditIntegrityCard() {
+  const { state } = useStore()
+  const [report, setReport] = useState<ChainReport | null>(null)
+  const [busy, setBusy] = useState(false)
+
+  async function run() {
+    setBusy(true)
+    try {
+      setReport(await verifyAuditChains(state.auditLog))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Card>
+      <div className="mb-1 flex items-center justify-between gap-2">
+        <div className="text-sm font-semibold text-slate-700 dark:text-slate-200">
+          Audit trail integrity
+        </div>
+        {report &&
+          (report.valid ? (
+            <Pill tone="green">Intact</Pill>
+          ) : (
+            <Pill tone="red">Tampering detected</Pill>
+          ))}
+      </div>
+      <p className="mb-3 text-xs text-slate-500">
+        Change-log entries are sealed into a cryptographic hash chain as
+        they're written. Verifying re-derives every chain — an entry that
+        was edited or deleted after sealing breaks its chain and is
+        reported here. Detects on-device tampering and storage corruption;
+        full non-repudiation (proof against someone rebuilding the whole
+        chain) will come with server-anchored team accounts.
+      </p>
+      <Button variant="secondary" disabled={busy} onClick={() => void run()}>
+        {busy ? 'Verifying…' : 'Verify integrity'}
+      </Button>
+      {report && (
+        <div className="mt-3 space-y-2">
+          <p className="text-sm text-slate-700 dark:text-slate-300">
+            {report.sealed} of {report.total} entries sealed across{' '}
+            {report.chains} device chain{report.chains === 1 ? '' : 's'}
+            {report.unsealed > 0 &&
+              ` (${report.unsealed} just written, not yet sealed)`}
+            .{' '}
+            {report.valid
+              ? 'Every chain checks out — no tampering detected.'
+              : 'Problems found:'}
+          </p>
+          {!report.valid && (
+            <ul className="space-y-1">
+              {report.problems.slice(0, 8).map((p, i) => (
+                <li
+                  key={i}
+                  className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-900 dark:bg-red-900/20 dark:text-red-100"
+                >
+                  Chain {p.chainId.slice(0, 8)}…
+                  {p.seq != null && ` · entry #${p.seq}`} — {p.message}
+                </li>
+              ))}
+              {report.problems.length > 8 && (
+                <li className="text-xs text-slate-500">
+                  +{report.problems.length - 8} more
+                </li>
+              )}
+            </ul>
+          )}
+        </div>
+      )}
+    </Card>
   )
 }
 
