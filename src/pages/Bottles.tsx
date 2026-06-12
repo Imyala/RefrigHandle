@@ -22,6 +22,7 @@ import {
   BOTTLE_KIND_LABELS,
   REFRIGERANT_TYPES,
   REASON_LABELS,
+  chargeSanity,
   fillingRatio,
   hydroStatusFor,
   netWeight,
@@ -1007,12 +1008,23 @@ function QuickLogModal({
   // picked and the leak-test question answered Yes or No.
   const missingReason = showCompliance && !reason
   const missingLeakTest = showCompliance && leakTest === null
+  // Plausibility guard on charges — catches gross typos (e.g. 50 kg into
+  // a split). Uses the selected unit's kind + recorded charge when known.
+  const sanity =
+    kind === 'charge'
+      ? chargeSanity(amountKg, {
+          unitKind: selectedUnit?.kind,
+          recordedChargeKg: selectedUnit?.refrigerantCharge,
+        })
+      : { level: 'ok' as const }
+  const blockImplausible = sanity.level === 'block'
   const submitBlocked =
     blockOverdraw ||
     blockSourceOverdraw ||
     blockAlreadyReturned ||
     missingReason ||
-    missingLeakTest
+    missingLeakTest ||
+    blockImplausible
 
   function handleUnitChange(value: string) {
     if (value === '__new__') {
@@ -1330,6 +1342,21 @@ function QuickLogModal({
             </>
           )}
 
+          {sanity.level !== 'ok' && sanity.message && (
+            <div
+              className={`rounded-xl p-3 text-sm ${
+                sanity.level === 'block'
+                  ? 'bg-red-50 text-red-900 dark:bg-red-900/20 dark:text-red-100'
+                  : 'bg-amber-50 text-amber-900 dark:bg-amber-900/20 dark:text-amber-100'
+              }`}
+            >
+              <span className="font-semibold">
+                {sanity.level === 'block' ? '⛔ ' : '⚠ '}
+              </span>
+              {sanity.message}
+            </div>
+          )}
+
           {showCompliance && (
             <>
               {!unitId && (
@@ -1418,11 +1445,13 @@ function QuickLogModal({
               ? 'Already returned'
               : blockOverdraw || blockSourceOverdraw
                 ? 'Amount exceeds bottle contents'
-                : missingReason
-                  ? 'Pick a reason'
-                  : missingLeakTest
-                    ? 'Answer leak test'
-                    : 'Save'}
+                : blockImplausible
+                  ? 'Amount looks wrong — check it'
+                  : missingReason
+                    ? 'Pick a reason'
+                    : missingLeakTest
+                      ? 'Answer leak test'
+                      : 'Save'}
           </Button>
         </form>
       </Modal>

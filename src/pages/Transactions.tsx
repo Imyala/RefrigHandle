@@ -13,9 +13,11 @@ import { Picker, type PickerOption } from '../components/Picker'
 import { DateInput } from '../components/DateInput'
 import { useStore } from '../lib/store'
 import {
+  type Transaction,
   type TransactionKind,
   type TransactionReason,
   REASON_LABELS,
+  chargeSanity,
   movementSummary,
   netWeight,
   overfillKg,
@@ -61,6 +63,10 @@ export default function Transactions() {
   const toast = useToast()
 
   const [adding, setAdding] = useState(false)
+  // The original entry currently being corrected (opens the log form in
+  // correction mode), or null. Kept separate from `adding` so the form
+  // can pre-fill + stamp the correction link.
+  const [correcting, setCorrecting] = useState<Transaction | null>(null)
   const [filterKind, setFilterKind] = useState<'all' | TransactionKind>('all')
   const [query, setQuery] = useState('')
   // Date-range filter (ISO YYYY-MM-DD, inclusive on both ends). Empty
@@ -129,6 +135,16 @@ export default function Transactions() {
         .sort((a, b) => b.date.localeCompare(a.date))
     )
   }, [transactions, filterKind, query, fromDate, toDate, tz, bottles, sites, state.units])
+
+  // Map each original entry's id → the (live) correction that supersedes
+  // it, so the original can show a "superseded" badge and link.
+  const correctionFor = useMemo(() => {
+    const m = new Map<string, Transaction>()
+    for (const t of transactions) {
+      if (t.correctsId && !t.deletedAt) m.set(t.correctsId, t)
+    }
+    return m
+  }, [transactions])
 
   return (
     <div className="space-y-3">
@@ -256,6 +272,13 @@ export default function Transactions() {
               transactions,
               (id) => sites.find((j) => j.id === id)?.name,
             )
+            // Correction linkage: the entry this one corrects (if it's a
+            // correction), and the live correction that supersedes this
+            // one (if it's an original that was corrected).
+            const corrects = t.correctsId
+              ? transactions.find((x) => x.id === t.correctsId)
+              : undefined
+            const supersededBy = correctionFor.get(t.id)
             return (
               <Card key={t.id} className="!p-3">
                 <div className="flex items-start justify-between gap-3">
@@ -270,7 +293,24 @@ export default function Transactions() {
                       <span className="text-sm text-slate-500">
                         {bottle?.refrigerantType ?? '?'}
                       </span>
+                      {corrects && <Pill tone="blue">Correction</Pill>}
+                      {supersededBy && <Pill tone="amber">Corrected</Pill>}
                     </div>
+                    {corrects && (
+                      <div className="mt-1 rounded-lg border border-blue-200 bg-blue-50 px-2 py-1 text-xs text-blue-900 dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-100">
+                        Corrects a {transactionLabel(corrects.kind).toLowerCase()} of{' '}
+                        {formatWeight(corrects.amount, unit)} from{' '}
+                        {formatDateTime(corrects.date, state.location.timezone, state.clock)}
+                        {t.correctionReason && <> — “{t.correctionReason}”</>}
+                      </div>
+                    )}
+                    {supersededBy && (
+                      <div className="mt-1 rounded-lg border border-amber-200 bg-amber-50 px-2 py-1 text-xs text-amber-900 dark:border-amber-700 dark:bg-amber-900/20 dark:text-amber-100">
+                        Superseded by a correction logged{' '}
+                        {formatDateTime(supersededBy.date, state.location.timezone, state.clock)}
+                        {supersededBy.correctionReason && <> — “{supersededBy.correctionReason}”</>}
+                      </div>
+                    )}
                     <div className="mt-1 text-sm text-slate-700 dark:text-slate-300">
                       {bottle?.bottleNumber ?? '(deleted)'}
                       {sourceBottle && ` ← ${sourceBottle.bottleNumber}`}
@@ -354,13 +394,24 @@ export default function Transactions() {
                       </div>
                     )}
                   </div>
-                  <button
-                    onClick={() => setDeleting({ id: t.id, reason: '' })}
-                    className="shrink-0 rounded-lg px-2 py-1 text-xs font-medium text-slate-500 hover:bg-slate-100 hover:text-red-600 dark:hover:bg-slate-800"
-                    aria-label="Delete transaction"
-                  >
-                    Delete
-                  </button>
+                  <div className="flex shrink-0 flex-col items-end gap-1">
+                    {!t.correctsId && (
+                      <button
+                        onClick={() => setCorrecting(t)}
+                        className="rounded-lg px-2 py-1 text-xs font-medium text-slate-500 hover:bg-slate-100 hover:text-brand-600 dark:hover:bg-slate-800"
+                        aria-label="Log a correction for this transaction"
+                      >
+                        Correct
+                      </button>
+                    )}
+                    <button
+                      onClick={() => setDeleting({ id: t.id, reason: '' })}
+                      className="rounded-lg px-2 py-1 text-xs font-medium text-slate-500 hover:bg-slate-100 hover:text-red-600 dark:hover:bg-slate-800"
+                      aria-label="Delete transaction"
+                    >
+                      Delete
+                    </button>
+                  </div>
                 </div>
               </Card>
             )
@@ -369,13 +420,18 @@ export default function Transactions() {
       )}
 
       <TransactionForm
-        open={adding}
-        onClose={() => setAdding(false)}
+        open={adding || !!correcting}
+        correcting={correcting}
+        onClose={() => {
+          setAdding(false)
+          setCorrecting(null)
+        }}
         onSave={(data) => {
           const result = addTransaction(data)
           if (result) {
             setAdding(false)
-            toast.show(`${transactionLabel(data.kind)} logged`)
+            setCorrecting(null)
+            toast.show(correcting ? 'Correction logged' : `${transactionLabel(data.kind)} logged`)
           }
         }}
       />
@@ -431,10 +487,14 @@ export default function Transactions() {
 
 function TransactionForm({
   open,
+  correcting,
   onClose,
   onSave,
 }: {
   open: boolean
+  // When set, the form is in "correction mode": it logs a new linked
+  // entry that references this original (never editing the original).
+  correcting?: Transaction | null
   onClose: () => void
   onSave: (data: {
     bottleId: string
@@ -450,6 +510,8 @@ function TransactionForm({
     reason?: TransactionReason
     leakTestPerformed?: boolean
     notes?: string
+    correctsId?: string
+    correctionReason?: string
     refrigerantMismatch?: { bottleType: string; unitType: string }
   }) => void
 }) {
@@ -483,6 +545,8 @@ function TransactionForm({
   // Leak test performed during this job. null = not answered yet (forces
   // a deliberate Yes/No on charge/recover work); true/false once picked.
   const [leakTest, setLeakTest] = useState<boolean | null>(null)
+  // Required when in correction mode — why the original was wrong.
+  const [correctionReason, setCorrectionReason] = useState('')
   const [notes, setNotes] = useState('')
   const [addingSite, setAddingSite] = useState(false)
   const [addingUnit, setAddingUnit] = useState(false)
@@ -494,10 +558,14 @@ function TransactionForm({
   const [lastOpen, setLastOpen] = useState(open)
   if (open && !lastOpen) {
     setLastOpen(true)
-    setBottleId(bottles[0]?.id ?? '')
+    // In correction mode, pin to the corrected entry's bottle and default
+    // to a signed manual adjustment (the usual shape of a fix); otherwise
+    // start fresh on the first bottle with a charge.
+    setBottleId(correcting?.bottleId ?? bottles[0]?.id ?? '')
     setSiteId('')
     setUnitId('')
-    setKind('charge')
+    setKind(correcting ? 'adjust' : 'charge')
+    setCorrectionReason('')
     setAmount('')
     setBottleAmount('')
     setShowLoss(false)
@@ -570,8 +638,25 @@ function TransactionForm({
   // picked, and the leak-test question must be answered Yes or No.
   const missingReason = showCompliance && !reason
   const missingLeakTest = showCompliance && leakTest === null
+  // A correction must say why the original was wrong.
+  const missingCorrectionReason = !!correcting && !correctionReason.trim()
+  // Plausibility guard on charges — catches gross typos (e.g. 50 kg into
+  // a split). Uses the selected unit's kind + recorded charge when known.
+  const sanity =
+    kind === 'charge'
+      ? chargeSanity(amountKg, {
+          unitKind: selectedUnit?.kind,
+          recordedChargeKg: selectedUnit?.refrigerantCharge,
+        })
+      : { level: 'ok' as const }
+  const blockImplausible = sanity.level === 'block'
   const submitBlocked =
-    blockOverdraw || blockAlreadyReturned || missingReason || missingLeakTest
+    blockOverdraw ||
+    blockAlreadyReturned ||
+    missingReason ||
+    missingLeakTest ||
+    missingCorrectionReason ||
+    blockImplausible
 
   // Resolve identity stamps from the picked profile (or the free-text
   // "Other" field). The store still adds fallbacks on top of these for
@@ -607,6 +692,8 @@ function TransactionForm({
       reason: reason || undefined,
       leakTestPerformed: showCompliance && leakTest !== null ? leakTest : undefined,
       notes: notes.trim() || undefined,
+      correctsId: correcting?.id,
+      correctionReason: correcting ? correctionReason.trim() : undefined,
       refrigerantMismatch:
         unitRefrigerantMismatch &&
         bottle &&
@@ -634,8 +721,33 @@ function TransactionForm({
   }
 
   return (
-    <Modal open={open} title="Log transaction" onClose={onClose}>
+    <Modal
+      open={open}
+      title={correcting ? 'Log correction' : 'Log transaction'}
+      onClose={onClose}
+    >
       <form onSubmit={submit} className="space-y-3">
+        {correcting && (
+          <div className="rounded-xl border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900 dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-100">
+            <div className="font-semibold">Correcting an earlier entry</div>
+            <div className="mt-0.5 text-xs">
+              The original {transactionLabel(correcting.kind).toLowerCase()} of{' '}
+              {formatWeight(correcting.amount, unit)} stays on the record — this
+              logs a new linked entry that fixes it. Enter the correcting
+              amount (an adjustment is pre-selected).
+            </div>
+          </div>
+        )}
+        {correcting && (
+          <Field label="Why is the original wrong?" hint="Required — kept on the audit trail.">
+            <TextInput
+              autoFocus
+              value={correctionReason}
+              onChange={(e) => setCorrectionReason(e.target.value)}
+              placeholder="e.g. logged 5 kg, actually charged 3 kg"
+            />
+          </Field>
+        )}
         <Field label="What happened?">
           <Picker
             title="What happened?"
@@ -836,6 +948,21 @@ function TransactionForm({
           )
         })()}
 
+        {sanity.level !== 'ok' && sanity.message && (
+          <div
+            className={`rounded-xl p-3 text-sm ${
+              sanity.level === 'block'
+                ? 'bg-red-50 text-red-900 dark:bg-red-900/20 dark:text-red-100'
+                : 'bg-amber-50 text-amber-900 dark:bg-amber-900/20 dark:text-amber-100'
+            }`}
+          >
+            <span className="font-semibold">
+              {sanity.level === 'block' ? '⛔ ' : '⚠ '}
+            </span>
+            {sanity.message}
+          </div>
+        )}
+
         {showCompliance && (
           <>
             {!unitId && (
@@ -1005,11 +1132,17 @@ function TransactionForm({
             ? 'Already returned'
             : blockOverdraw
               ? 'Amount exceeds bottle contents'
-              : missingReason
-                ? 'Pick a reason'
-                : missingLeakTest
-                  ? 'Answer leak test'
-                  : 'Save'}
+              : blockImplausible
+                ? 'Amount looks wrong — check it'
+                : missingCorrectionReason
+                  ? 'Add a correction reason'
+                  : missingReason
+                    ? 'Pick a reason'
+                    : missingLeakTest
+                      ? 'Answer leak test'
+                      : correcting
+                        ? 'Log correction'
+                        : 'Save'}
         </Button>
       </form>
 

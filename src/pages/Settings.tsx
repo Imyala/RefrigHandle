@@ -186,6 +186,7 @@ export default function Settings() {
     // by a deletedAt column. Deleted-only columns (deletedAt etc.)
     // appear only in the second section's header.
     const liveHeader = [
+      'id',
       'date',
       'kind',
       'bottleNumber',
@@ -205,6 +206,8 @@ export default function Settings() {
       'equipment',
       'reason',
       'leakTestPerformed',
+      'correctsId',
+      'correctionReason',
       'returnDestination',
       'technician',
       'technicianLicence',
@@ -228,6 +231,7 @@ export default function Settings() {
       const u = state.units.find((x) => x.id === t.unitId)
       const loss = transactionLoss(t)
       return [
+        t.id,
         t.date,
         t.kind,
         b?.bottleNumber ?? '',
@@ -251,6 +255,8 @@ export default function Settings() {
           : t.leakTestPerformed
             ? 'Yes'
             : 'No',
+        t.correctsId ?? '',
+        (t.correctionReason ?? '').replace(/[\r\n]+/g, ' '),
         t.returnDestination ?? '',
         t.technician ?? '',
         t.technicianLicence ?? '',

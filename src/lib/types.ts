@@ -259,6 +259,14 @@ export interface Transaction {
     bottleType: string
     unitType: string
   }
+  // Correction link (append-only correction workflow). When set, this
+  // transaction was logged to correct an earlier one — `correctsId` is
+  // the id of the original entry and `correctionReason` is the typed
+  // explanation. The original is NEVER edited or deleted: both rows stay
+  // on the record and reference each other, so the full history is
+  // preserved for an audit (a true voiding/offsetting entry).
+  correctsId?: string
+  correctionReason?: string
   // Soft-delete fields. A row with deletedAt set is hidden from the
   // normal activity log, dashboard, and equipment logbook, and is
   // excluded from cumulative calcs (leak top-ups, totals). It stays
@@ -799,6 +807,86 @@ export function tonnesCO2eFor(
   const gwp = gwpFor(refrigerant)
   if (gwp == null) return undefined
   return (kg * gwp) / 1000
+}
+
+// --- Charge plausibility ----------------------------------------------
+//
+// Catches gross data-entry errors before they land in the record — e.g.
+// logging 50 kg into a split system that holds ~2 kg. These are sanity
+// guards, NOT regulatory limits: a tech with a genuine edge case can
+// still proceed past a warning. We only hard-block physically absurd
+// values that are almost certainly a typo (wrong decimal place, kg vs g).
+//
+// Per-kind soft thresholds are the upper end of a *single* charge for
+// that equipment class (kg). Above the soft threshold we warn; well
+// above it (or far beyond the unit's own recorded charge) we block.
+export const PLAUSIBLE_MAX_CHARGE_KG: Partial<Record<UnitKind, number>> = {
+  split: 6,
+  split_ducted: 12,
+  multi_head_split: 18,
+  vrf_vrv: 80,
+  heat_pump: 12,
+  package: 40,
+  air_handler_dx: 40,
+  chiller: 1000,
+  refrigeration: 300,
+}
+
+// Multiples applied to a known recorded charge (unit.refrigerantCharge)
+// or to the per-kind soft threshold to decide warn vs. block.
+export const CHARGE_WARN_MULTIPLE = 1.5
+export const CHARGE_BLOCK_MULTIPLE = 5
+
+export type ChargeSanityLevel = 'ok' | 'warn' | 'block'
+
+export interface ChargeSanity {
+  level: ChargeSanityLevel
+  message?: string
+}
+
+// Assess whether `amountKg` is a plausible single charge into equipment.
+// Prefers the unit's own recorded charge when known (most specific);
+// otherwise falls back to the per-kind soft threshold. Returns 'ok' when
+// we have nothing to compare against (unknown kind, no recorded charge).
+export function chargeSanity(
+  amountKg: number,
+  opts: { unitKind?: UnitKind; recordedChargeKg?: number },
+): ChargeSanity {
+  if (!(amountKg > 0)) return { level: 'ok' }
+  const { unitKind, recordedChargeKg } = opts
+
+  if (recordedChargeKg && recordedChargeKg > 0) {
+    if (amountKg > recordedChargeKg * CHARGE_BLOCK_MULTIPLE) {
+      return {
+        level: 'block',
+        message: `${amountKg.toFixed(2)} kg is more than ${CHARGE_BLOCK_MULTIPLE}× this unit's recorded charge (${recordedChargeKg.toFixed(2)} kg) — almost certainly a typo.`,
+      }
+    }
+    if (amountKg > recordedChargeKg * CHARGE_WARN_MULTIPLE) {
+      return {
+        level: 'warn',
+        message: `${amountKg.toFixed(2)} kg exceeds this unit's recorded charge (${recordedChargeKg.toFixed(2)} kg). Double-check the amount.`,
+      }
+    }
+    return { level: 'ok' }
+  }
+
+  const soft = unitKind ? PLAUSIBLE_MAX_CHARGE_KG[unitKind] : undefined
+  if (soft) {
+    if (amountKg > soft * 2) {
+      return {
+        level: 'block',
+        message: `${amountKg.toFixed(2)} kg is far above the typical maximum for a ${UNIT_KIND_LABELS[unitKind!].toLowerCase()} (~${soft} kg) — check for a data-entry error.`,
+      }
+    }
+    if (amountKg > soft) {
+      return {
+        level: 'warn',
+        message: `${amountKg.toFixed(2)} kg is high for a ${UNIT_KIND_LABELS[unitKind!].toLowerCase()} (~${soft} kg typical). Double-check the amount.`,
+      }
+    }
+  }
+  return { level: 'ok' }
 }
 
 // --- Leak detection ---------------------------------------------------
