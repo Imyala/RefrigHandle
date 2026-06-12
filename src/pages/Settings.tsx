@@ -90,6 +90,50 @@ export default function Settings() {
   useEffect(() => setLoc(state.location), [state.location])
   useEffect(() => setTeamIdInput(state.sync.teamId), [state.sync.teamId])
 
+  // --- Auto-save for the compliance + location cards -------------------
+  // These cards used to have explicit Save buttons. Now each field
+  // commits to the store on blur (text fields) or on a short debounce
+  // (the location pickers), so a tech can't enter compliance details and
+  // walk away thinking they're stored when they aren't. Each commit
+  // flashes a small "Saved" confirmation in the card header.
+  const [compSaved, flashComp] = useSaveFlash()
+  const [locSaved, flashLoc] = useSaveFlash()
+
+  // ABN is held back from the store until it's valid (or blank) — an
+  // invalid number shows an inline hint instead of being saved.
+  const abnInvalid = abn.trim() !== '' && !isValidAbn(abn)
+
+  function commitBizName() {
+    if (bizName.trim() !== state.businessName) {
+      setBusinessName(bizName)
+      flashComp()
+    }
+  }
+  function commitAbn() {
+    if (abnInvalid) return
+    if (abn.trim() !== state.businessAbn) {
+      setBusinessAbn(abn)
+      flashComp()
+    }
+  }
+  function commitArcAuth() {
+    if (arcAuth.trim() !== state.arcAuthorisationNumber) {
+      setArcAuthorisationNumber(arcAuth)
+      flashComp()
+    }
+  }
+
+  // Location commits on a debounce so a burst of picker changes
+  // (state → city → timezone) coalesces into one save + one audit entry.
+  useEffect(() => {
+    if (locationEqual(loc, state.location)) return
+    const id = setTimeout(() => {
+      setLocation(loc)
+      flashLoc()
+    }, 600)
+    return () => clearTimeout(id)
+  }, [loc, state.location, setLocation, flashLoc])
+
   function openAddTech() {
     setEditingTech(null)
     setTechModalOpen(true)
@@ -249,9 +293,12 @@ export default function Settings() {
         t.weightAfter.toFixed(3),
         t.sourceWeightBefore?.toFixed(3) ?? '',
         t.sourceWeightAfter?.toFixed(3) ?? '',
-        s?.name ?? '',
+        // Live record first, then the name frozen on the row when the
+        // site/unit was deleted — exports must keep saying where the
+        // work happened.
+        s?.name ?? t.siteName ?? '',
         s?.client ?? '',
-        u?.name ?? '',
+        u?.name ?? t.unitName ?? '',
         u?.serial ?? '',
         t.equipment ?? '',
         t.reason ?? '',
@@ -301,7 +348,15 @@ export default function Settings() {
       .map((r) =>
         (Array.isArray(r) ? r : [r])
           .map((cell) => {
-            const s = String(cell ?? '')
+            let s = String(cell ?? '')
+            // Spreadsheet formula-injection guard: a free-text field
+            // starting with = @ + or - would execute as a formula when
+            // the auditor opens the CSV in Excel. Prefix with ' to force
+            // text — but leave plain negative numbers (e.g. -2.000 on an
+            // adjust) untouched.
+            if (/^[=@]/.test(s) || (/^[+-]/.test(s) && !/^[+-]?\d+(\.\d+)?$/.test(s))) {
+              s = `'${s}`
+            }
             return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
           })
           .join(','),
@@ -426,20 +481,7 @@ export default function Settings() {
           <div className="text-sm font-semibold text-slate-700 dark:text-slate-200">
             Compliance details (Australia)
           </div>
-          <Button
-            onClick={() => {
-              if (abn.trim() !== '' && !isValidAbn(abn)) {
-                toast.show('ABN must be a valid 11-digit number', 'error')
-                return
-              }
-              setBusinessName(bizName)
-              setBusinessAbn(abn)
-              setArcAuthorisationNumber(arcAuth)
-              toast.show('Saved')
-            }}
-          >
-            Save
-          </Button>
+          <SavedFlash show={compSaved} />
         </div>
         <p className="mb-3 text-xs text-slate-500">
           Used on logbook printouts and stamped onto every transaction at the
@@ -461,16 +503,22 @@ export default function Settings() {
             <TextInput
               value={bizName}
               onChange={(e) => setBizName(e.target.value)}
+              onBlur={commitBizName}
               placeholder="e.g. Acme Refrigeration Pty Ltd"
             />
           </Field>
           <Field
             label="Business ABN"
-            hint="Your 11-digit Australian Business Number."
+            hint={
+              abnInvalid
+                ? 'Must be a valid 11-digit ABN — not saved until corrected.'
+                : 'Your 11-digit Australian Business Number.'
+            }
           >
             <TextInput
               value={abn}
               onChange={(e) => setAbn(e.target.value)}
+              onBlur={commitAbn}
               inputMode="numeric"
               placeholder="e.g. 51 824 753 556"
             />
@@ -482,6 +530,7 @@ export default function Settings() {
             <TextInput
               value={arcAuth}
               onChange={(e) => setArcAuth(e.target.value)}
+              onBlur={commitArcAuth}
               placeholder="e.g. AU00000"
             />
           </Field>
@@ -498,14 +547,7 @@ export default function Settings() {
           <div className="text-sm font-semibold text-slate-700 dark:text-slate-200">
             Location
           </div>
-          <Button
-            onClick={() => {
-              setLocation(loc)
-              toast.show('Saved')
-            }}
-          >
-            Save
-          </Button>
+          <SavedFlash show={locSaved} />
         </div>
         <p className="mb-3 text-xs text-slate-500">
           Drives the timezone used for "now" defaults on transactions and the
@@ -1246,8 +1288,12 @@ function DeletedTransactionsCard({
                         </div>
                         <div className="mt-0.5 text-xs text-slate-600 dark:text-slate-400">
                           {bottle?.bottleNumber ?? '(deleted bottle)'}
-                          {site ? ` · ${site.name}` : ''}
-                          {txUnit ? ` · ${txUnit.name}` : ''}
+                          {(site?.name ?? t.siteName)
+                            ? ` · ${site?.name ?? t.siteName}`
+                            : ''}
+                          {(txUnit?.name ?? t.unitName)
+                            ? ` · ${txUnit?.name ?? t.unitName}`
+                            : ''}
                         </div>
                         <div className="mt-0.5 text-xs text-slate-500">
                           Logged{' '}
@@ -1293,6 +1339,42 @@ function DeletedTransactionsCard({
         </>
       )}
     </Card>
+  )
+}
+
+// Tracks a transient "Saved" confirmation. flash() shows it for ~1.8s;
+// rapid commits just reset the timer so it stays visible while editing.
+function useSaveFlash(): [boolean, () => void] {
+  const [shown, setShown] = useState(false)
+  const timer = useRef<number | undefined>(undefined)
+  const flash = useCallback(() => {
+    setShown(true)
+    window.clearTimeout(timer.current)
+    timer.current = window.setTimeout(() => setShown(false), 1800)
+  }, [])
+  useEffect(() => () => window.clearTimeout(timer.current), [])
+  return [shown, flash]
+}
+
+function SavedFlash({ show }: { show: boolean }) {
+  return (
+    <span
+      aria-live="polite"
+      className={`text-xs font-medium text-green-600 transition-opacity dark:text-green-400 ${
+        show ? 'opacity-100' : 'opacity-0'
+      }`}
+    >
+      ✓ Saved
+    </span>
+  )
+}
+
+function locationEqual(a: LocationSettings, b: LocationSettings): boolean {
+  return (
+    a.country === b.country &&
+    a.region === b.region &&
+    a.city === b.city &&
+    a.timezone === b.timezone
   )
 }
 
