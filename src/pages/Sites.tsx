@@ -1626,6 +1626,7 @@ function UnitLogbook({
                     <th className="py-1 pr-2 text-right">Bottle kg</th>
                     <th className="py-1 pr-2 text-right">Loss kg</th>
                     <th className="py-1 pr-2">Reason</th>
+                    <th className="py-1 pr-2">Leak test</th>
                     <th className="py-1 pr-2">Operator</th>
                     <th className="py-1">Notes</th>
                   </tr>
@@ -1722,6 +1723,13 @@ function LogbookRow({ t }: { t: Transaction }) {
         {loss > 0 ? loss.toFixed(3) : ''}
       </td>
       <td className="py-1 pr-2">{t.reason ?? ''}</td>
+      <td className="py-1 pr-2">
+        {t.leakTestPerformed === undefined
+          ? ''
+          : t.leakTestPerformed
+            ? 'Yes'
+            : 'No'}
+      </td>
       <td className="py-1 pr-2 whitespace-nowrap">
         {t.technician && <div>{t.technician}</div>}
         {t.technicianLicence && (
@@ -2000,6 +2008,7 @@ function SiteAuditModal({
                     <th className="py-1 pr-2 text-right">Refrig kg</th>
                     <th className="py-1 pr-2 text-right">Loss kg</th>
                     <th className="py-1 pr-2">Reason</th>
+                    <th className="py-1 pr-2">Leak test</th>
                     <th className="py-1">Operator</th>
                   </tr>
                 </thead>
@@ -2058,6 +2067,13 @@ function AuditTxRow({ t }: { t: Transaction }) {
         {loss > 0 ? loss.toFixed(3) : ''}
       </td>
       <td className="py-1 pr-2">{t.reason ? REASON_LABELS[t.reason] : ''}</td>
+      <td className="py-1 pr-2">
+        {t.leakTestPerformed === undefined
+          ? ''
+          : t.leakTestPerformed
+            ? 'Yes'
+            : 'No'}
+      </td>
       <td className="py-1 whitespace-nowrap">
         {t.technician && <div>{t.technician}</div>}
         {t.technicianLicence && (

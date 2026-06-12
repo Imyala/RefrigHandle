@@ -522,7 +522,7 @@ export default function Bottles() {
                 const ok = await confirm({
                   title: 'Delete this bottle?',
                   message:
-                    'The bottle and all of its transactions will be removed from the record. This cannot be undone.',
+                    'The bottle is removed from your inventory, but its refrigerant log entries are kept (soft-deleted) for the audit trail — visible in Settings → Deleted transactions and the CSV/JSON export.',
                   confirmLabel: 'Delete bottle',
                   danger: true,
                 })
@@ -859,6 +859,7 @@ function QuickLogModal({
     technician?: string
     equipment?: string
     reason?: TransactionReason
+    leakTestPerformed?: boolean
     notes?: string
     returnDestination?: string
     refrigerantMismatch?: { bottleType: string; unitType: string }
@@ -885,6 +886,9 @@ function QuickLogModal({
   const [unitId, setUnitId] = useState('')
   const [equipment, setEquipment] = useState('')
   const [reason, setReason] = useState<TransactionReason | ''>('')
+  // Leak test performed during this job. null = unanswered (forces a
+  // deliberate Yes/No on charge/recover); true/false once picked.
+  const [leakTest, setLeakTest] = useState<boolean | null>(null)
   const [notes, setNotes] = useState('')
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 16))
   const [recoverSource, setRecoverSource] = useState<RecoverSource>('equipment')
@@ -907,6 +911,7 @@ function QuickLogModal({
     setUnitId('')
     setEquipment('')
     setReason('')
+    setLeakTest(null)
     setNotes('')
     setDate(new Date().toISOString().slice(0, 16))
     setRecoverSource('equipment')
@@ -998,8 +1003,16 @@ function QuickLogModal({
   // service (edit → status: in stock).
   const blockAlreadyReturned =
     kind === 'return' && bottle.status === 'returned'
+  // Audit-required fields on equipment work: Purpose/Reason must be
+  // picked and the leak-test question answered Yes or No.
+  const missingReason = showCompliance && !reason
+  const missingLeakTest = showCompliance && leakTest === null
   const submitBlocked =
-    blockOverdraw || blockSourceOverdraw || blockAlreadyReturned
+    blockOverdraw ||
+    blockSourceOverdraw ||
+    blockAlreadyReturned ||
+    missingReason ||
+    missingLeakTest
 
   function handleUnitChange(value: string) {
     if (value === '__new__') {
@@ -1031,6 +1044,7 @@ function QuickLogModal({
       // from the Activity tab where the picker lives.
       equipment: equipment.trim() || undefined,
       reason: reason || undefined,
+      leakTestPerformed: showCompliance && leakTest !== null ? leakTest : undefined,
       notes: notes.trim() || undefined,
       returnDestination:
         kind === 'return' && returnDestination.trim()
@@ -1330,8 +1344,9 @@ function QuickLogModal({
                   />
                 </Field>
               )}
-              <Field label="Reason">
+              <Field label="Reason" hint="Required — the purpose of this job.">
                 <Picker
+                  required
                   title="Reason"
                   value={reason}
                   onChange={(v) => setReason(v as TransactionReason | '')}
@@ -1340,6 +1355,27 @@ function QuickLogModal({
                     (r) => ({ value: r, label: REASON_LABELS[r] }),
                   )}
                 />
+              </Field>
+              <Field label="Leak test performed?">
+                <div className="grid grid-cols-2 gap-2">
+                  {([
+                    ['Yes', true],
+                    ['No', false],
+                  ] as const).map(([label, val]) => (
+                    <button
+                      key={label}
+                      type="button"
+                      onClick={() => setLeakTest(val)}
+                      className={`rounded-xl px-3 py-3 text-sm font-medium transition ${
+                        leakTest === val
+                          ? 'bg-brand-600 text-white'
+                          : 'bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-200'
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
               </Field>
             </>
           )}
@@ -1380,9 +1416,13 @@ function QuickLogModal({
           <Button type="submit" full disabled={submitBlocked}>
             {blockAlreadyReturned
               ? 'Already returned'
-              : submitBlocked
+              : blockOverdraw || blockSourceOverdraw
                 ? 'Amount exceeds bottle contents'
-                : 'Save'}
+                : missingReason
+                  ? 'Pick a reason'
+                  : missingLeakTest
+                    ? 'Answer leak test'
+                    : 'Save'}
           </Button>
         </form>
       </Modal>

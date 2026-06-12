@@ -308,17 +308,41 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const deleteBottle: StoreApi['deleteBottle'] = useCallback((id) => {
     setState((s) => {
       const before = s.bottles.find((b) => b.id === id)
+      const activeTech = s.technicians.find(
+        (x) => x.id === s.activeTechnicianId,
+      )
+      const now = new Date().toISOString()
+      // The bottle row is removed, but its refrigerant log entries are
+      // PRESERVED for the audit trail — soft-deleted rather than purged,
+      // so the trail isn't broken when a cylinder is retired. We stamp
+      // the bottle number into deletedReason so the rows still identify
+      // their cylinder in the export once the bottle record is gone.
+      // Rows already soft-deleted keep their original reason untouched.
+      const transactions = s.transactions.map((t) =>
+        t.bottleId === id && !t.deletedAt
+          ? {
+              ...t,
+              deletedAt: now,
+              deletedBy: activeTech?.name || s.technician || undefined,
+              deletedByLicence:
+                activeTech?.arcLicenceNumber || s.arcLicenceNumber || undefined,
+              deletedReason: before
+                ? `Bottle ${before.bottleNumber} deleted`
+                : 'Bottle deleted',
+            }
+          : t,
+      )
       return {
         ...s,
         bottles: s.bottles.filter((b) => b.id !== id),
-        transactions: s.transactions.filter((t) => t.bottleId !== id),
+        transactions,
         auditLog: before
           ? withAudit(s, {
               action: 'delete',
               entity: 'bottle',
               entityId: id,
               target: before.bottleNumber,
-              summary: `Removed bottle ${before.bottleNumber} and its log entries`,
+              summary: `Removed bottle ${before.bottleNumber} — its log entries are kept (soft-deleted) for the audit trail`,
             })
           : s.auditLog,
       }

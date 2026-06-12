@@ -242,6 +242,11 @@ export interface Transaction {
   arcAuthorisationNumber?: string
   equipment?: string // free-text fallback if no Unit is picked
   reason?: TransactionReason
+  // Whether a leak test was performed as part of this job. Optional —
+  // only meaningful for charge/recover work, and undefined on older
+  // records / movement rows. Surfaced on the log and in the audit CSV
+  // so an auditor can see leak-test coverage at a glance.
+  leakTestPerformed?: boolean
   notes?: string
   // Where the bottle was returned (store / supplier) — only for 'return' kind
   returnDestination?: string

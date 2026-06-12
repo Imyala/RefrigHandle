@@ -304,6 +304,11 @@ export default function Transactions() {
                         Returned to: {t.returnDestination}
                       </div>
                     )}
+                    {t.leakTestPerformed !== undefined && (
+                      <div className="text-xs text-slate-500">
+                        Leak test: {t.leakTestPerformed ? 'Yes' : 'No'}
+                      </div>
+                    )}
                     <div className="text-xs text-slate-500">
                       {formatDateTime(t.date, state.location.timezone, state.clock)}
                       {t.amount > 0 && (
@@ -443,6 +448,7 @@ function TransactionForm({
     technicianLicence?: string
     equipment?: string
     reason?: TransactionReason
+    leakTestPerformed?: boolean
     notes?: string
     refrigerantMismatch?: { bottleType: string; unitType: string }
   }) => void
@@ -474,6 +480,9 @@ function TransactionForm({
   const [pwPromptTech, setPwPromptTech] = useState<Technician | null>(null)
   const [equipment, setEquipment] = useState('')
   const [reason, setReason] = useState<TransactionReason | ''>('')
+  // Leak test performed during this job. null = not answered yet (forces
+  // a deliberate Yes/No on charge/recover work); true/false once picked.
+  const [leakTest, setLeakTest] = useState<boolean | null>(null)
   const [notes, setNotes] = useState('')
   const [addingSite, setAddingSite] = useState(false)
   const [addingUnit, setAddingUnit] = useState(false)
@@ -503,6 +512,7 @@ function TransactionForm({
     setNewTechRhl('')
     setEquipment('')
     setReason('')
+    setLeakTest(null)
     setNotes('')
   } else if (!open && lastOpen) {
     setLastOpen(false)
@@ -556,7 +566,12 @@ function TransactionForm({
   // put back into service first.
   const blockAlreadyReturned =
     !!bottle && kind === 'return' && bottle.status === 'returned'
-  const submitBlocked = blockOverdraw || blockAlreadyReturned
+  // Audit-required fields on equipment work: a Purpose/Reason must be
+  // picked, and the leak-test question must be answered Yes or No.
+  const missingReason = showCompliance && !reason
+  const missingLeakTest = showCompliance && leakTest === null
+  const submitBlocked =
+    blockOverdraw || blockAlreadyReturned || missingReason || missingLeakTest
 
   // Resolve identity stamps from the picked profile (or the free-text
   // "Other" field). The store still adds fallbacks on top of these for
@@ -590,6 +605,7 @@ function TransactionForm({
       technicianLicence: stampedRhl,
       equipment: equipment.trim() || undefined,
       reason: reason || undefined,
+      leakTestPerformed: showCompliance && leakTest !== null ? leakTest : undefined,
       notes: notes.trim() || undefined,
       refrigerantMismatch:
         unitRefrigerantMismatch &&
@@ -834,8 +850,9 @@ function TransactionForm({
                 />
               </Field>
             )}
-            <Field label="Reason">
+            <Field label="Reason" hint="Required — the purpose of this job.">
               <Picker
+                required
                 title="Reason"
                 value={reason}
                 onChange={(v) => setReason(v as TransactionReason | '')}
@@ -844,6 +861,27 @@ function TransactionForm({
                   (r) => ({ value: r, label: REASON_LABELS[r] }),
                 )}
               />
+            </Field>
+            <Field label="Leak test performed?">
+              <div className="grid grid-cols-2 gap-2">
+                {([
+                  ['Yes', true],
+                  ['No', false],
+                ] as const).map(([label, val]) => (
+                  <button
+                    key={label}
+                    type="button"
+                    onClick={() => setLeakTest(val)}
+                    className={`rounded-xl px-3 py-3 text-sm font-medium transition ${
+                      leakTest === val
+                        ? 'bg-brand-600 text-white'
+                        : 'bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-200'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
             </Field>
           </>
         )}
@@ -967,7 +1005,11 @@ function TransactionForm({
             ? 'Already returned'
             : blockOverdraw
               ? 'Amount exceeds bottle contents'
-              : 'Save'}
+              : missingReason
+                ? 'Pick a reason'
+                : missingLeakTest
+                  ? 'Answer leak test'
+                  : 'Save'}
         </Button>
       </form>
 

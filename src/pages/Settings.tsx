@@ -201,8 +201,10 @@ export default function Settings() {
       'site',
       'client',
       'unit',
+      'unitSerial',
       'equipment',
       'reason',
+      'leakTestPerformed',
       'returnDestination',
       'technician',
       'technicianLicence',
@@ -241,8 +243,14 @@ export default function Settings() {
         s?.name ?? '',
         s?.client ?? '',
         u?.name ?? '',
+        u?.serial ?? '',
         t.equipment ?? '',
         t.reason ?? '',
+        t.leakTestPerformed === undefined
+          ? ''
+          : t.leakTestPerformed
+            ? 'Yes'
+            : 'No',
         t.returnDestination ?? '',
         t.technician ?? '',
         t.technicianLicence ?? '',
