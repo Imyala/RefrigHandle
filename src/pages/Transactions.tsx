@@ -119,8 +119,10 @@ export default function Transactions() {
           return [
             bottle?.bottleNumber,
             txUnit?.name,
+            t.unitName,
             t.equipment,
             site?.name,
+            t.siteName,
             site?.address,
             t.technician,
             t.technicianLicence,
@@ -314,7 +316,11 @@ export default function Transactions() {
                     <div className="mt-1 text-sm text-slate-700 dark:text-slate-300">
                       {bottle?.bottleNumber ?? '(deleted)'}
                       {sourceBottle && ` ← ${sourceBottle.bottleNumber}`}
-                      {!move && site ? ` · ${site.name}` : ''}
+                      {/* Fall back to the name frozen on the row when the
+                          site record was deleted. */}
+                      {!move && (site?.name ?? t.siteName)
+                        ? ` · ${site?.name ?? t.siteName}`
+                        : ''}
                     </div>
                     {move && (
                       <div className="mt-0.5 flex flex-wrap items-center gap-1 text-sm text-slate-700 dark:text-slate-300">
@@ -331,11 +337,12 @@ export default function Transactions() {
                         <span className="font-medium">{move.to}</span>
                       </div>
                     )}
-                    {(txUnit || t.equipment || t.reason) && (
+                    {(txUnit || t.unitName || t.equipment || t.reason) && (
                       <div className="text-xs text-slate-500">
-                        {txUnit && txUnit.name}
-                        {!txUnit && t.equipment && t.equipment}
-                        {(txUnit || t.equipment) && t.reason && ' · '}
+                        {txUnit?.name ?? t.unitName ?? t.equipment}
+                        {(txUnit || t.unitName || t.equipment) &&
+                          t.reason &&
+                          ' · '}
                         {t.reason && REASON_LABELS[t.reason]}
                       </div>
                     )}

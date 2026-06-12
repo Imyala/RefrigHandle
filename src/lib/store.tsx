@@ -397,6 +397,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const deleteSite: StoreApi['deleteSite'] = useCallback((id) => {
     setState((s) => {
       const before = s.sites.find((x) => x.id === id)
+      // Deleting a site (and its units) must not rewrite history: every
+      // transaction that referenced it gets the site/unit NAME frozen on
+      // the row before the link is cleared, so logbooks and exports keep
+      // saying where the work happened.
+      const deletedUnitNames = new Map(
+        s.units.filter((u) => u.siteId === id).map((u) => [u.id, u.name]),
+      )
       return {
         ...s,
         sites: s.sites.filter((x) => x.id !== id),
@@ -404,16 +411,27 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         bottles: s.bottles.map((b) =>
           b.currentSiteId === id ? { ...b, currentSiteId: undefined } : b,
         ),
-        transactions: s.transactions.map((t) =>
-          t.siteId === id ? { ...t, siteId: undefined } : t,
-        ),
+        transactions: s.transactions.map((t) => {
+          const siteHit = t.siteId === id
+          const unitHit = t.unitId != null && deletedUnitNames.has(t.unitId)
+          if (!siteHit && !unitHit) return t
+          return {
+            ...t,
+            siteId: siteHit ? undefined : t.siteId,
+            siteName: siteHit ? (before?.name ?? t.siteName) : t.siteName,
+            unitId: unitHit ? undefined : t.unitId,
+            unitName: unitHit
+              ? deletedUnitNames.get(t.unitId!) ?? t.unitName
+              : t.unitName,
+          }
+        }),
         auditLog: before
           ? withAudit(s, {
               action: 'delete',
               entity: 'site',
               entityId: id,
               target: before.name,
-              summary: `Removed site ${before.name} — its units were deleted and bottle/log links cleared`,
+              summary: `Removed site ${before.name} — its units were deleted; past log entries keep the site/unit names frozen on the record`,
             })
           : s.auditLog,
       }
@@ -472,8 +490,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       return {
         ...s,
         units: s.units.filter((u) => u.id !== id),
+        // Freeze the unit's name onto its log rows before clearing the
+        // link — deleting equipment must not erase where past work
+        // happened from the historical record.
         transactions: s.transactions.map((t) =>
-          t.unitId === id ? { ...t, unitId: undefined } : t,
+          t.unitId === id
+            ? { ...t, unitId: undefined, unitName: before?.name ?? t.unitName }
+            : t,
         ),
         auditLog: before
           ? withAudit(s, {

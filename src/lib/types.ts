@@ -217,6 +217,14 @@ export interface Transaction {
   sourceWeightAfter?: number
   siteId?: string
   unitId?: string
+  // Frozen display names, stamped when the referenced site/unit record
+  // is deleted. Historical rows must keep saying where the work
+  // happened even after the site/unit itself is removed from the
+  // register — an audit printout that shows "—" for location because
+  // someone tidied up old sites is a broken record. Unset while the
+  // live record still exists (the id lookup wins).
+  siteName?: string
+  unitName?: string
   kind: TransactionKind
   amount: number // kg of refrigerant moved (always positive). For charge: into equipment. For recover: out of equipment.
   // Optional bottle-side amount when it differs from `amount` due to
@@ -722,6 +730,17 @@ export function siteIdBeforeMovement(
   tx: Transaction,
   transactions: readonly Transaction[],
 ): string | undefined {
+  const prev = movementBefore(tx, transactions)
+  if (!prev || prev.kind === 'return') return undefined
+  return prev.siteId
+}
+
+// The movement (transfer / return) immediately before the given one in
+// the bottle's history, or undefined when this is the first move.
+function movementBefore(
+  tx: Transaction,
+  transactions: readonly Transaction[],
+): Transaction | undefined {
   const moves = transactions
     .map((t, i) => ({ t, i }))
     .filter(({ t }) => t.bottleId === tx.bottleId && isMovement(t.kind))
@@ -733,9 +752,7 @@ export function siteIdBeforeMovement(
   })
   const idx = moves.findIndex((m) => m.t.id === tx.id)
   if (idx <= 0) return undefined
-  const prev = moves[idx - 1].t
-  if (prev.kind === 'return') return undefined
-  return prev.siteId
+  return moves[idx - 1].t
 }
 
 // A human-readable "from → to" for a movement transaction, using a
@@ -747,11 +764,17 @@ export function movementSummary(
   siteName: (id: string | undefined) => string | undefined,
 ): { from: string; to: string } | null {
   if (!isMovement(tx.kind)) return null
-  const from = siteName(siteIdBeforeMovement(tx, transactions)) ?? 'Stock'
+  // Resolve via the live site record first, falling back to the name
+  // frozen onto the row when the site was deleted.
+  const prev = movementBefore(tx, transactions)
+  const from =
+    prev && prev.kind !== 'return'
+      ? siteName(prev.siteId) ?? prev.siteName ?? 'Stock'
+      : 'Stock'
   const to =
     tx.kind === 'return'
       ? tx.returnDestination?.trim() || 'Stock'
-      : siteName(tx.siteId) ?? 'Stock'
+      : siteName(tx.siteId) ?? tx.siteName ?? 'Stock'
   return { from, to }
 }
 

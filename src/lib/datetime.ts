@@ -94,6 +94,31 @@ export function formatDateTime(
   return d.toLocaleString(undefined, opts)
 }
 
+// Date-only rendering of a stored ISO timestamp, in the configured
+// timezone. Used on logbook / audit printouts where showing the date in
+// the browser's zone instead of the business's could shift an
+// early-morning job onto the previous calendar day.
+export function formatDate(iso: string, tz?: string): string {
+  if (!iso) return ''
+  const d = new Date(iso)
+  const opts: Intl.DateTimeFormatOptions = { dateStyle: 'medium' }
+  if (tz && isTzSupported(tz)) opts.timeZone = tz
+  return d.toLocaleDateString('en-AU', opts)
+}
+
+// Render a plain calendar date (YYYY-MM-DD, no time component) without
+// round-tripping through Date — `new Date('YYYY-MM-DD')` parses as UTC
+// midnight, so formatting it in a negative-offset zone shows the
+// previous day. Install dates etc. are wall-calendar facts; format the
+// parts directly.
+export function formatPlainDate(ymd: string): string {
+  const m = ymd.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+  if (!m) return ymd
+  // Construct at local noon so the formatter can't cross a date line.
+  const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]), 12)
+  return d.toLocaleDateString('en-AU', { dateStyle: 'medium' })
+}
+
 // Convert a stored ISO timestamp into the "YYYY-MM-DDTHH:MM" string
 // the form input expects, using the configured timezone.
 export function isoToDateTimeInput(iso: string, tz?: string): string {

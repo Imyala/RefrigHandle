@@ -13,7 +13,7 @@ import {
   transactionLoss,
   type Transaction,
 } from '../lib/types'
-import { formatDateTime } from '../lib/datetime'
+import { formatDate, formatDateTime } from '../lib/datetime'
 import { formatWeight, kgToDisplay } from '../lib/units'
 
 export default function Dashboard() {
@@ -232,12 +232,16 @@ function RecentActivityItem({ t }: { t: Transaction }) {
           </div>
           <div className="truncate text-sm text-slate-500">
             {bottle?.bottleNumber ?? '?'} · {bottle?.refrigerantType ?? '?'}
-            {move ? ` · ${move.from} → ${move.to}` : site ? ` · ${site.name}` : ''}
+            {move
+              ? ` · ${move.from} → ${move.to}`
+              : (site?.name ?? t.siteName)
+                ? ` · ${site?.name ?? t.siteName}`
+                : ''}
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-2">
           <span className="text-xs text-slate-500">
-            {new Date(t.date).toLocaleDateString()}
+            {formatDate(t.date, state.location.timezone)}
           </span>
           <svg
             aria-hidden
@@ -265,11 +269,13 @@ function RecentActivityItem({ t }: { t: Transaction }) {
               value={sourceBottle.bottleNumber}
             />
           )}
-          {!move && site && <DetailLine label="Site" value={site.name} />}
-          {(txUnit || t.equipment) && (
+          {!move && (site?.name ?? t.siteName) && (
+            <DetailLine label="Site" value={site?.name ?? t.siteName ?? ''} />
+          )}
+          {(txUnit || t.unitName || t.equipment) && (
             <DetailLine
               label="Equipment"
-              value={txUnit?.name ?? t.equipment ?? ''}
+              value={txUnit?.name ?? t.unitName ?? t.equipment ?? ''}
             />
           )}
           {t.reason && (

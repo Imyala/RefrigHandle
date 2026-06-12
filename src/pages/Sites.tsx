@@ -34,7 +34,7 @@ import {
 } from '../lib/types'
 import { RefrigerantSelect } from '../components/RefrigerantSelect'
 import { DateInput } from '../components/DateInput'
-import { formatDateTime } from '../lib/datetime'
+import { formatDate, formatDateTime, formatPlainDate } from '../lib/datetime'
 import { useToast } from '../lib/toast'
 import { useConfirm } from '../lib/confirm'
 import { displayToKg, formatWeight, kgToDisplay } from '../lib/units'
@@ -301,8 +301,10 @@ function SiteCard({ site, onOpen }: { site: Site; onOpen: () => void }) {
     (u) => u.siteId === site.id && u.status === 'decommissioned',
   )
   const onSite = bottles.filter((b) => b.currentSiteId === site.id)
+  // Exclude soft-deleted rows — the printable Site Audit does, and the
+  // card stat must agree with it.
   const charged = transactions
-    .filter((t) => t.siteId === site.id && t.kind === 'charge')
+    .filter((t) => !t.deletedAt && t.siteId === site.id && t.kind === 'charge')
     .reduce((s, t) => s + t.amount, 0)
 
   return (
@@ -990,7 +992,7 @@ function DecommissionedUnitCard({
           </div>
           {u.decommissionedAt && (
             <div className="text-xs text-slate-500">
-              {new Date(u.decommissionedAt).toLocaleDateString()}
+              {formatDate(u.decommissionedAt, state.location.timezone)}
               {u.decommissionedReason && ` · ${u.decommissionedReason}`}
             </div>
           )}
@@ -1533,10 +1535,7 @@ function UnitLogbook({
             {unit.model && <Kv label="Model" v={unit.model} />}
             {unit.serial && <Kv label="Serial" v={unit.serial} />}
             {unit.installDate && (
-              <Kv
-                label="Installed"
-                v={new Date(unit.installDate).toLocaleDateString('en-AU')}
-              />
+              <Kv label="Installed" v={formatPlainDate(unit.installDate)} />
             )}
           </div>
         </section>
@@ -1686,7 +1685,9 @@ function LogbookRow({ t }: { t: Transaction }) {
   return (
     <tr className="border-b border-slate-200 align-top dark:border-slate-800">
       <td className="py-1 pr-2 whitespace-nowrap">
-        {new Date(t.date).toLocaleDateString('en-AU')}
+        {/* Business timezone, not browser — printed audit dates must
+            match the on-screen log. */}
+        {formatDate(t.date, state.location.timezone)}
       </td>
       <td className="py-1 pr-2">
         {transactionLabel(t.kind)}
@@ -2044,11 +2045,11 @@ function AuditTxRow({ t }: { t: Transaction }) {
   return (
     <tr className="border-b border-slate-200 align-top dark:border-slate-800">
       <td className="py-1 pr-2 whitespace-nowrap">
-        {new Date(t.date).toLocaleDateString('en-AU')}
+        {formatDate(t.date, state.location.timezone)}
       </td>
       <td className="py-1 pr-2">{transactionLabel(t.kind)}</td>
       <td className="py-1 pr-2">{bottle ? bottle.bottleNumber : '—'}</td>
-      <td className="py-1 pr-2">{unit?.name ?? t.equipment ?? '—'}</td>
+      <td className="py-1 pr-2">{unit?.name ?? t.unitName ?? t.equipment ?? '—'}</td>
       <td className="py-1 pr-2 text-right tabular-nums">
         {refrigKg ? refrigKg.toFixed(3) : ''}
       </td>

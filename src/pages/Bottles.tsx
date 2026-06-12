@@ -35,11 +35,16 @@ import {
 import { RefrigerantSelect } from '../components/RefrigerantSelect'
 import { BottleSelect } from '../components/BottleSelect'
 import { MonthInput } from '../components/MonthInput'
+import { DateTimeInput } from '../components/DateTimeInput'
 import { SiteForm } from './Sites'
 import { useToast } from '../lib/toast'
 import { useConfirm } from '../lib/confirm'
 import { displayToKg, formatWeight, kgToDisplay } from '../lib/units'
-import { formatDateTime } from '../lib/datetime'
+import {
+  dateTimeInputToIso,
+  formatDateTime,
+  localDateTimeInput,
+} from '../lib/datetime'
 
 const statusTone: Record<
   BottleStatus,
@@ -823,7 +828,7 @@ function BottleActionSheet({
                       </div>
                       <div className="truncate text-xs text-slate-500">
                         {formatDateTime(t.date, state.location.timezone, state.clock)}
-                        {j ? ` · ${j.name}` : ''}
+                        {(j?.name ?? t.siteName) ? ` · ${j?.name ?? t.siteName}` : ''}
                       </div>
                     </div>
                   </li>
@@ -869,6 +874,8 @@ function QuickLogModal({
   const { state, addBottle, addSite, addUnit, addCustomRefrigerant } =
     useStore()
   const unit = state.unit
+  const tz = state.location.timezone
+  const clock = state.clock
   const allRefrigerantTypes = useMemo(
     () =>
       sortRefrigerants(
@@ -891,7 +898,10 @@ function QuickLogModal({
   // deliberate Yes/No on charge/recover); true/false once picked.
   const [leakTest, setLeakTest] = useState<boolean | null>(null)
   const [notes, setNotes] = useState('')
-  const [date, setDate] = useState(() => new Date().toISOString().slice(0, 16))
+  // Default to "now" in the configured business timezone — the raw
+  // toISOString() slice this used to be is UTC, which put a wrong
+  // wall-clock time on the fastest (most used) logging path.
+  const [date, setDate] = useState(() => localDateTimeInput(new Date(), tz))
   const [recoverSource, setRecoverSource] = useState<RecoverSource>('equipment')
   const [sourceBottleId, setSourceBottleId] = useState('')
   const [returnDestination, setReturnDestination] = useState('')
@@ -914,7 +924,7 @@ function QuickLogModal({
     setReason('')
     setLeakTest(null)
     setNotes('')
-    setDate(new Date().toISOString().slice(0, 16))
+    setDate(localDateTimeInput(new Date(), tz))
     setRecoverSource('equipment')
     setSourceBottleId('')
     setReturnDestination('')
@@ -1049,7 +1059,9 @@ function QuickLogModal({
         showAmount && showLoss && enteredBottleDisplay > 0
           ? Math.abs(bottleAmountKg)
           : undefined,
-      date: new Date(date).toISOString(),
+      // Interpret the typed wall-clock time in the configured timezone
+      // (matches the main Refrigerant Log form).
+      date: dateTimeInputToIso(date, tz),
       // Tech name + RHL come from the active profile via the store's
       // stamping fallback. The bottle quick-log form doesn't expose a
       // tech picker — for crews that need to switch techs per job, log
@@ -1429,10 +1441,12 @@ function QuickLogModal({
           )}
 
           <Field label="Date / time">
-            <TextInput
-              type="datetime-local"
+            <DateTimeInput
               value={date}
-              onChange={(e) => setDate(e.target.value)}
+              onChange={setDate}
+              timezone={tz}
+              clock={clock}
+              ariaLabel="Transaction date and time"
             />
           </Field>
 
@@ -1532,6 +1546,13 @@ function BottleQuickAdd({
     tareKgPreview > 0 &&
     grossKgPreview > 0 &&
     tareKgPreview > grossKgPreview + 0.01
+  // Soft duplicate guard — two cylinders sharing a number makes the
+  // audit trail ambiguous. Warn (don't block): re-entering a previously
+  // returned cylinder under the same number can be legitimate.
+  const duplicateNumber = isDuplicateBottleNumber(
+    state.bottles,
+    bottleNumber,
+  )
 
   function submit(e: React.FormEvent) {
     e.preventDefault()
@@ -1560,6 +1581,13 @@ function BottleQuickAdd({
             placeholder="e.g. B-205"
           />
         </Field>
+        {duplicateNumber && (
+          <div className="rounded-xl bg-amber-50 p-3 text-sm text-amber-900 dark:bg-amber-900/20 dark:text-amber-100">
+            ⚠ A bottle numbered <strong>{bottleNumber.trim()}</strong> already
+            exists. Two cylinders sharing a number makes the audit trail
+            ambiguous — double-check before saving.
+          </div>
+        )}
         <Field label="Refrigerant type">
           <RefrigerantSelect
             required
@@ -1745,6 +1773,13 @@ function BottleForm({
   // be less than tare. Show an inline error and block save.
   const tareExceedsGross =
     tareKgEntered > 0 && grossKgEntered > 0 && tareKgEntered > grossKgEntered + 0.01
+  // Soft duplicate guard (see BottleQuickAdd) — excludes the bottle
+  // being edited so saving it under its own number doesn't warn.
+  const duplicateNumber = isDuplicateBottleNumber(
+    state.bottles,
+    bottleNumber,
+    bottle?.id,
+  )
 
   // capacityWeight holds the stamped water capacity (W.C) in display units.
   // Safe fill = W.C × FR(refrigerant) is computed downstream (live check
@@ -1853,6 +1888,14 @@ function BottleForm({
             placeholder="e.g. B-102"
           />
         </Field>
+        {duplicateNumber && (
+          <div className="rounded-xl bg-amber-50 p-3 text-sm text-amber-900 dark:bg-amber-900/20 dark:text-amber-100">
+            ⚠ Another bottle is already numbered{' '}
+            <strong>{bottleNumber.trim()}</strong>. Two cylinders sharing a
+            number makes the audit trail ambiguous — double-check before
+            saving.
+          </div>
+        )}
         <Field label="Bottle type">
           <Picker
             title="Bottle type"
@@ -2117,6 +2160,20 @@ function BottleForm({
 function wcFromSafeFill(safeFillKg: number, refrigerant?: string): number {
   if (!safeFillKg) return 0
   return safeFillKg / fillingRatio(refrigerant)
+}
+
+// Case-insensitive duplicate check on bottle numbers, ignoring the
+// bottle being edited (pass its id as `excludeId`).
+function isDuplicateBottleNumber(
+  bottles: readonly Bottle[],
+  bottleNumber: string,
+  excludeId?: string,
+): boolean {
+  const n = bottleNumber.trim().toLowerCase()
+  if (!n) return false
+  return bottles.some(
+    (b) => b.id !== excludeId && b.bottleNumber.trim().toLowerCase() === n,
+  )
 }
 
 // Truncate a stored cylinder test date to YYYY-MM. Accepts both legacy
