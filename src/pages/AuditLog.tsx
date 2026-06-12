@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Card, EmptyState, Field, Pill, TextInput } from '../components/ui'
+import { Button, Card, EmptyState, Field, Pill, TextInput } from '../components/ui'
 import { DateInput } from '../components/DateInput'
 import { useStore } from '../lib/store'
 import { formatDateTime, localDateTimeInput } from '../lib/datetime'
@@ -87,6 +87,20 @@ export default function AuditLog() {
           .includes(q)
       })
   }, [auditLog, filter, query, fromDate, toDate, tz])
+
+  // Render a window, not the whole history — a busy crew accumulates
+  // tens of thousands of entries over the 5-year retention period and
+  // mounting a Card per entry locks the page up. "Show older" grows
+  // the window; changing any filter snaps it back to the first page.
+  const PAGE = 100
+  const [limit, setLimit] = useState(PAGE)
+  const filterKey = `${filter}|${query}|${fromDate}|${toDate}`
+  const [prevFilterKey, setPrevFilterKey] = useState(filterKey)
+  if (prevFilterKey !== filterKey) {
+    setPrevFilterKey(filterKey)
+    setLimit(PAGE)
+  }
+  const visible = rows.length > limit ? rows.slice(0, limit) : rows
 
   return (
     <div className="space-y-3">
@@ -183,7 +197,7 @@ export default function AuditLog() {
         <EmptyState title="No matches for this filter" />
       ) : (
         <div className="space-y-2">
-          {rows.map((e) => (
+          {visible.map((e) => (
             <Card key={e.id} className="!p-3">
               <div className="flex flex-wrap items-center gap-2">
                 <Pill tone={AUDIT_ACTION_TONE[e.action]}>
@@ -237,6 +251,15 @@ export default function AuditLog() {
               </div>
             </Card>
           ))}
+          {rows.length > limit && (
+            <Button
+              variant="secondary"
+              full
+              onClick={() => setLimit((l) => l + PAGE)}
+            >
+              Show older ({rows.length - limit} more)
+            </Button>
+          )}
         </div>
       )}
     </div>

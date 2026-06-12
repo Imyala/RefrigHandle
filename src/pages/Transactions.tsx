@@ -181,6 +181,19 @@ export default function Transactions() {
     return m
   }, [transactions])
 
+  // Render a window, not the whole multi-year log — same pattern as the
+  // Change log. "Show older" grows the window; any filter change snaps
+  // back to the first page.
+  const PAGE = 100
+  const [limit, setLimit] = useState(PAGE)
+  const filterKey = `${filterKind}|${query}|${fromDate}|${toDate}`
+  const [prevFilterKey, setPrevFilterKey] = useState(filterKey)
+  if (prevFilterKey !== filterKey) {
+    setPrevFilterKey(filterKey)
+    setLimit(PAGE)
+  }
+  const visible = sorted.length > limit ? sorted.slice(0, limit) : sorted
+
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between gap-2">
@@ -295,7 +308,7 @@ export default function Transactions() {
         />
       ) : (
         <div className="space-y-2">
-          {sorted.map((t) => {
+          {visible.map((t) => {
             const bottle = bottles.find((b) => b.id === t.bottleId)
             const sourceBottle = t.sourceBottleId
               ? bottles.find((b) => b.id === t.sourceBottleId)
@@ -495,6 +508,15 @@ export default function Transactions() {
               </Card>
             )
           })}
+          {sorted.length > limit && (
+            <Button
+              variant="secondary"
+              full
+              onClick={() => setLimit((l) => l + PAGE)}
+            >
+              Show older ({sorted.length - limit} more)
+            </Button>
+          )}
         </div>
       )}
 
