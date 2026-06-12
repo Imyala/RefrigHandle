@@ -1,4 +1,5 @@
 import type { AppState } from './types'
+import { exportAttachments } from './attachments'
 
 // Backup freshness tracking. Until records live on a server (team
 // accounts), every byte of compliance history exists only in this
@@ -58,8 +59,14 @@ function snoozedUntil(): string | null {
 
 // Full-state JSON download — THE backup. Shared by Settings and the
 // overdue-backup alert so both stamp the same freshness marker.
-export function downloadBackup(state: AppState): void {
-  const blob = new Blob([JSON.stringify(state, null, 2)], {
+// Photos and signatures (IndexedDB, see lib/attachments.ts) ride along
+// under `__attachments` so "full backup" stays true; import strips the
+// key back out before the state is restored.
+export async function downloadBackup(state: AppState): Promise<void> {
+  const attachments = await exportAttachments()
+  const payload =
+    attachments.length > 0 ? { ...state, __attachments: attachments } : state
+  const blob = new Blob([JSON.stringify(payload, null, 2)], {
     type: 'application/json',
   })
   const url = URL.createObjectURL(blob)

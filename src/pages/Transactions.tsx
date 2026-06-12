@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   Button,
   Card,
@@ -45,6 +45,9 @@ import {
   type EntryMode,
 } from '../components/ScaleEntry'
 import type { Technician } from '../lib/types'
+import { PendingPhotoPicker, PhotoSection } from '../components/Photos'
+import { SignatureSection } from '../components/Signatures'
+import { addPhoto, attachmentCounts } from '../lib/attachments'
 
 const KIND_OPTIONS: readonly PickerOption[] = [
   { value: 'charge', label: 'Charge', hint: 'into equipment (bottle weight decreases)' },
@@ -73,6 +76,20 @@ export default function Transactions() {
   const licShort = profileFor(state.jurisdiction).techLicenceShort
 
   const [adding, setAdding] = useState(false)
+  // Row whose photos / customer sign-off are being viewed or added.
+  const [attachFor, setAttachFor] = useState<Transaction | null>(null)
+  // transaction id → number of photos+signatures, for the row badge.
+  // Loaded with a key-only cursor so it stays cheap; refreshed whenever
+  // the attachments modal closes or staged form photos are bound.
+  const [attachCounts, setAttachCounts] = useState<Map<string, number>>(
+    () => new Map(),
+  )
+  const refreshAttachCounts = useCallback(() => {
+    void attachmentCounts('transaction').then(setAttachCounts)
+  }, [])
+  useEffect(() => {
+    refreshAttachCounts()
+  }, [refreshAttachCounts])
   // The original entry currently being corrected (opens the log form in
   // correction mode), or null. Kept separate from `adding` so the form
   // can pre-fill + stamp the correction link.
@@ -440,6 +457,18 @@ export default function Transactions() {
                     )}
                   </div>
                   <div className="flex shrink-0 flex-col items-end gap-1">
+                    {(() => {
+                      const n = attachCounts.get(t.id) ?? 0
+                      return (
+                        <button
+                          onClick={() => setAttachFor(t)}
+                          className="rounded-lg px-2 py-1 text-xs font-medium text-slate-500 hover:bg-slate-100 hover:text-brand-600 dark:hover:bg-slate-800"
+                          aria-label="Photos and sign-off for this transaction"
+                        >
+                          📎 {n > 0 ? n : 'Attach'}
+                        </button>
+                      )
+                    })()}
                     {/* Correct an entry only while no live correction points
                         at it (a corrected entry's fix is corrected instead —
                         that keeps the supersede chain unambiguous). Legacy
@@ -477,14 +506,59 @@ export default function Transactions() {
           setCorrecting(null)
         }}
         onSave={(data) => {
-          const result = addTransaction(data)
+          // Staged photos are NOT part of the transaction record — they
+          // go to the attachment store, keyed to the new row's id.
+          const { photos, ...txData } = data
+          const result = addTransaction(txData)
           if (result) {
+            if (photos && photos.length > 0) {
+              const txId = result.id
+              void Promise.all(
+                photos.map((f) => addPhoto('transaction', txId, f)),
+              )
+                .then(() => refreshAttachCounts())
+                .catch(() =>
+                  toast.show('Logged, but a photo could not be saved', 'error'),
+                )
+            }
             setAdding(false)
             setCorrecting(null)
             toast.show(correcting ? 'Correction logged' : `${transactionLabel(data.kind)} logged`)
           }
         }}
       />
+
+      {/* Photos + customer sign-off for a logged row. Counts refresh on
+          close so the row badge stays current. */}
+      <Modal
+        open={!!attachFor}
+        title="Photos & sign-off"
+        onClose={() => {
+          setAttachFor(null)
+          refreshAttachCounts()
+        }}
+      >
+        {attachFor && (
+          <div className="space-y-4">
+            <div>
+              <div className="mb-1.5 text-sm font-medium text-slate-700 dark:text-slate-200">
+                Photos
+              </div>
+              <PhotoSection
+                entityType="transaction"
+                entityId={attachFor.id}
+                hint="Invoice / docket, gauges, the job — stored on this device and included in the JSON backup."
+              />
+            </div>
+            <div>
+              <div className="mb-1.5 text-sm font-medium text-slate-700 dark:text-slate-200">
+                Customer sign-off
+              </div>
+              <SignatureSection entityType="transaction" entityId={attachFor.id} />
+            </div>
+          </div>
+        )}
+      </Modal>
 
       <Modal
         open={!!deleting}
@@ -565,6 +639,9 @@ function TransactionForm({
     correctsId?: string
     correctionReason?: string
     refrigerantMismatch?: { bottleType: string; unitType: string }
+    // Staged camera shots, bound to the row's id after the save (they
+    // live in the attachment store, never in the transaction itself).
+    photos?: File[]
   }) => void
 }) {
   const { state, addSite, addUnit, addTechnician, setActiveTechnicianId } =
@@ -632,6 +709,7 @@ function TransactionForm({
   const [returnDestination, setReturnDestination] = useState('')
   const [docketNumber, setDocketNumber] = useState('')
   const [notes, setNotes] = useState('')
+  const [pendingPhotos, setPendingPhotos] = useState<File[]>([])
   const [addingSite, setAddingSite] = useState(false)
   const [addingUnit, setAddingUnit] = useState(false)
 
@@ -716,6 +794,7 @@ function TransactionForm({
     setReturnDestination('')
     setDocketNumber('')
     setNotes('')
+    setPendingPhotos([])
   } else if (!open && lastOpen) {
     setLastOpen(false)
   }
@@ -866,6 +945,7 @@ function TransactionForm({
           ? docketNumber.trim()
           : undefined,
       notes: notes.trim() || undefined,
+      photos: pendingPhotos.length > 0 ? pendingPhotos : undefined,
       correctsId: correcting?.id,
       correctionReason: correcting ? correctionReason.trim() : undefined,
       refrigerantMismatch:
@@ -1424,6 +1504,12 @@ function TransactionForm({
         <Field label="Notes">
           <TextArea value={notes} onChange={(e) => setNotes(e.target.value)} />
         </Field>
+
+        <PendingPhotoPicker
+          files={pendingPhotos}
+          onChange={setPendingPhotos}
+          hint="Snap the docket, gauges or nameplate now — saved with this entry."
+        />
 
         {blockAlreadyReturned && (
           <div className="rounded-xl bg-red-50 p-3 text-sm text-red-900 dark:bg-red-900/20 dark:text-red-100">

@@ -47,6 +47,7 @@ import {
 import { useToast } from '../lib/toast'
 import { useConfirm } from '../lib/confirm'
 import { displayToKg, formatWeight, kgToDisplay } from '../lib/units'
+import { PhotoSection } from '../components/Photos'
 
 export default function Sites() {
   const { state, addSite } = useStore()
@@ -1763,6 +1764,19 @@ function UnitLogbook({
               </table>
             </div>
           )}
+        </section>
+
+        {/* On-screen only — nameplate/condition photos for this unit.
+            Excluded from the printed logbook to keep it a clean record. */}
+        <section className="no-print">
+          <div className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+            Photos
+          </div>
+          <PhotoSection
+            entityType="unit"
+            entityId={unit.id}
+            hint="Nameplate, condition, install — stored on this device and included in the JSON backup."
+          />
         </section>
 
         <footer className="border-t border-slate-300 pt-3 text-[11px] text-slate-500 dark:border-slate-700">

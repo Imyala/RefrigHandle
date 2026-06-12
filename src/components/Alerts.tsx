@@ -103,9 +103,10 @@ function BackupAlert() {
         <Button
           variant="secondary"
           onClick={() => {
-            downloadBackup(state)
-            setRefresh((n) => n + 1)
-            toast.show('Backup saved — keep the file somewhere safe', 'success')
+            void downloadBackup(state).then(() => {
+              setRefresh((n) => n + 1)
+              toast.show('Backup saved — keep the file somewhere safe', 'success')
+            })
           }}
         >
           Back up now

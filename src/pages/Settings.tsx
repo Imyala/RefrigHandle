@@ -49,6 +49,7 @@ import {
   type StorageEstimate,
 } from '../lib/storage'
 import { downloadBackup, getLastBackupAt } from '../lib/backup'
+import { importAttachments } from '../lib/attachments'
 import type { PickerOption } from '../components/Picker'
 
 const WEIGHT_UNIT_OPTIONS: readonly PickerOption[] = [
@@ -236,9 +237,9 @@ export default function Settings() {
 
   function exportJson() {
     // Shared with the overdue-backup alert — stamps the device-local
-    // "last backup" marker that drives the nudge.
-    downloadBackup(state)
-    setLastBackupAt(getLastBackupAt())
+    // "last backup" marker that drives the nudge. Bundles photos and
+    // signatures from the attachment store.
+    void downloadBackup(state).then(() => setLastBackupAt(getLastBackupAt()))
   }
 
   // Optional date range on the CSV export (inclusive local calendar
@@ -431,7 +432,17 @@ export default function Settings() {
         danger: true,
       })
       if (ok) {
-        importState(data)
+        // Photos/signatures ride in the backup under __attachments —
+        // restore them to the attachment store and keep the key out of
+        // the app state.
+        const { __attachments, ...stateOnly } = data
+        importState(stateOnly)
+        if (Array.isArray(__attachments) && __attachments.length > 0) {
+          const n = await importAttachments(__attachments)
+          if (n > 0) {
+            toast.show(`Restored ${n} photo${n === 1 ? '' : 's'}/signatures`, 'success')
+          }
+        }
       }
     } catch {
       toast.show('Could not read that file.', 'error')
