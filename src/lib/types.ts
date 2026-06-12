@@ -415,6 +415,7 @@ export interface AppState {
   // is preserved if the licence/RTA changes later.
   arcAuthorisationNumber: string // ARC Refrigerant Trading Authorisation (RTA), per business
   businessName: string
+  businessAbn: string // Australian Business Number (11 digits)
   location: LocationSettings
   unit: WeightUnit
   theme: Theme
@@ -444,12 +445,28 @@ export const EMPTY_STATE: AppState = {
   arcLicenceNumber: '',
   arcAuthorisationNumber: '',
   businessName: '',
+  businessAbn: '',
   location: { country: '', region: '', city: '', timezone: '' },
   unit: 'kg',
   theme: 'light',
   clock: '24h',
   sync: { enabled: false, teamId: '' },
   setupCompletedAt: undefined,
+}
+
+// ABN checksum per the ATO algorithm: subtract 1 from the first digit,
+// weight the 11 digits, and the weighted sum must divide by 89. Catches
+// typos and transposed digits, not whether the ABN is actually
+// registered. Spaces are ignored so "12 345 678 901" entry styles work.
+export function isValidAbn(abn: string): boolean {
+  const digits = abn.replace(/\s+/g, '')
+  if (!/^\d{11}$/.test(digits)) return false
+  const weights = [10, 1, 3, 5, 7, 9, 11, 13, 15, 17, 19]
+  const sum = weights.reduce(
+    (acc, w, i) => acc + w * (Number(digits[i]) - (i === 0 ? 1 : 0)),
+    0,
+  )
+  return sum % 89 === 0
 }
 
 // Location is "complete enough" for onboarding when we know the

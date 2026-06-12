@@ -12,6 +12,7 @@ import { LocationFields } from '../components/LocationFields'
 import { InstallAppButton } from '../components/InstallAppButton'
 import { useStore } from '../lib/store'
 import {
+  isValidAbn,
   REFRIGERANT_TYPES,
   transactionLabel,
   transactionLoss,
@@ -55,6 +56,7 @@ export default function Settings() {
     restoreTransaction,
     setArcAuthorisationNumber,
     setBusinessName,
+    setBusinessAbn,
     setLocation,
     setUnit,
     setTheme,
@@ -70,6 +72,7 @@ export default function Settings() {
   const confirm = useConfirm()
   const [arcAuth, setArcAuth] = useState(state.arcAuthorisationNumber)
   const [bizName, setBizName] = useState(state.businessName)
+  const [abn, setAbn] = useState(state.businessAbn)
   const [loc, setLoc] = useState<LocationSettings>(state.location)
   const [newType, setNewType] = useState('')
   const [teamIdInput, setTeamIdInput] = useState(state.sync.teamId)
@@ -83,6 +86,7 @@ export default function Settings() {
     [state.arcAuthorisationNumber],
   )
   useEffect(() => setBizName(state.businessName), [state.businessName])
+  useEffect(() => setAbn(state.businessAbn), [state.businessAbn])
   useEffect(() => setLoc(state.location), [state.location])
   useEffect(() => setTeamIdInput(state.sync.teamId), [state.sync.teamId])
 
@@ -422,7 +426,12 @@ export default function Settings() {
           </div>
           <Button
             onClick={() => {
+              if (abn.trim() !== '' && !isValidAbn(abn)) {
+                toast.show('ABN must be a valid 11-digit number', 'error')
+                return
+              }
               setBusinessName(bizName)
+              setBusinessAbn(abn)
               setArcAuthorisationNumber(arcAuth)
               toast.show('Saved')
             }}
@@ -450,6 +459,17 @@ export default function Settings() {
               value={bizName}
               onChange={(e) => setBizName(e.target.value)}
               placeholder="e.g. Acme Refrigeration Pty Ltd"
+            />
+          </Field>
+          <Field
+            label="Business ABN"
+            hint="Your 11-digit Australian Business Number."
+          >
+            <TextInput
+              value={abn}
+              onChange={(e) => setAbn(e.target.value)}
+              inputMode="numeric"
+              placeholder="e.g. 51 824 753 556"
             />
           </Field>
           <Field

@@ -97,6 +97,7 @@ interface StoreApi {
   // the onboarding gate stands down.
   completeSetup: (data: {
     businessName: string
+    businessAbn: string
     arcAuthorisationNumber: string
     technician: { name: string; arcLicenceNumber: string }
     location: LocationSettings
@@ -106,6 +107,7 @@ interface StoreApi {
   setArcLicenceNumber: (n: string) => void
   setArcAuthorisationNumber: (n: string) => void
   setBusinessName: (n: string) => void
+  setBusinessAbn: (n: string) => void
   setLocation: (l: LocationSettings) => void
   setUnit: (u: WeightUnit) => void
   setTheme: (t: Theme) => void
@@ -869,6 +871,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       return {
         ...s,
         businessName: data.businessName.trim(),
+        businessAbn: data.businessAbn.trim(),
         arcAuthorisationNumber: data.arcAuthorisationNumber.trim(),
         location: data.location,
         technicians: [...s.technicians, tech],
@@ -954,6 +957,20 @@ export function StoreProvider({ children }: { children: ReactNode }) {
               ...s,
               businessName: n.trim(),
               auditLog: settingsChange(s, 'Business name', s.businessName, n.trim()),
+            },
+      ),
+    [],
+  )
+
+  const setBusinessAbn = useCallback(
+    (n: string) =>
+      setState((s) =>
+        s.businessAbn === n.trim()
+          ? s
+          : {
+              ...s,
+              businessAbn: n.trim(),
+              auditLog: settingsChange(s, 'Business ABN', s.businessAbn, n.trim()),
             },
       ),
     [],
@@ -1170,6 +1187,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       arcLicenceNumber: s.arcLicenceNumber,
       arcAuthorisationNumber: s.arcAuthorisationNumber,
       businessName: s.businessName,
+      businessAbn: s.businessAbn,
       location: s.location,
       unit: s.unit,
       theme: s.theme,
@@ -1226,6 +1244,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setArcLicenceNumber,
       setArcAuthorisationNumber,
       setBusinessName,
+      setBusinessAbn,
       setLocation,
       setUnit,
       setTheme,
@@ -1265,6 +1284,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setArcLicenceNumber,
       setArcAuthorisationNumber,
       setBusinessName,
+      setBusinessAbn,
       setLocation,
       setUnit,
       setTheme,

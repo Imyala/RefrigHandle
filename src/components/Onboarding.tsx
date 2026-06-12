@@ -6,6 +6,7 @@ import { useToast } from '../lib/toast'
 import {
   isLocationComplete,
   isSetupComplete,
+  isValidAbn,
   type LocationSettings,
 } from '../lib/types'
 
@@ -26,6 +27,7 @@ function OnboardingScreen() {
   const toast = useToast()
 
   const [businessName, setBusinessName] = useState('')
+  const [abn, setAbn] = useState('')
   const [arcAuth, setArcAuth] = useState('')
   const [techName, setTechName] = useState('')
   const [techRhl, setTechRhl] = useState('')
@@ -37,15 +39,17 @@ function OnboardingScreen() {
   })
 
   const businessOk = businessName.trim() !== ''
+  const abnOk = isValidAbn(abn)
   const arcOk = arcAuth.trim() !== ''
   const techOk = techName.trim() !== '' && techRhl.trim() !== ''
   const locOk = isLocationComplete(loc)
-  const canFinish = businessOk && arcOk && techOk && locOk
+  const canFinish = businessOk && abnOk && arcOk && techOk && locOk
 
   function finish() {
     if (!canFinish) return
     completeSetup({
       businessName,
+      businessAbn: abn,
       arcAuthorisationNumber: arcAuth,
       technician: { name: techName, arcLicenceNumber: techRhl },
       location: loc,
@@ -101,6 +105,21 @@ function OnboardingScreen() {
                   value={businessName}
                   onChange={(e) => setBusinessName(e.target.value)}
                   placeholder="e.g. Acme Refrigeration Pty Ltd"
+                />
+              </Field>
+              <Field
+                label="Business ABN *"
+                hint={
+                  abn.trim() !== '' && !abnOk
+                    ? 'Must be a valid 11-digit ABN.'
+                    : 'Your 11-digit Australian Business Number.'
+                }
+              >
+                <TextInput
+                  value={abn}
+                  onChange={(e) => setAbn(e.target.value)}
+                  inputMode="numeric"
+                  placeholder="e.g. 51 824 753 556"
                 />
               </Field>
               <Field
@@ -169,8 +188,8 @@ function OnboardingScreen() {
           </Button>
           {!canFinish && (
             <p className="mt-2 text-center text-xs text-slate-500">
-              Fill in your business name, ARC RTA, technician (name + RHL) and
-              location to continue.
+              Fill in your business name, ABN, ARC RTA, technician (name +
+              RHL) and location to continue.
             </p>
           )}
         </div>
