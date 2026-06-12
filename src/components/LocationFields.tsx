@@ -6,6 +6,7 @@ import {
   AU_REGIONS,
   CITY_OTHER_VALUE,
   TIMEZONE_OPTIONS,
+  type Jurisdiction,
   type LocationSettings,
 } from '../lib/types'
 
@@ -17,13 +18,89 @@ const AU_REGION_OPTIONS: readonly PickerOption[] = AU_REGIONS.map((r) => ({
 type SetLoc = React.Dispatch<React.SetStateAction<LocationSettings>>
 
 // State / city / timezone, shared between Settings and the first-run
-// onboarding screen so both stay in lock-step. The app is
-// Australia-only (ARC RTA / RHL licensing is Australian), so there is
-// no country picker — every edit stamps country: 'Australia', which
-// also migrates any pre-Australia-only stored value on the next save.
-// Pure UI over a LocationSettings value — the caller owns the state
-// and decides when to persist it.
+// onboarding screen so both stay in lock-step. Under the AU profile the
+// fields are the curated Australian pickers (every edit stamps
+// country: 'Australia'); other jurisdictions get free-text country /
+// region / city and the browser's full IANA timezone list. Pure UI
+// over a LocationSettings value — the caller owns the state and
+// decides when to persist it.
 export function LocationFields({
+  loc,
+  setLoc,
+  jurisdiction = 'AU',
+}: {
+  loc: LocationSettings
+  setLoc: SetLoc
+  jurisdiction?: Jurisdiction
+}) {
+  if (jurisdiction !== 'AU') {
+    return <GenericLocationFields loc={loc} setLoc={setLoc} />
+  }
+  return <AuLocationFields loc={loc} setLoc={setLoc} />
+}
+
+function GenericLocationFields({
+  loc,
+  setLoc,
+}: {
+  loc: LocationSettings
+  setLoc: SetLoc
+}) {
+  // Full IANA timezone list, grouped by continent. Falls back to the
+  // curated AU list on engines without Intl.supportedValuesOf.
+  const timezoneOptions = useMemo<PickerOption[]>(() => {
+    try {
+      const zones = (
+        Intl as unknown as { supportedValuesOf(k: string): string[] }
+      ).supportedValuesOf('timeZone')
+      return zones.map((z) => ({
+        value: z,
+        label: z.replace(/_/g, ' '),
+        group: z.split('/')[0],
+      }))
+    } catch {
+      return TIMEZONE_OPTIONS.map((tz) => ({ value: tz.iana, label: tz.label }))
+    }
+  }, [])
+
+  return (
+    <div className="space-y-3">
+      <Field label="Country">
+        <TextInput
+          value={loc.country}
+          onChange={(e) => setLoc((l) => ({ ...l, country: e.target.value }))}
+          placeholder="e.g. Germany, United States"
+        />
+      </Field>
+      <Field label="State / region">
+        <TextInput
+          value={loc.region}
+          onChange={(e) => setLoc((l) => ({ ...l, region: e.target.value }))}
+        />
+      </Field>
+      <Field label="City / town">
+        <TextInput
+          value={loc.city}
+          onChange={(e) => setLoc((l) => ({ ...l, city: e.target.value }))}
+        />
+      </Field>
+      <Field
+        label="Timezone"
+        hint='Used for "now" defaults and timestamp display.'
+      >
+        <Picker
+          title="Timezone"
+          value={loc.timezone}
+          onChange={(v) => setLoc((l) => ({ ...l, timezone: v }))}
+          emptyLabel="— follow this device —"
+          options={timezoneOptions}
+        />
+      </Field>
+    </div>
+  )
+}
+
+function AuLocationFields({
   loc,
   setLoc,
 }: {

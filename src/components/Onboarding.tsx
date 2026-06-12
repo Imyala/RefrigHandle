@@ -1,14 +1,16 @@
 import { useState, type ReactNode } from 'react'
 import { Button, Card, Field, TextInput } from './ui'
+import { Picker } from './Picker'
 import { LocationFields } from './LocationFields'
 import { useStore } from '../lib/store'
 import { useToast } from '../lib/toast'
 import {
   isLocationComplete,
   isSetupComplete,
-  isValidAbn,
+  type Jurisdiction,
   type LocationSettings,
 } from '../lib/types'
+import { COMPLIANCE_PROFILES, profileFor } from '../lib/compliance'
 
 // Gate the whole app behind a one-time setup. Until the business
 // identity, ARC RTA, first technician and location are entered, the
@@ -26,6 +28,7 @@ function OnboardingScreen() {
   const { completeSetup } = useStore()
   const toast = useToast()
 
+  const [jurisdiction, setJurisdiction] = useState<Jurisdiction>('AU')
   const [businessName, setBusinessName] = useState('')
   const [abn, setAbn] = useState('')
   const [arcAuth, setArcAuth] = useState('')
@@ -38,9 +41,22 @@ function OnboardingScreen() {
     timezone: '',
   })
 
+  const profile = profileFor(jurisdiction)
+
+  function pickJurisdiction(j: Jurisdiction) {
+    setJurisdiction(j)
+    // Reset the country default to match — AU stamps 'Australia';
+    // other regimes leave it for the tech to type.
+    setLoc((l) => ({
+      ...l,
+      country: j === 'AU' ? 'Australia' : l.country === 'Australia' ? '' : l.country,
+      region: j === 'AU' ? l.region : l.region,
+    }))
+  }
+
   const businessOk = businessName.trim() !== ''
-  const abnOk = isValidAbn(abn)
-  const arcOk = arcAuth.trim() !== ''
+  const abnOk = abn.trim() !== '' && profile.validateBusinessNumber(abn)
+  const arcOk = !profile.hasBusinessAuthorisation || arcAuth.trim() !== ''
   const techOk = techName.trim() !== '' && techRhl.trim() !== ''
   const locOk = isLocationComplete(loc)
   const canFinish = businessOk && abnOk && arcOk && techOk && locOk
@@ -50,9 +66,10 @@ function OnboardingScreen() {
     completeSetup({
       businessName,
       businessAbn: abn,
-      arcAuthorisationNumber: arcAuth,
+      arcAuthorisationNumber: profile.hasBusinessAuthorisation ? arcAuth : '',
       technician: { name: techName, arcLicenceNumber: techRhl },
       location: loc,
+      jurisdiction,
     })
     toast.show('Setup complete — welcome aboard', 'success')
   }
@@ -84,21 +101,42 @@ function OnboardingScreen() {
 
           <Card>
             <div className="mb-1 text-sm font-semibold text-slate-700 dark:text-slate-200">
-              Business
+              Where do you operate?
             </div>
             <p className="mb-3 text-xs text-slate-500">
-              Your ARC Refrigerant Trading Authorisation (RTA) is issued to the
-              business — look it up at{' '}
-              <a
-                href="https://www.arctick.org/"
-                target="_blank"
-                rel="noreferrer"
-                className="font-medium text-brand-600 hover:underline"
-              >
-                arctick.org
-              </a>
-              .
+              Sets the licence terminology, leak-monitoring rules and report
+              citations. You can change it later in Settings.
             </p>
+            <Picker
+              title="Jurisdiction"
+              value={jurisdiction}
+              onChange={(v) => pickJurisdiction(v as Jurisdiction)}
+              options={Object.values(COMPLIANCE_PROFILES).map((p) => ({
+                value: p.id,
+                label: p.name,
+              }))}
+            />
+          </Card>
+
+          <Card>
+            <div className="mb-1 text-sm font-semibold text-slate-700 dark:text-slate-200">
+              Business
+            </div>
+            {profile.id === 'AU' && (
+              <p className="mb-3 text-xs text-slate-500">
+                Your ARC Refrigerant Trading Authorisation (RTA) is issued to
+                the business — look it up at{' '}
+                <a
+                  href="https://www.arctick.org/"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="font-medium text-brand-600 hover:underline"
+                >
+                  arctick.org
+                </a>
+                .
+              </p>
+            )}
             <div className="space-y-3">
               <Field label="Trading / business name *">
                 <TextInput
@@ -108,30 +146,36 @@ function OnboardingScreen() {
                 />
               </Field>
               <Field
-                label="Business ABN *"
+                label={`${profile.businessNumberLabel} *`}
                 hint={
                   abn.trim() !== '' && !abnOk
                     ? 'Must be a valid 11-digit ABN.'
-                    : 'Your 11-digit Australian Business Number.'
+                    : profile.businessNumberHint
                 }
               >
                 <TextInput
                   value={abn}
                   onChange={(e) => setAbn(e.target.value)}
-                  inputMode="numeric"
-                  placeholder="e.g. 51 824 753 556"
+                  inputMode={profile.id === 'AU' ? 'numeric' : undefined}
+                  placeholder={
+                    profile.id === 'AU' ? 'e.g. 51 824 753 556' : undefined
+                  }
                 />
               </Field>
-              <Field
-                label="ARC Refrigerant Trading Authorisation (RTA) *"
-                hint="Required to handle, buy or sell refrigerant."
-              >
-                <TextInput
-                  value={arcAuth}
-                  onChange={(e) => setArcAuth(e.target.value)}
-                  placeholder="e.g. AU00000"
-                />
-              </Field>
+              {profile.hasBusinessAuthorisation && (
+                <Field
+                  label={`${profile.businessAuthLabel} *`}
+                  hint="Required to handle, buy or sell refrigerant."
+                >
+                  <TextInput
+                    value={arcAuth}
+                    onChange={(e) => setArcAuth(e.target.value)}
+                    placeholder={
+                      profile.id === 'AU' ? 'e.g. AU00000' : undefined
+                    }
+                  />
+                </Field>
+              )}
             </div>
           </Card>
 
@@ -140,9 +184,9 @@ function OnboardingScreen() {
               First technician
             </div>
             <p className="mb-3 text-xs text-slate-500">
-              This profile becomes the active technician. Their name and ARC
-              Refrigerant Handling Licence (RHL) are stamped onto each
-              transaction they log. You can add more technicians later.
+              This profile becomes the active technician. Their name and{' '}
+              {profile.techLicenceLabel} are stamped onto each transaction
+              they log. You can add more technicians later.
             </p>
             <div className="space-y-3">
               <Field label="Technician name *">
@@ -153,13 +197,13 @@ function OnboardingScreen() {
                 />
               </Field>
               <Field
-                label="ARC Refrigerant Handling Licence (RHL) *"
+                label={`${profile.techLicenceLabel} *`}
                 hint="The technician's personal licence number."
               >
                 <TextInput
                   value={techRhl}
                   onChange={(e) => setTechRhl(e.target.value)}
-                  placeholder="e.g. L000000"
+                  placeholder={profile.id === 'AU' ? 'e.g. L000000' : undefined}
                 />
               </Field>
             </div>
@@ -173,7 +217,7 @@ function OnboardingScreen() {
               Sets the timezone used for "now" defaults on transactions and the
               generated-at line on logbook PDFs.
             </p>
-            <LocationFields loc={loc} setLoc={setLoc} />
+            <LocationFields loc={loc} setLoc={setLoc} jurisdiction={jurisdiction} />
           </Card>
         </div>
       </main>
@@ -188,8 +232,12 @@ function OnboardingScreen() {
           </Button>
           {!canFinish && (
             <p className="mt-2 text-center text-xs text-slate-500">
-              Fill in your business name, ABN, ARC RTA, technician (name +
-              RHL) and location to continue.
+              Fill in your business name, {profile.businessNumberLabel}
+              {profile.hasBusinessAuthorisation
+                ? `, ${profile.businessAuthShort}`
+                : ''}
+              , technician (name + {profile.techLicenceShort}) and location
+              to continue.
             </p>
           )}
         </div>

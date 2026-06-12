@@ -38,6 +38,7 @@ interface LegacyState
     | 'arcLicenceNumber'
     | 'arcAuthorisationNumber'
     | 'arcAuthorisationExpiry'
+    | 'jurisdiction'
     | 'businessName'
     | 'businessAbn'
     | 'location'
@@ -63,6 +64,7 @@ interface LegacyState
   arcLicenceNumber?: string
   arcAuthorisationNumber?: string
   arcAuthorisationExpiry?: string
+  jurisdiction?: string
   businessName?: string
   businessAbn?: string
   location?: Partial<AppState['location']>
@@ -194,6 +196,10 @@ function normalize(parsed: LegacyState): AppState {
     arcLicenceNumber: parsed.arcLicenceNumber ?? '',
     arcAuthorisationNumber: parsed.arcAuthorisationNumber ?? '',
     arcAuthorisationExpiry: parsed.arcAuthorisationExpiry ?? '',
+    jurisdiction:
+      parsed.jurisdiction === 'EU' || parsed.jurisdiction === 'US'
+        ? parsed.jurisdiction
+        : 'AU',
     businessName: parsed.businessName ?? '',
     businessAbn: parsed.businessAbn ?? '',
     location: {

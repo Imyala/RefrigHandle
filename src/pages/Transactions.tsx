@@ -37,6 +37,7 @@ import {
 import { PasswordPromptModal } from '../components/PasswordPromptModal'
 import { Alerts } from '../components/Alerts'
 import { ScanButton } from '../components/ScanButton'
+import { profileFor } from '../lib/compliance'
 import {
   EntryModeToggle,
   ScaleReadingField,
@@ -68,6 +69,7 @@ export default function Transactions() {
   const { state, addTransaction, deleteTransaction } = useStore()
   const { bottles, sites, transactions, unit } = state
   const toast = useToast()
+  const licShort = profileFor(state.jurisdiction).techLicenceShort
 
   const [adding, setAdding] = useState(false)
   // The original entry currently being corrected (opens the log form in
@@ -389,12 +391,12 @@ export default function Transactions() {
                       <div className="mt-1 text-xs text-slate-500">
                         {[
                           t.technician &&
-                            `${t.technician}${t.technicianLicence ? ` · RHL ${t.technicianLicence}` : ''}`,
-                          !t.technician && t.technicianLicence && `RHL ${t.technicianLicence}`,
+                            `${t.technician}${t.technicianLicence ? ` · ${licShort} ${t.technicianLicence}` : ''}`,
+                          !t.technician && t.technicianLicence && `${licShort} ${t.technicianLicence}`,
                           t.businessName &&
-                            `${t.businessName}${t.arcAuthorisationNumber ? ` · RTA ${t.arcAuthorisationNumber}` : ''}`,
-                          !t.businessName && t.arcAuthorisationNumber && `RTA ${t.arcAuthorisationNumber}`,
-                          t.businessAbn && `ABN ${t.businessAbn}`,
+                            `${t.businessName}${t.arcAuthorisationNumber ? ` · ${profileFor(state.jurisdiction).businessAuthShort || 'Auth'} ${t.arcAuthorisationNumber}` : ''}`,
+                          !t.businessName && t.arcAuthorisationNumber && `${profileFor(state.jurisdiction).businessAuthShort || 'Auth'} ${t.arcAuthorisationNumber}`,
+                          t.businessAbn && `${profileFor(state.jurisdiction).businessNumberShort} ${t.businessAbn}`,
                         ]
                           .filter(Boolean)
                           .join(' · ')}
@@ -1215,13 +1217,14 @@ function TransactionForm({
 
         <Field
           label="Technician"
-          hint={
-            pickedTech?.arcLicenceNumber
-              ? `Stamps RHL ${pickedTech.arcLicenceNumber} on this transaction.`
+          hint={(() => {
+            const short = profileFor(state.jurisdiction).techLicenceShort
+            return pickedTech?.arcLicenceNumber
+              ? `Stamps ${short} ${pickedTech.arcLicenceNumber} on this transaction.`
               : pickedTech
-                ? 'No RHL on this profile — add one in Settings to stamp it.'
-                : 'Pick a profile to stamp a name + RHL, or use Other for a one-off entry.'
-          }
+                ? `No ${short} on this profile — add one in Settings to stamp it.`
+                : `Pick a profile to stamp a name + ${short}, or use Other for a one-off entry.`
+          })()}
         >
           <Picker
             title="Technician"
@@ -1248,7 +1251,7 @@ function TransactionForm({
                 value: t.id,
                 label: t.name,
                 hint: t.arcLicenceNumber
-                  ? `RHL ${t.arcLicenceNumber}`
+                  ? `${profileFor(state.jurisdiction).techLicenceShort} ${t.arcLicenceNumber}`
                   : undefined,
               })),
               { value: '__other__', label: 'Other (manual entry)' },
@@ -1280,11 +1283,13 @@ function TransactionForm({
                 placeholder="e.g. Jane Smith"
               />
             </Field>
-            <Field label="RHL">
+            <Field label={profileFor(state.jurisdiction).techLicenceShort}>
               <TextInput
                 value={newTechRhl}
                 onChange={(e) => setNewTechRhl(e.target.value)}
-                placeholder="e.g. L000000"
+                placeholder={
+                  state.jurisdiction === 'AU' ? 'e.g. L000000' : undefined
+                }
               />
             </Field>
             <div className="flex gap-2">

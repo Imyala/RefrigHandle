@@ -39,6 +39,7 @@ import { BottleSelect } from '../components/BottleSelect'
 import { MonthInput } from '../components/MonthInput'
 import { DateTimeInput } from '../components/DateTimeInput'
 import { ScanButton } from '../components/ScanButton'
+import { profileFor } from '../lib/compliance'
 import {
   EntryModeToggle,
   ScaleReadingField,
@@ -305,7 +306,8 @@ export default function Bottles() {
                   </span>
                   {b.createdByLicence && (
                     <span className="text-slate-500">
-                      {' '}· RHL {b.createdByLicence}
+                      {' '}· {profileFor(state.jurisdiction).techLicenceShort}{' '}
+                      {b.createdByLicence}
                     </span>
                   )}
                 </>

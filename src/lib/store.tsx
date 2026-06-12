@@ -14,6 +14,7 @@ import {
   type Bottle,
   type BottlePreset,
   type ClockFormat,
+  type Jurisdiction,
   type LocationSettings,
   type Site,
   type SyncSettings,
@@ -46,6 +47,7 @@ import {
 } from './sync'
 import { mergeStates } from './merge'
 import { sealAuditLog } from './auditChain'
+import { profileFor } from './compliance'
 import { useToast } from './toast'
 
 // Build the next auditLog array with a fresh entry prepended (newest
@@ -109,6 +111,7 @@ interface StoreApi {
     arcAuthorisationNumber: string
     technician: { name: string; arcLicenceNumber: string }
     location: LocationSettings
+    jurisdiction: Jurisdiction
   }) => void
   // settings
   setTechnician: (name: string) => void
@@ -117,6 +120,7 @@ interface StoreApi {
   setArcAuthorisationExpiry: (d: string) => void
   setBusinessName: (n: string) => void
   setBusinessAbn: (n: string) => void
+  setJurisdiction: (j: Jurisdiction) => void
   setLocation: (l: LocationSettings) => void
   setUnit: (u: WeightUnit) => void
   setTheme: (t: Theme) => void
@@ -862,7 +866,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         entityId: tech.id,
         target: tech.name,
         summary: `Added technician ${tech.name}${
-          tech.arcLicenceNumber ? ` · RHL ${tech.arcLicenceNumber}` : ''
+          tech.arcLicenceNumber
+            ? ` · ${profileFor(s.jurisdiction).techLicenceShort} ${tech.arcLicenceNumber}`
+            : ''
         }`,
       }),
     }))
@@ -980,7 +986,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           entityId: tech.id,
           target: tech.name,
           summary: `Added technician ${tech.name}${
-            tech.arcLicenceNumber ? ` · RHL ${tech.arcLicenceNumber}` : ''
+            tech.arcLicenceNumber
+              ? ` · ${profileFor(data.jurisdiction).techLicenceShort} ${tech.arcLicenceNumber}`
+              : ''
           }`,
         }),
       ]
@@ -989,6 +997,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         businessName: data.businessName.trim(),
         businessAbn: data.businessAbn.trim(),
         arcAuthorisationNumber: data.arcAuthorisationNumber.trim(),
+        jurisdiction: data.jurisdiction,
         location: data.location,
         technicians: [...s.technicians, tech],
         activeTechnicianId: s.activeTechnicianId ?? tech.id,
@@ -1113,6 +1122,21 @@ export function StoreProvider({ children }: { children: ReactNode }) {
               businessAbn: n.trim(),
               settingsUpdatedAt: new Date().toISOString(),
               auditLog: settingsChange(s, 'Business ABN', s.businessAbn, n.trim()),
+            },
+      ),
+    [],
+  )
+
+  const setJurisdiction = useCallback(
+    (j: Jurisdiction) =>
+      setState((s) =>
+        s.jurisdiction === j
+          ? s
+          : {
+              ...s,
+              jurisdiction: j,
+              settingsUpdatedAt: new Date().toISOString(),
+              auditLog: settingsChange(s, 'Jurisdiction', s.jurisdiction, j),
             },
       ),
     [],
@@ -1350,6 +1374,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       arcAuthorisationExpiry: s.arcAuthorisationExpiry,
       businessName: s.businessName,
       businessAbn: s.businessAbn,
+      jurisdiction: s.jurisdiction,
       location: s.location,
       unit: s.unit,
       theme: s.theme,
@@ -1421,6 +1446,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setArcAuthorisationExpiry,
       setBusinessName,
       setBusinessAbn,
+      setJurisdiction,
       setLocation,
       setUnit,
       setTheme,
@@ -1462,6 +1488,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setArcAuthorisationExpiry,
       setBusinessName,
       setBusinessAbn,
+      setJurisdiction,
       setLocation,
       setUnit,
       setTheme,

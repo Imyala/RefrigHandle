@@ -9,6 +9,7 @@ import {
   AUDIT_ENTITY_LABELS,
 } from '../lib/audit'
 import type { AuditEntity } from '../lib/types'
+import { profileFor } from '../lib/compliance'
 
 // The entity filter bar — mirrors the kind filter on the activity log.
 // 'all' first, then the records people most often want to audit. The
@@ -40,6 +41,7 @@ export default function AuditLog() {
   const { state } = useStore()
   const { auditLog } = state
   const tz = state.location.timezone
+  const licShort = profileFor(state.jurisdiction).techLicenceShort
 
   const [query, setQuery] = useState('')
   const [filter, setFilter] = useState<(typeof ENTITY_FILTERS)[number]>('all')
@@ -229,7 +231,7 @@ export default function AuditLog() {
                   <>
                     {' · '}
                     {e.by}
-                    {e.byLicence ? ` · RHL ${e.byLicence}` : ''}
+                    {e.byLicence ? ` · ${licShort} ${e.byLicence}` : ''}
                   </>
                 )}
               </div>

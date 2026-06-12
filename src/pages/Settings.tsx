@@ -15,16 +15,17 @@ import { QuarterlyReportCard } from '../components/QuarterlyReport'
 import { useStore } from '../lib/store'
 import {
   expiryStatus,
-  isValidAbn,
   REFRIGERANT_TYPES,
   transactionLabel,
   transactionLoss,
   type ClockFormat,
+  type Jurisdiction,
   type LocationSettings,
   type Technician,
   type Theme,
   type WeightUnit,
 } from '../lib/types'
+import { COMPLIANCE_PROFILES, profileFor } from '../lib/compliance'
 import {
   formatDateTime,
   formatPlainDate,
@@ -66,6 +67,7 @@ export default function Settings() {
     setArcAuthorisationExpiry,
     setBusinessName,
     setBusinessAbn,
+    setJurisdiction,
     setLocation,
     setUnit,
     setTheme,
@@ -108,9 +110,13 @@ export default function Settings() {
   const [compSaved, flashComp] = useSaveFlash()
   const [locSaved, flashLoc] = useSaveFlash()
 
-  // ABN is held back from the store until it's valid (or blank) — an
-  // invalid number shows an inline hint instead of being saved.
-  const abnInvalid = abn.trim() !== '' && !isValidAbn(abn)
+  // Active jurisdiction profile — drives licence terminology, business
+  // number validation, and which compliance fields exist at all.
+  const profile = profileFor(state.jurisdiction)
+
+  // The business number is held back from the store until it passes the
+  // profile's validation (AU: ABN checksum; others: free-form).
+  const abnInvalid = !profile.validateBusinessNumber(abn)
 
   function commitBizName() {
     if (bizName.trim() !== state.businessName) {
@@ -446,10 +452,11 @@ export default function Settings() {
           <Button onClick={openAddTech}>+ Add tech</Button>
         </div>
         <p className="mb-3 text-xs text-slate-500">
-          Each profile carries a name and an ARC Refrigerant Handling Licence
-          (RHL). Pick the active tech here — every transaction logged is
-          stamped with that profile's name and RHL, frozen so the historical
-          record is preserved if a tech later changes their licence.
+          Each profile carries a name and {profile.id === 'AU' ? 'an' : 'a'}{' '}
+          {profile.techLicenceLabel}. Pick the active tech here — every
+          transaction logged is stamped with that profile's name and licence,
+          frozen so the historical record is preserved if a tech later
+          changes their licence.
         </p>
         {state.technicians.length === 0 ? (
           <p className="text-sm text-slate-500">
@@ -478,8 +485,8 @@ export default function Settings() {
                     </div>
                     <div className="text-xs text-slate-500">
                       {t.arcLicenceNumber
-                        ? `RHL ${t.arcLicenceNumber}`
-                        : 'No RHL recorded'}
+                        ? `${profile.techLicenceShort} ${t.arcLicenceNumber}`
+                        : `No ${profile.techLicenceShort} recorded`}
                       {t.licenceExpiry && (() => {
                         const ex = expiryStatus(t.licenceExpiry)
                         return (
@@ -530,26 +537,59 @@ export default function Settings() {
       </Card>
 
       <Card>
+        <Field
+          label="Jurisdiction / regulatory scheme"
+          hint="Drives licence terminology, leak-monitoring rules, validation and the citations on printed reports. Your data is unaffected when switching."
+        >
+          <Picker
+            title="Jurisdiction"
+            value={state.jurisdiction}
+            onChange={(v) => {
+              setJurisdiction(v as Jurisdiction)
+              toast.show(
+                `Switched to ${profileFor(v as Jurisdiction).name}`,
+              )
+            }}
+            options={(
+              Object.values(COMPLIANCE_PROFILES)
+            ).map((p) => ({
+              value: p.id,
+              label: p.name,
+              hint:
+                p.id === 'AU'
+                  ? 'ARC RHL/RTA · CoP 2025 · 5-year records'
+                  : p.id === 'EU'
+                    ? 'F-Gas 2024/573 · CO₂e leak-check schedule · 5-year records'
+                    : 'EPA §608 / AIM Act · leak-rate thresholds · 3-year records',
+            }))}
+          />
+        </Field>
+      </Card>
+
+      <Card>
         <div className="mb-1 flex items-center justify-between gap-2">
           <div className="text-sm font-semibold text-slate-700 dark:text-slate-200">
-            Compliance details (Australia)
+            Compliance details — {profile.name}
           </div>
           <SavedFlash show={compSaved} />
         </div>
         <p className="mb-3 text-xs text-slate-500">
           Used on logbook printouts and stamped onto every transaction at the
-          time of work, as required by the Australia and New Zealand
-          Refrigerant Handling Code of Practice 2025 and AS/NZS 5149.4. Look up
-          your numbers at{' '}
-          <a
-            href="https://www.arctick.org/"
-            target="_blank"
-            rel="noreferrer"
-            className="font-medium text-brand-600 hover:underline"
-          >
-            arctick.org
-          </a>
-          .
+          time of work.
+          {profile.id === 'AU' && (
+            <>
+              {' '}Look up your numbers at{' '}
+              <a
+                href="https://www.arctick.org/"
+                target="_blank"
+                rel="noreferrer"
+                className="font-medium text-brand-600 hover:underline"
+              >
+                arctick.org
+              </a>
+              .
+            </>
+          )}
         </p>
         <div className="space-y-3">
           <Field label="Trading / business name">
@@ -561,49 +601,59 @@ export default function Settings() {
             />
           </Field>
           <Field
-            label="Business ABN"
+            label={profile.businessNumberLabel}
             hint={
               abnInvalid
                 ? 'Must be a valid 11-digit ABN — not saved until corrected.'
-                : 'Your 11-digit Australian Business Number.'
+                : profile.businessNumberHint
             }
           >
             <TextInput
               value={abn}
               onChange={(e) => setAbn(e.target.value)}
               onBlur={commitAbn}
-              inputMode="numeric"
-              placeholder="e.g. 51 824 753 556"
+              inputMode={profile.id === 'AU' ? 'numeric' : undefined}
+              placeholder={
+                profile.id === 'AU' ? 'e.g. 51 824 753 556' : undefined
+              }
             />
           </Field>
-          <Field
-            label="ARC Refrigerant Trading Authorisation (RTA)"
-            hint="Issued by the Australian Refrigeration Council to your business — required to handle/buy/sell refrigerant."
-          >
-            <TextInput
-              value={arcAuth}
-              onChange={(e) => setArcAuth(e.target.value)}
-              onBlur={commitArcAuth}
-              placeholder="e.g. AU00000"
-            />
-          </Field>
-          <Field
-            label="RTA expiry"
-            hint="The app warns before the authorisation lapses."
-          >
-            <DateInput
-              value={state.arcAuthorisationExpiry}
-              onChange={(v) => {
-                setArcAuthorisationExpiry(v)
-                flashComp()
-              }}
-              ariaLabel="RTA expiry date"
-            />
-          </Field>
+          {profile.hasBusinessAuthorisation && (
+            <>
+              <Field
+                label={profile.businessAuthLabel}
+                hint={
+                  profile.id === 'AU'
+                    ? 'Issued by the Australian Refrigeration Council to your business — required to handle/buy/sell refrigerant.'
+                    : 'The company-level certificate required to undertake refrigerant work.'
+                }
+              >
+                <TextInput
+                  value={arcAuth}
+                  onChange={(e) => setArcAuth(e.target.value)}
+                  onBlur={commitArcAuth}
+                  placeholder={profile.id === 'AU' ? 'e.g. AU00000' : undefined}
+                />
+              </Field>
+              <Field
+                label={`${profile.businessAuthShort} expiry`}
+                hint="The app warns before the authorisation lapses."
+              >
+                <DateInput
+                  value={state.arcAuthorisationExpiry}
+                  onChange={(v) => {
+                    setArcAuthorisationExpiry(v)
+                    flashComp()
+                  }}
+                  ariaLabel="Business authorisation expiry date"
+                />
+              </Field>
+            </>
+          )}
           <p className="text-xs text-slate-500">
-            Each tech's RHL lives on their profile in the Technicians card
-            above — that's how a multi-tech crew gets their own licence
-            stamped on each transaction.
+            Each tech's {profile.techLicenceShort} lives on their profile in
+            the Technicians card above — that's how a multi-tech crew gets
+            their own licence stamped on each transaction.
           </p>
         </div>
       </Card>
@@ -620,7 +670,11 @@ export default function Settings() {
           generated-at line on logbook PDFs. Leave blank to follow this
           device's settings.
         </p>
-        <LocationFields loc={loc} setLoc={setLoc} />
+        <LocationFields
+          loc={loc}
+          setLoc={setLoc}
+          jurisdiction={state.jurisdiction}
+        />
       </Card>
 
       <Card>
@@ -853,7 +907,10 @@ export default function Settings() {
         <InstallAppButton variant="full" />
       </Card>
 
-      <QuarterlyReportCard />
+      {/* The quarterly record matches the ARC RTA permit conditions —
+          only meaningful under the AU profile. EU/US use the date-range
+          CSV export and equipment logbooks instead. */}
+      {state.jurisdiction === 'AU' && <QuarterlyReportCard />}
 
       <Card>
         <div className="mb-3 text-sm font-semibold text-slate-700 dark:text-slate-200">
@@ -1135,6 +1192,8 @@ function TechnicianModal({
   onSave: (data: TechSavePayload) => void
   onDelete?: () => void
 }) {
+  const { state } = useStore()
+  const profile = profileFor(state.jurisdiction)
   const [name, setName] = useState('')
   const [rhl, setRhl] = useState('')
   const [licenceExpiry, setLicenceExpiry] = useState('')
@@ -1205,25 +1264,28 @@ function TechnicianModal({
           />
         </Field>
         <Field
-          label="ARC Refrigerant Handling Licence (RHL)"
+          label={profile.techLicenceLabel}
           hint="Personal licence — stamped onto every transaction this tech logs."
         >
           <TextInput
             value={rhl}
             onChange={(e) => setRhl(e.target.value)}
-            placeholder="e.g. L000000"
+            placeholder={profile.id === 'AU' ? 'e.g. L000000' : undefined}
           />
         </Field>
-        <Field
-          label="RHL expiry"
-          hint="RHLs run for two years — the app warns before this lapses, since logging work on an expired licence is a breach."
-        >
-          <DateInput
-            value={licenceExpiry}
-            onChange={setLicenceExpiry}
-            ariaLabel="RHL expiry date"
-          />
-        </Field>
+        {/* EPA §608 certification is permanent — no expiry to track. */}
+        {profile.id !== 'US' && (
+          <Field
+            label={`${profile.techLicenceShort} expiry`}
+            hint="The app warns before this lapses, since logging work on an expired licence is a breach."
+          >
+            <DateInput
+              value={licenceExpiry}
+              onChange={setLicenceExpiry}
+              ariaLabel="Licence expiry date"
+            />
+          </Field>
+        )}
 
         <div className="rounded-xl border border-slate-200 p-3 dark:border-slate-800">
           <div className="mb-1 text-sm font-semibold text-slate-700 dark:text-slate-200">
@@ -1491,7 +1553,7 @@ function DeletedTransactionsCard({
                             ? formatDateTime(t.deletedAt, tz, clock)
                             : ''}
                           {t.deletedBy && ` by ${t.deletedBy}`}
-                          {t.deletedByLicence && ` · RHL ${t.deletedByLicence}`}
+                          {t.deletedByLicence && ` · ${profileFor(state.jurisdiction).techLicenceShort} ${t.deletedByLicence}`}
                         </div>
                         {t.deletedReason && (
                           <div className="mt-0.5 text-xs italic text-slate-500">

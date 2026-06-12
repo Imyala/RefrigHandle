@@ -14,6 +14,7 @@ import {
   type Transaction,
 } from '../lib/types'
 import { formatDate, formatDateTime } from '../lib/datetime'
+import { profileFor } from '../lib/compliance'
 import { formatWeight, kgToDisplay } from '../lib/units'
 
 export default function Dashboard() {
@@ -302,7 +303,7 @@ function RecentActivityItem({ t }: { t: Transaction }) {
               label="Technician"
               value={[
                 t.technician,
-                t.technicianLicence && `RHL ${t.technicianLicence}`,
+                t.technicianLicence && `${profileFor(state.jurisdiction).techLicenceShort} ${t.technicianLicence}`,
               ]
                 .filter(Boolean)
                 .join(' · ')}

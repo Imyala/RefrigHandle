@@ -396,6 +396,13 @@ export interface Tombstone {
   at: string // ISO timestamp of the deletion
 }
 
+// Which regulatory regime the business operates under. Drives
+// terminology (licence names, business-number labels), leak-monitoring
+// rules, validation, and the citations on printed reports — see
+// lib/compliance.ts for the profiles. 'AU' is the default and the
+// original behaviour of the app.
+export type Jurisdiction = 'AU' | 'EU' | 'US'
+
 export type WeightUnit = 'kg' | 'lb'
 
 export type Theme = 'system' | 'light' | 'dark'
@@ -483,7 +490,13 @@ export interface AppState {
   // RTA expiry date (YYYY-MM-DD) — alerted on like RHL expiry.
   arcAuthorisationExpiry: string
   businessName: string
-  businessAbn: string // Australian Business Number (11 digits)
+  // Business registration number. Under the AU profile this is an ABN
+  // (11 digits, checksum-validated); other jurisdictions treat it as a
+  // free-form VAT / registration number. Field name kept for backward
+  // compatibility with stored data and exports.
+  businessAbn: string
+  // Regulatory regime — see Jurisdiction / lib/compliance.ts.
+  jurisdiction: Jurisdiction
   location: LocationSettings
   unit: WeightUnit
   theme: Theme
@@ -526,6 +539,7 @@ export const EMPTY_STATE: AppState = {
   arcAuthorisationExpiry: '',
   businessName: '',
   businessAbn: '',
+  jurisdiction: 'AU',
   location: { country: '', region: '', city: '', timezone: '' },
   unit: 'kg',
   theme: 'light',
@@ -1068,10 +1082,17 @@ export function cumulativeTopUpKg(
 
 // Returns the unit's leak status against the trailing 12-month window.
 // `nowISO` defaults to "today" but is injectable for tests/print views.
+// `thresholds` lets a jurisdiction profile substitute its own watch /
+// suspected fractions (e.g. EPA 608 leak-rate thresholds vary by
+// equipment class) — defaults to the conservative AU advisory levels.
 export function leakStatusFor(
   unit: Unit,
   transactions: readonly Transaction[],
   nowISO: string = new Date().toISOString(),
+  thresholds: { watch: number; suspected: number } = {
+    watch: LEAK_WATCH_FRACTION,
+    suspected: LEAK_SUSPECTED_FRACTION,
+  },
 ): LeakStatus {
   const windowDays = LEAK_TRAILING_DAYS
   const now = new Date(nowISO)
@@ -1089,9 +1110,9 @@ export function leakStatusFor(
   }
   const fraction = topUp / charge
   const level: LeakLevel =
-    fraction >= LEAK_SUSPECTED_FRACTION
+    fraction >= thresholds.suspected
       ? 'suspected'
-      : fraction >= LEAK_WATCH_FRACTION
+      : fraction >= thresholds.watch
         ? 'watch'
         : 'ok'
   return { level, topUpKg: topUp, fraction, windowDays }
