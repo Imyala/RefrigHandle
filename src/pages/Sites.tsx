@@ -14,7 +14,6 @@ import { useStore } from '../lib/store'
 import {
   AU_CITIES_BY_REGION,
   AU_REGIONS,
-  CITIES_BY_COUNTRY,
   CITY_OTHER_VALUE,
   NON_REFRIGERANT_UNIT_KINDS,
   REASON_LABELS,
@@ -955,7 +954,7 @@ function LeakPill({ leak }: { leak: LeakStatus }) {
   return (
     <Pill
       tone="red"
-      title={`Top-ups in last 12 months: ${leak.topUpKg.toFixed(2)} kg (${pct}% of charge). Repeated top-ups — investigate and rectify per AIRAH DA19 / AREMA Code of Practice 2018.`}
+      title={`Top-ups in last 12 months: ${leak.topUpKg.toFixed(2)} kg (${pct}% of charge). Repeated top-ups — investigate and rectify per AIRAH DA19 / Refrigerant Handling Code of Practice 2025.`}
     >
       Leak suspected · {pct}%
     </Pill>
@@ -1168,8 +1167,7 @@ export function SiteForm({
   )
 }
 
-// State / territory picker for sites. AU states for Australia (or no
-// country set); falls back to free text for other countries.
+// State / territory picker for sites.
 function StateField({
   value,
   onChange,
@@ -1177,19 +1175,6 @@ function StateField({
   value: string
   onChange: (v: string) => void
 }) {
-  const { state } = useStore()
-  const country = state.location.country
-
-  if (country && country !== 'Australia') {
-    return (
-      <TextInput
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder="State / region / province"
-      />
-    )
-  }
-
   return (
     <Picker
       title="State"
@@ -1202,10 +1187,10 @@ function StateField({
   )
 }
 
-// Town / city picker. Offers the curated list for the chosen state (AU)
-// or country, plus an "Other — type my own" option that reveals a free-
-// text box. Mounted with key={resetKey} by the form so the manual-entry
-// mode resets cleanly between sites.
+// Town / city picker. Offers the curated list for the chosen state,
+// plus an "Other — type my own" option that reveals a free-text box.
+// Mounted with key={resetKey} by the form so the manual-entry mode
+// resets cleanly between sites.
 function CityField({
   stateCode,
   value,
@@ -1215,33 +1200,24 @@ function CityField({
   value: string
   onChange: (v: string) => void
 }) {
-  const { state } = useStore()
-  const country = state.location.country
   const [manual, setManual] = useState(false)
 
   const cityOptions = useMemo<PickerOption[]>(() => {
-    if (country === 'Australia' || country === '') {
-      // Cities for the picked state; if none picked yet, offer all.
-      if (stateCode && AU_CITIES_BY_REGION[stateCode]) {
-        return AU_CITIES_BY_REGION[stateCode].map((c) => ({
-          value: c,
-          label: c,
-        }))
-      }
-      const opts: PickerOption[] = []
-      for (const region of AU_REGIONS) {
-        for (const city of AU_CITIES_BY_REGION[region] ?? []) {
-          opts.push({ value: city, label: city, group: region })
-        }
-      }
-      return opts
+    // Cities for the picked state; if none picked yet, offer all.
+    if (stateCode && AU_CITIES_BY_REGION[stateCode]) {
+      return AU_CITIES_BY_REGION[stateCode].map((c) => ({
+        value: c,
+        label: c,
+      }))
     }
-    return (CITIES_BY_COUNTRY[country] ?? []).map((c) => ({
-      value: c,
-      label: c,
-      group: country,
-    }))
-  }, [country, stateCode])
+    const opts: PickerOption[] = []
+    for (const region of AU_REGIONS) {
+      for (const city of AU_CITIES_BY_REGION[region] ?? []) {
+        opts.push({ value: city, label: city, group: region })
+      }
+    }
+    return opts
+  }, [stateCode])
 
   const options = useMemo<PickerOption[]>(
     () => [
@@ -1467,7 +1443,7 @@ export function UnitForm({
   )
 }
 
-// --- Equipment logbook (AS/NZS 5149.4 + AREMA/AIRAH 2018) -------------
+// --- Equipment logbook (AS/NZS 5149.4 + ANZ Refrigerant Handling CoP 2025) ---
 //
 // Per-unit service record. Surfaces: business + ARC RTA, technician +
 // ARC RHL stamped on each row, refrigerant + GWP + tCO2-e, leak status
@@ -1648,9 +1624,9 @@ function UnitLogbook({
 
         <footer className="border-t border-slate-300 pt-3 text-[11px] text-slate-500 dark:border-slate-700">
           <p>
-            Recorded against AS/NZS 5149.4 §6 (service records), the AREMA /
-            AIRAH "Code of Practice for the reduction of emissions of
-            fluorocarbon refrigerants" 2018, and AIRAH DA19 (refrigerant
+            Recorded against AS/NZS 5149.4 §6 (service records), the Australia
+            and New Zealand Refrigerant Handling Code of Practice 2025, and
+            AIRAH DA19 (refrigerant
             selection &amp; handling). GWP values per IPCC AR4 (100-year) as
             adopted by the Ozone Protection and Synthetic Greenhouse Gas
             Management Regulations 1995.
@@ -2037,9 +2013,9 @@ function SiteAuditModal({
 
         <footer className="border-t border-slate-300 pt-3 text-[11px] text-slate-500 dark:border-slate-700">
           <p>
-            Refrigerant handling records per AS/NZS 5149.4 §6, the AREMA /
-            AIRAH "Code of Practice for the reduction of emissions of
-            fluorocarbon refrigerants" 2018, and AIRAH DA19. Cylinder periodic
+            Refrigerant handling records per AS/NZS 5149.4 §6, the Australia
+            and New Zealand Refrigerant Handling Code of Practice 2025, and
+            AIRAH DA19. Cylinder periodic
             test dates per AS 2030.
           </p>
           {(totalCharged > 0 || totalRecovered > 0) && (

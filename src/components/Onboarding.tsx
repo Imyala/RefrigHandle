@@ -32,7 +32,7 @@ function OnboardingScreen() {
   const [techName, setTechName] = useState('')
   const [techRhl, setTechRhl] = useState('')
   const [loc, setLoc] = useState<LocationSettings>({
-    country: '',
+    country: 'Australia',
     region: '',
     city: '',
     timezone: '',

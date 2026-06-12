@@ -443,8 +443,9 @@ export default function Settings() {
         </div>
         <p className="mb-3 text-xs text-slate-500">
           Used on logbook printouts and stamped onto every transaction at the
-          time of work, as required by the AREMA / AIRAH Code of Practice 2018
-          and AS/NZS 5149.4. Look up your numbers at{' '}
+          time of work, as required by the Australia and New Zealand
+          Refrigerant Handling Code of Practice 2025 and AS/NZS 5149.4. Look up
+          your numbers at{' '}
           <a
             href="https://www.arctick.org/"
             target="_blank"

@@ -910,9 +910,9 @@ export function chargeSanity(
 
 // --- Leak detection ---------------------------------------------------
 //
-// Australian guidance (AIRAH DA19, AREMA/AIRAH "Code of Practice for
-// the reduction of emissions of fluorocarbon refrigerants" 2018, and
-// AS/NZS 5149.2 §5.3) does not set a fixed numeric leak-rate threshold
+// Australian guidance (AIRAH DA19, the Australia and New Zealand
+// Refrigerant Handling Code of Practice 2025, and AS/NZS 5149.2 §5.3)
+// does not set a fixed numeric leak-rate threshold
 // the way EU F-gas does. Instead the duty is to "investigate and
 // rectify any leak detected" and to keep records of refrigerant added.
 // Repeated top-ups against the same equipment are the recognised
@@ -988,36 +988,26 @@ export function leakStatusFor(
 
 // --- Timezones --------------------------------------------------------
 //
-// Curated short list, Australian states first since that's the
-// primary market. The "label" is what techs recognise (AEST, AWST);
-// the "iana" name is what Intl.DateTimeFormat / new Date() actually
-// understand. "(custom)" is escape-hatch for users elsewhere — they
-// type their own IANA name. Resolved against the runtime via
-// Intl.supportedValuesOf so we don't ship a stale list.
+// Australian timezones only — ARC RTA / RHL licensing is Australian,
+// so the app is Australia-only. The "label" is what techs recognise
+// (AEST, AWST); the "iana" name is what Intl.DateTimeFormat /
+// new Date() actually understand.
 
 export interface TimezoneOption {
   iana: string
   label: string
-  group: 'Australia' | 'Pacific' | 'World'
+  group: 'Australia'
 }
 
 export const TIMEZONE_OPTIONS: readonly TimezoneOption[] = [
-  // Australia
   { iana: 'Australia/Sydney', label: 'Sydney — AEST/AEDT (NSW, ACT, VIC)', group: 'Australia' },
   { iana: 'Australia/Melbourne', label: 'Melbourne — AEST/AEDT', group: 'Australia' },
   { iana: 'Australia/Hobart', label: 'Hobart — AEST/AEDT (TAS)', group: 'Australia' },
   { iana: 'Australia/Brisbane', label: 'Brisbane — AEST (QLD, no DST)', group: 'Australia' },
   { iana: 'Australia/Adelaide', label: 'Adelaide — ACST/ACDT (SA)', group: 'Australia' },
+  { iana: 'Australia/Broken_Hill', label: 'Broken Hill — ACST/ACDT (far west NSW)', group: 'Australia' },
   { iana: 'Australia/Darwin', label: 'Darwin — ACST (NT, no DST)', group: 'Australia' },
   { iana: 'Australia/Perth', label: 'Perth — AWST (WA)', group: 'Australia' },
-  // Pacific
-  { iana: 'Pacific/Auckland', label: 'Auckland — NZST/NZDT', group: 'Pacific' },
-  // World — minimal, just the common anchors
-  { iana: 'UTC', label: 'UTC', group: 'World' },
-  { iana: 'Europe/London', label: 'London — GMT/BST', group: 'World' },
-  { iana: 'America/New_York', label: 'New York — EST/EDT', group: 'World' },
-  { iana: 'America/Los_Angeles', label: 'Los Angeles — PST/PDT', group: 'World' },
-  { iana: 'Asia/Singapore', label: 'Singapore', group: 'World' },
 ] as const
 
 // Australian states/territories — used for the Region dropdown when
@@ -1027,68 +1017,61 @@ export const AU_REGIONS: readonly string[] = [
   'NSW', 'VIC', 'QLD', 'SA', 'WA', 'TAS', 'NT', 'ACT',
 ] as const
 
-// Curated city lists for the City picker on the Settings page. AU is
-// grouped by state so the picker can filter; other countries are a
-// single flat list. Not exhaustive — a tech in a small town picks
+// Curated city/town lists for the City pickers, grouped by state so
+// the picker can filter. Covers the capitals plus the major regional
+// cities and towns in each state — a tech in a smaller locality picks
 // "Other" and types the name in.
 export const AU_CITIES_BY_REGION: Record<string, readonly string[]> = {
   NSW: [
-    'Sydney', 'Newcastle', 'Wollongong', 'Central Coast',
-    'Wagga Wagga', 'Albury', 'Coffs Harbour', 'Port Macquarie',
-    'Tamworth', 'Dubbo', 'Orange', 'Bathurst', 'Lismore', 'Armidale',
+    'Sydney', 'Newcastle', 'Wollongong', 'Central Coast', 'Maitland',
+    'Wagga Wagga', 'Albury', 'Port Macquarie', 'Coffs Harbour',
+    'Tamworth', 'Orange', 'Dubbo', 'Bathurst', 'Lismore', 'Nowra',
+    'Queanbeyan', 'Tweed Heads', 'Goulburn', 'Armidale', 'Griffith',
+    'Broken Hill', 'Grafton', 'Taree', 'Cessnock', 'Singleton',
+    'Muswellbrook', 'Ballina', 'Moree', 'Parkes', 'Mudgee', 'Cowra',
+    'Bega', 'Batemans Bay', 'Bowral',
   ],
   VIC: [
     'Melbourne', 'Geelong', 'Ballarat', 'Bendigo', 'Shepparton',
-    'Mildura', 'Warrnambool', 'Traralgon', 'Wodonga',
+    'Mildura', 'Warrnambool', 'Traralgon', 'Morwell', 'Moe', 'Sale',
+    'Bairnsdale', 'Wodonga', 'Wangaratta', 'Horsham', 'Echuca',
+    'Swan Hill', 'Colac', 'Portland', 'Hamilton', 'Ararat', 'Benalla',
+    'Seymour', 'Castlemaine', 'Maryborough', 'Warragul', 'Drouin',
+    'Leongatha', 'Torquay', 'Lakes Entrance',
   ],
   QLD: [
     'Brisbane', 'Gold Coast', 'Sunshine Coast', 'Townsville', 'Cairns',
     'Toowoomba', 'Mackay', 'Rockhampton', 'Bundaberg', 'Hervey Bay',
-    'Gladstone', 'Mount Isa',
+    'Gladstone', 'Maryborough', 'Gympie', 'Yeppoon', 'Emerald',
+    'Mount Isa', 'Warwick', 'Dalby', 'Roma', 'Charleville', 'Kingaroy',
+    'Charters Towers', 'Ayr', 'Bowen', 'Airlie Beach', 'Moranbah',
+    'Biloela', 'Innisfail', 'Mareeba', 'Atherton', 'Port Douglas',
+    'Ingham', 'Longreach', 'Goondiwindi', 'Stanthorpe', 'Weipa',
   ],
   SA: [
-    'Adelaide', 'Mount Gambier', 'Whyalla', 'Murray Bridge', 'Port Augusta',
-    'Port Lincoln', 'Port Pirie',
+    'Adelaide', 'Mount Gambier', 'Whyalla', 'Murray Bridge',
+    'Port Augusta', 'Port Pirie', 'Port Lincoln', 'Victor Harbor',
+    'Gawler', 'Mount Barker', 'Berri', 'Renmark', 'Loxton',
+    'Naracoorte', 'Millicent', 'Kadina', 'Clare', 'Ceduna',
+    'Roxby Downs', 'Coober Pedy',
   ],
   WA: [
-    'Perth', 'Mandurah', 'Bunbury', 'Geraldton', 'Kalgoorlie',
-    'Albany', 'Karratha', 'Port Hedland', 'Broome',
+    'Perth', 'Mandurah', 'Bunbury', 'Busselton', 'Geraldton',
+    'Kalgoorlie', 'Albany', 'Broome', 'Karratha', 'Port Hedland',
+    'Esperance', 'Carnarvon', 'Newman', 'Tom Price', 'Kununurra',
+    'Derby', 'Margaret River', 'Collie', 'Narrogin', 'Northam',
+    'Merredin', 'Manjimup', 'Exmouth',
   ],
-  TAS: ['Hobart', 'Launceston', 'Devonport', 'Burnie'],
-  NT: ['Darwin', 'Alice Springs', 'Katherine', 'Palmerston'],
+  TAS: [
+    'Hobart', 'Launceston', 'Devonport', 'Burnie', 'Ulverstone',
+    'Kingston', 'New Norfolk', 'Sorell', 'George Town', 'Wynyard',
+    'Smithton', 'Scottsdale', 'Huonville', 'Queenstown',
+  ],
+  NT: [
+    'Darwin', 'Palmerston', 'Alice Springs', 'Katherine',
+    'Tennant Creek', 'Nhulunbuy', 'Jabiru', 'Yulara',
+  ],
   ACT: ['Canberra'],
-}
-
-export const CITIES_BY_COUNTRY: Record<string, readonly string[]> = {
-  'New Zealand': [
-    'Auckland', 'Wellington', 'Christchurch', 'Hamilton', 'Tauranga',
-    'Dunedin', 'Palmerston North', 'Napier', 'Hastings', 'Nelson',
-    'Rotorua', 'Whangarei', 'Invercargill', 'New Plymouth',
-  ],
-  'United Kingdom': [
-    'London', 'Birmingham', 'Manchester', 'Glasgow', 'Leeds',
-    'Liverpool', 'Edinburgh', 'Bristol', 'Sheffield', 'Cardiff',
-    'Newcastle upon Tyne', 'Belfast', 'Aberdeen', 'Plymouth',
-    'Brighton', 'Oxford', 'Cambridge', 'Southampton', 'Reading',
-    'Nottingham', 'Leicester',
-  ],
-  'United States': [
-    'New York', 'Los Angeles', 'Chicago', 'Houston', 'Phoenix',
-    'Philadelphia', 'San Antonio', 'San Diego', 'Dallas', 'San Jose',
-    'Austin', 'Jacksonville', 'Fort Worth', 'Columbus', 'Charlotte',
-    'San Francisco', 'Indianapolis', 'Seattle', 'Denver',
-    'Washington DC', 'Boston', 'Nashville', 'Portland', 'Las Vegas',
-    'Detroit', 'Memphis', 'Louisville', 'Baltimore', 'Milwaukee',
-    'Albuquerque', 'Tucson', 'Atlanta', 'Miami', 'Orlando', 'Tampa',
-    'Pittsburgh', 'Cincinnati', 'Cleveland', 'Kansas City', 'St Louis',
-    'Minneapolis', 'New Orleans', 'Honolulu', 'Anchorage',
-  ],
-  Canada: [
-    'Toronto', 'Montreal', 'Vancouver', 'Calgary', 'Edmonton',
-    'Ottawa', 'Winnipeg', 'Quebec City', 'Hamilton', 'Kitchener',
-    'London', 'Victoria', 'Halifax', 'Oshawa', 'Windsor',
-    'Saskatoon', 'Regina', "St John's",
-  ],
 }
 
 // The marker the City picker uses to mean "let me type my own".
