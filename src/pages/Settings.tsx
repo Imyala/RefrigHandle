@@ -216,6 +216,7 @@ export default function Settings() {
       'technician',
       'technicianLicence',
       'businessName',
+      'businessAbn',
       'arcAuthorisationNumber',
       'notes',
     ]
@@ -265,6 +266,7 @@ export default function Settings() {
         t.technician ?? '',
         t.technicianLicence ?? '',
         t.businessName ?? '',
+        t.businessAbn ?? '',
         t.arcAuthorisationNumber ?? '',
         (t.notes ?? '').replace(/[\r\n]+/g, ' '),
       ]

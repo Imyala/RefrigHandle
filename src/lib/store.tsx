@@ -253,6 +253,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           (activeTech?.arcLicenceNumber || undefined) ??
           (s.arcLicenceNumber || undefined),
         businessName: s.businessName || undefined,
+        businessAbn: s.businessAbn || undefined,
         arcAuthorisationNumber: s.arcAuthorisationNumber || undefined,
       }
       return {
@@ -597,6 +598,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           (activeTech?.arcLicenceNumber || undefined) ??
           (s.arcLicenceNumber || undefined),
         businessName: t.businessName ?? (s.businessName || undefined),
+        businessAbn: t.businessAbn ?? (s.businessAbn || undefined),
         arcAuthorisationNumber:
           t.arcAuthorisationNumber ?? (s.arcAuthorisationNumber || undefined),
       }

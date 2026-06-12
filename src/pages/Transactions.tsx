@@ -361,6 +361,7 @@ export default function Transactions() {
                     {(t.technician ||
                       t.technicianLicence ||
                       t.businessName ||
+                      t.businessAbn ||
                       t.arcAuthorisationNumber) && (
                       <div className="mt-1 text-xs text-slate-500">
                         {[
@@ -370,6 +371,7 @@ export default function Transactions() {
                           t.businessName &&
                             `${t.businessName}${t.arcAuthorisationNumber ? ` · RTA ${t.arcAuthorisationNumber}` : ''}`,
                           !t.businessName && t.arcAuthorisationNumber && `RTA ${t.arcAuthorisationNumber}`,
+                          t.businessAbn && `ABN ${t.businessAbn}`,
                         ]
                           .filter(Boolean)
                           .join(' · ')}

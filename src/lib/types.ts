@@ -234,11 +234,13 @@ export interface Transaction {
   // work — frozen so a logbook printed years later still shows the
   // licence that was in force, not what the tech happens to hold now.
   technicianLicence?: string
-  // Business trading name and ARC Refrigerant Trading Authorisation
-  // (RTA) frozen at the time of work for the same reason as the RHL
-  // above — an audit needs to see the operator that was in force when
-  // the transaction happened, not whoever owns the licence today.
+  // Business trading name, ABN and ARC Refrigerant Trading
+  // Authorisation (RTA) frozen at the time of work for the same reason
+  // as the RHL above — an audit needs to see the operator that was in
+  // force when the transaction happened, not whoever owns the licence
+  // today.
   businessName?: string
+  businessAbn?: string
   arcAuthorisationNumber?: string
   equipment?: string // free-text fallback if no Unit is picked
   reason?: TransactionReason

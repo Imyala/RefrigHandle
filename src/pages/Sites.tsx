@@ -1532,9 +1532,14 @@ function UnitLogbook({
             {state.businessName || 'Business name not set in Settings'}
           </div>
           <div className="text-xs text-slate-500">
-            {state.arcAuthorisationNumber
-              ? `ARC RTA ${state.arcAuthorisationNumber}`
-              : 'ARC RTA not set in Settings'}
+            {[
+              state.businessAbn
+                ? `ABN ${state.businessAbn}`
+                : 'ABN not set in Settings',
+              state.arcAuthorisationNumber
+                ? `ARC RTA ${state.arcAuthorisationNumber}`
+                : 'ARC RTA not set in Settings',
+            ].join(' · ')}
           </div>
         </header>
 
@@ -1736,6 +1741,9 @@ function LogbookRow({ t }: { t: Transaction }) {
           <div className="text-[10px] text-slate-500">RHL {t.technicianLicence}</div>
         )}
         {t.businessName && <div>{t.businessName}</div>}
+        {t.businessAbn && (
+          <div className="text-[10px] text-slate-500">ABN {t.businessAbn}</div>
+        )}
         {t.arcAuthorisationNumber && (
           <div className="text-[10px] text-slate-500">
             RTA {t.arcAuthorisationNumber}
@@ -1847,9 +1855,14 @@ function SiteAuditModal({
             {state.businessName || 'Business name not set in Settings'}
           </div>
           <div className="text-xs text-slate-500">
-            {state.arcAuthorisationNumber
-              ? `ARC RTA ${state.arcAuthorisationNumber}`
-              : 'ARC RTA not set in Settings'}
+            {[
+              state.businessAbn
+                ? `ABN ${state.businessAbn}`
+                : 'ABN not set in Settings',
+              state.arcAuthorisationNumber
+                ? `ARC RTA ${state.arcAuthorisationNumber}`
+                : 'ARC RTA not set in Settings',
+            ].join(' · ')}
           </div>
         </header>
 
