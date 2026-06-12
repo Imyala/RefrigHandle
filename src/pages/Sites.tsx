@@ -19,9 +19,11 @@ import {
   REASON_LABELS,
   UNIT_KIND_LABELS,
   gwpFor,
+  isRestatement,
   leakStatusFor,
   netWeight,
   statusLabel,
+  supersededIds,
   tonnesCO2eFor,
   transactionLabel,
   transactionLoss,
@@ -308,10 +310,17 @@ function SiteCard({ site, onOpen }: { site: Site; onOpen: () => void }) {
     (u) => u.siteId === site.id && u.status === 'decommissioned',
   )
   const onSite = bottles.filter((b) => b.currentSiteId === site.id)
-  // Exclude soft-deleted rows — the printable Site Audit does, and the
-  // card stat must agree with it.
+  // Exclude soft-deleted rows and re-stated originals — the printable
+  // Site Audit does, and the card stat must agree with it.
+  const superseded = supersededIds(transactions)
   const charged = transactions
-    .filter((t) => !t.deletedAt && t.siteId === site.id && t.kind === 'charge')
+    .filter(
+      (t) =>
+        !t.deletedAt &&
+        !superseded.has(t.id) &&
+        t.siteId === site.id &&
+        t.kind === 'charge',
+    )
     .reduce((s, t) => s + t.amount, 0)
 
   return (
@@ -1578,13 +1587,18 @@ function UnitLogbook({
   const tCO2e = unit.refrigerantCharge
     ? tonnesCO2eFor(unit.refrigerantCharge, unit.refrigerantType)
     : undefined
-  const totalCharged = txs
+  // Originals superseded by a re-statement correction stay in the
+  // service-history table (marked) but are excluded from every total —
+  // the linked correction carries the true figures.
+  const superseded = supersededIds(state.transactions)
+  const counted = txs.filter((t) => !superseded.has(t.id))
+  const totalCharged = counted
     .filter((t) => t.kind === 'charge')
     .reduce((s, t) => s + t.amount, 0)
-  const totalRecovered = txs
+  const totalRecovered = counted
     .filter((t) => t.kind === 'recover')
     .reduce((s, t) => s + t.amount, 0)
-  const totalLoss = txs.reduce((s, t) => s + transactionLoss(t), 0)
+  const totalLoss = counted.reduce((s, t) => s + transactionLoss(t), 0)
   const generatedAt = formatDateTime(
     new Date().toISOString(),
     state.location.timezone,
@@ -1739,7 +1753,11 @@ function UnitLogbook({
                 </thead>
                 <tbody>
                   {txs.map((t) => (
-                    <LogbookRow key={t.id} t={t} />
+                    <LogbookRow
+                      key={t.id}
+                      t={t}
+                      superseded={superseded.has(t.id)}
+                    />
                   ))}
                 </tbody>
               </table>
@@ -1795,7 +1813,13 @@ function leakLevelLabel(l: LeakStatus['level']): string {
   }
 }
 
-function LogbookRow({ t }: { t: Transaction }) {
+function LogbookRow({
+  t,
+  superseded = false,
+}: {
+  t: Transaction
+  superseded?: boolean
+}) {
   const { state } = useStore()
   const profile = profileFor(state.jurisdiction)
   const bottle = state.bottles.find((b) => b.id === t.bottleId)
@@ -1803,7 +1827,11 @@ function LogbookRow({ t }: { t: Transaction }) {
   const bottleKg = t.bottleAmount ?? equipKg
   const loss = transactionLoss(t)
   return (
-    <tr className="border-b border-slate-200 align-top dark:border-slate-800">
+    <tr
+      className={`border-b border-slate-200 align-top dark:border-slate-800 ${
+        superseded ? 'text-slate-400 dark:text-slate-500' : ''
+      }`}
+    >
       <td className="py-1 pr-2 whitespace-nowrap">
         {/* Business timezone, not browser — printed audit dates must
             match the on-screen log. */}
@@ -1814,6 +1842,16 @@ function LogbookRow({ t }: { t: Transaction }) {
         {bottle ? (
           <div className="text-[10px] text-slate-500">via {bottle.bottleNumber}</div>
         ) : null}
+        {superseded && (
+          <div className="text-[10px] font-medium text-amber-700 dark:text-amber-400">
+            Superseded by correction — not counted
+          </div>
+        )}
+        {isRestatement(t) && (
+          <div className="text-[10px] font-medium text-blue-700 dark:text-blue-400">
+            Correction — re-states earlier entry
+          </div>
+        )}
       </td>
       <td className="py-1 pr-2 text-right tabular-nums">
         {equipKg ? equipKg.toFixed(3) : ''}
@@ -1857,6 +1895,11 @@ function LogbookRow({ t }: { t: Transaction }) {
             ⚠ Refrigerant mismatch: bottle{' '}
             {t.refrigerantMismatch.bottleType} into unit set up for{' '}
             {t.refrigerantMismatch.unitType}
+          </div>
+        )}
+        {t.correctionReason && (
+          <div className="text-[11px] italic">
+            Correction reason: “{t.correctionReason}”
           </div>
         )}
         {t.notes ?? ''}
@@ -1928,11 +1971,26 @@ function SiteAuditModal({
     state.clock,
   )
   const totalOnSiteNet = bottles.reduce((s, b) => s + netWeight(b), 0)
+  // Re-stated originals are excluded — the linked correction row (same
+  // site/kind) carries the true amount and is summed instead.
+  const supersededTotals = supersededIds(state.transactions)
   const totalCharged = state.transactions
-    .filter((t) => !t.deletedAt && t.siteId === site.id && t.kind === 'charge')
+    .filter(
+      (t) =>
+        !t.deletedAt &&
+        !supersededTotals.has(t.id) &&
+        t.siteId === site.id &&
+        t.kind === 'charge',
+    )
     .reduce((s, t) => s + t.amount, 0)
   const totalRecovered = state.transactions
-    .filter((t) => !t.deletedAt && t.siteId === site.id && t.kind === 'recover')
+    .filter(
+      (t) =>
+        !t.deletedAt &&
+        !supersededTotals.has(t.id) &&
+        t.siteId === site.id &&
+        t.kind === 'recover',
+    )
     .reduce((s, t) => s + t.amount, 0)
 
   return (
@@ -2133,7 +2191,11 @@ function SiteAuditModal({
                 </thead>
                 <tbody>
                   {txs.map((t) => (
-                    <AuditTxRow key={t.id} t={t} />
+                    <AuditTxRow
+                      key={t.id}
+                      t={t}
+                      superseded={supersededTotals.has(t.id)}
+                    />
                   ))}
                 </tbody>
               </table>
@@ -2163,7 +2225,13 @@ function SiteAuditModal({
   )
 }
 
-function AuditTxRow({ t }: { t: Transaction }) {
+function AuditTxRow({
+  t,
+  superseded = false,
+}: {
+  t: Transaction
+  superseded?: boolean
+}) {
   const { state } = useStore()
   const profile = profileFor(state.jurisdiction)
   const bottle = state.bottles.find((b) => b.id === t.bottleId)
@@ -2171,11 +2239,27 @@ function AuditTxRow({ t }: { t: Transaction }) {
   const refrigKg = t.kind === 'charge' || t.kind === 'recover' ? t.amount : 0
   const loss = transactionLoss(t)
   return (
-    <tr className="border-b border-slate-200 align-top dark:border-slate-800">
+    <tr
+      className={`border-b border-slate-200 align-top dark:border-slate-800 ${
+        superseded ? 'text-slate-400 dark:text-slate-500' : ''
+      }`}
+    >
       <td className="py-1 pr-2 whitespace-nowrap">
         {formatDate(t.date, state.location.timezone)}
       </td>
-      <td className="py-1 pr-2">{transactionLabel(t.kind)}</td>
+      <td className="py-1 pr-2">
+        {transactionLabel(t.kind)}
+        {superseded && (
+          <div className="text-[10px] font-medium text-amber-700 dark:text-amber-400">
+            Superseded by correction — not counted
+          </div>
+        )}
+        {isRestatement(t) && (
+          <div className="text-[10px] font-medium text-blue-700 dark:text-blue-400">
+            Correction — re-states earlier entry
+          </div>
+        )}
+      </td>
       <td className="py-1 pr-2">{bottle ? bottle.bottleNumber : '—'}</td>
       <td className="py-1 pr-2">{unit?.name ?? t.unitName ?? t.equipment ?? '—'}</td>
       <td className="py-1 pr-2 text-right tabular-nums">

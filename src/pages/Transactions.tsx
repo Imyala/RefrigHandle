@@ -18,6 +18,7 @@ import {
   type TransactionReason,
   REASON_LABELS,
   chargeSanity,
+  isRestatement,
   movementSummary,
   netWeight,
   overfillKg,
@@ -152,7 +153,13 @@ export default function Transactions() {
   const correctionFor = useMemo(() => {
     const m = new Map<string, Transaction>()
     for (const t of transactions) {
-      if (t.correctsId && !t.deletedAt) m.set(t.correctsId, t)
+      if (!t.correctsId || t.deletedAt) continue
+      // If several live corrections point at the same original (possible
+      // in legacy data), surface the most recently logged one.
+      const prev = m.get(t.correctsId)
+      if (!prev || (t.loggedAt ?? t.date) > (prev.loggedAt ?? prev.date)) {
+        m.set(t.correctsId, t)
+      }
     }
     return m
   }, [transactions])
@@ -309,17 +316,28 @@ export default function Transactions() {
                     </div>
                     {corrects && (
                       <div className="mt-1 rounded-lg border border-blue-200 bg-blue-50 px-2 py-1 text-xs text-blue-900 dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-100">
-                        Corrects a {transactionLabel(corrects.kind).toLowerCase()} of{' '}
+                        {isRestatement(t) ? 'Re-states' : 'Corrects'} a{' '}
+                        {transactionLabel(corrects.kind).toLowerCase()} of{' '}
                         {formatWeight(corrects.amount, unit)} from{' '}
                         {formatDateTime(corrects.date, state.location.timezone, state.clock)}
                         {t.correctionReason && <> — “{t.correctionReason}”</>}
+                        {isRestatement(t) && (
+                          <> · Equipment records and totals count this entry.</>
+                        )}
                       </div>
                     )}
                     {supersededBy && (
                       <div className="mt-1 rounded-lg border border-amber-200 bg-amber-50 px-2 py-1 text-xs text-amber-900 dark:border-amber-700 dark:bg-amber-900/20 dark:text-amber-100">
                         Superseded by a correction logged{' '}
-                        {formatDateTime(supersededBy.date, state.location.timezone, state.clock)}
+                        {formatDateTime(
+                          supersededBy.loggedAt ?? supersededBy.date,
+                          state.location.timezone,
+                          state.clock,
+                        )}
                         {supersededBy.correctionReason && <> — “{supersededBy.correctionReason}”</>}
+                        {isRestatement(supersededBy) && (
+                          <> · Excluded from totals in favour of the correction.</>
+                        )}
                       </div>
                     )}
                     <div className="mt-1 text-sm text-slate-700 dark:text-slate-300">
@@ -422,7 +440,12 @@ export default function Transactions() {
                     )}
                   </div>
                   <div className="flex shrink-0 flex-col items-end gap-1">
-                    {!t.correctsId && (
+                    {/* Correct an entry only while no live correction points
+                        at it (a corrected entry's fix is corrected instead —
+                        that keeps the supersede chain unambiguous). Legacy
+                        bottle adjustments can't be re-corrected; log a manual
+                        adjustment if one was wrong. */}
+                    {!supersededBy && !(t.correctsId && t.kind === 'adjust') && (
                       <button
                         onClick={() => setCorrecting(t)}
                         className="rounded-lg px-2 py-1 text-xs font-medium text-slate-500 hover:bg-slate-100 hover:text-brand-600 dark:hover:bg-slate-800"
@@ -616,23 +639,69 @@ function TransactionForm({
     (u) => u.siteId === siteId && u.status === 'active',
   )
 
+  // Correction shape. Equipment work (charge / recover from equipment)
+  // is corrected by RE-STATING it: same kind, site, unit and work date,
+  // with the corrected amount — the original is superseded everywhere
+  // amounts aggregate, and the bottle moves by the delta. Everything
+  // else (intake / transfer / return / adjust / bottle-to-bottle
+  // decants) keeps the legacy signed bottle adjustment.
+  const restating =
+    !!correcting &&
+    (correcting.kind === 'charge' ||
+      (correcting.kind === 'recover' && !correcting.sourceBottleId))
+
   const [lastOpen, setLastOpen] = useState(open)
   if (open && !lastOpen) {
     setLastOpen(true)
-    // In correction mode, pin to the corrected entry's bottle and default
-    // to a signed manual adjustment (the usual shape of a fix); otherwise
+    // In correction mode, pin to the corrected entry's bottle; otherwise
     // start on the most recently used bottle (falling back to the first).
     setBottleId(correcting?.bottleId ?? lastBottleId ?? bottles[0]?.id ?? '')
-    setSiteId('')
-    setUnitId('')
-    setKind(correcting ? 'adjust' : 'charge')
+    // Re-statements start from a copy of the original: the tech fixes
+    // what was wrong (usually the amount) and saves. The work date is
+    // the ORIGINAL's date so leak windows and quarterly bucketing stay
+    // on the day the refrigerant actually moved.
+    const restateSiteId =
+      restating && correcting.siteId &&
+      sites.some((s) => s.id === correcting.siteId)
+        ? correcting.siteId
+        : ''
+    setSiteId(restateSiteId)
+    setUnitId(
+      restating &&
+        restateSiteId &&
+        correcting.unitId &&
+        state.units.some(
+          (u) =>
+            u.id === correcting.unitId &&
+            u.siteId === restateSiteId &&
+            u.status === 'active',
+        )
+        ? correcting.unitId
+        : '',
+    )
+    setKind(restating ? correcting.kind : correcting ? 'adjust' : 'charge')
     setCorrectionReason('')
-    setAmount('')
-    setBottleAmount('')
-    setShowLoss(false)
+    const round3 = (n: number) => Math.round(n * 1000) / 1000
+    setAmount(
+      restating ? String(round3(kgToDisplay(correcting.amount, unit))) : '',
+    )
+    const restateBottleAmount =
+      restating &&
+      correcting.bottleAmount != null &&
+      correcting.bottleAmount !== correcting.amount
+    setBottleAmount(
+      restateBottleAmount
+        ? String(round3(kgToDisplay(correcting.bottleAmount!, unit)))
+        : '',
+    )
+    setShowLoss(restateBottleAmount)
     setEntryMode('amount')
     setNewGross('')
-    setDate(localDateTimeInput(new Date(), tz))
+    setDate(
+      restating
+        ? localDateTimeInput(new Date(correcting.date), tz)
+        : localDateTimeInput(new Date(), tz),
+    )
     setTechId(
       state.activeTechnicianId ??
         (state.technicians[0]?.id ?? '__other__'),
@@ -641,9 +710,9 @@ function TransactionForm({
     setAddingTech(false)
     setNewTechName('')
     setNewTechRhl('')
-    setEquipment('')
-    setReason('')
-    setLeakTest(null)
+    setEquipment(restating ? (correcting.equipment ?? '') : '')
+    setReason(restating ? (correcting.reason ?? '') : '')
+    setLeakTest(restating ? (correcting.leakTestPerformed ?? null) : null)
     setReturnDestination('')
     setDocketNumber('')
     setNotes('')
@@ -682,10 +751,20 @@ function TransactionForm({
           ? Math.max(0, amountKg - bottleAmountKg)
           : 0
       : 0
+  // Bottle-side effect of saving this entry. For a re-statement the
+  // original already moved refrigerant, so only the difference between
+  // the corrected and original bottle amounts hits the bottle (mirrors
+  // the store's addTransaction logic).
+  const restateOriginalBottleKg = restating
+    ? (correcting.bottleAmount ?? correcting.amount)
+    : 0
+  const bottleEffectKg = restating
+    ? bottleAmountKg - restateOriginalBottleKg
+    : bottleAmountKg
   let projectedAfter = bottle?.grossWeight ?? 0
   if (bottle) {
-    if (kind === 'charge') projectedAfter = bottle.grossWeight - bottleAmountKg
-    else if (kind === 'recover') projectedAfter = bottle.grossWeight + bottleAmountKg
+    if (kind === 'charge') projectedAfter = bottle.grossWeight - bottleEffectKg
+    else if (kind === 'recover') projectedAfter = bottle.grossWeight + bottleEffectKg
     else if (kind === 'adjust') projectedAfter = bottle.grossWeight + amountKg
   }
 
@@ -710,9 +789,10 @@ function TransactionForm({
 
   // Block over-draw on charge: can't take more refrigerant than the bottle
   // currently holds. Adjust is a manual signed correction — left unblocked.
+  // Re-statements only draw the delta beyond what the original already took.
   const currentNet = bottle ? netWeight(bottle) : 0
   const blockOverdraw =
-    !!bottle && kind === 'charge' && bottleAmountKg > currentNet + 0.01
+    !!bottle && kind === 'charge' && bottleEffectKg > currentNet + 0.01
   // Already-returned bottles can't be returned again — they need to be
   // put back into service first.
   const blockAlreadyReturned =
@@ -825,10 +905,23 @@ function TransactionForm({
           <div className="rounded-xl border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900 dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-100">
             <div className="font-semibold">Correcting an earlier entry</div>
             <div className="mt-0.5 text-xs">
-              The original {transactionLabel(correcting.kind).toLowerCase()} of{' '}
-              {formatWeight(correcting.amount, unit)} stays on the record — this
-              logs a new linked entry that fixes it. Enter the correcting
-              amount (an adjustment is pre-selected).
+              {restating ? (
+                <>
+                  The original {transactionLabel(correcting.kind).toLowerCase()}{' '}
+                  of {formatWeight(correcting.amount, unit)} stays on the record
+                  but is superseded — this logs a re-statement with the corrected
+                  details, and the equipment logbook, leak stats and totals count
+                  this entry instead. The bottle only moves by the difference.
+                  Keep the pre-filled work date unless the date itself was wrong.
+                </>
+              ) : (
+                <>
+                  The original {transactionLabel(correcting.kind).toLowerCase()}{' '}
+                  of {formatWeight(correcting.amount, unit)} stays on the record —
+                  this logs a linked signed adjustment that fixes the bottle
+                  ledger.
+                </>
+              )}
             </div>
           </div>
         )}
@@ -842,20 +935,33 @@ function TransactionForm({
             />
           </Field>
         )}
-        <Field label="What happened?">
-          <Picker
-            title="What happened?"
-            value={kind}
-            onChange={(v) => setKind(v as TransactionKind)}
-            options={KIND_OPTIONS}
-          />
-        </Field>
+        {/* Kind is fixed in correction mode: a re-statement must keep the
+            original's kind for the supersede link to hold, and a legacy
+            correction is always a signed adjustment. */}
+        {!correcting && (
+          <Field label="What happened?">
+            <Picker
+              title="What happened?"
+              value={kind}
+              onChange={(v) => setKind(v as TransactionKind)}
+              options={KIND_OPTIONS}
+            />
+          </Field>
+        )}
 
-        <Field label="Bottle">
+        <Field
+          label="Bottle"
+          hint={
+            correcting
+              ? 'Locked to the original entry’s bottle — a correction can’t move the work to a different cylinder.'
+              : undefined
+          }
+        >
           <div className="flex gap-2">
             <div className="min-w-0 flex-1">
               <Picker
                 required
+                disabled={!!correcting}
                 title="Pick a bottle"
                 value={bottleId}
                 onChange={setBottleId}
@@ -867,18 +973,20 @@ function TransactionForm({
                 }))}
               />
             </div>
-            <ScanButton
-              title="Scan a cylinder barcode"
-              onScan={(text) => {
-                const hit = bottles.find(
-                  (b) =>
-                    b.bottleNumber.trim().toLowerCase() ===
-                    text.trim().toLowerCase(),
-                )
-                if (hit) setBottleId(hit.id)
-                else toast.show(`No bottle matched “${text}”`, 'info')
-              }}
-            />
+            {!correcting && (
+              <ScanButton
+                title="Scan a cylinder barcode"
+                onScan={(text) => {
+                  const hit = bottles.find(
+                    (b) =>
+                      b.bottleNumber.trim().toLowerCase() ===
+                      text.trim().toLowerCase(),
+                  )
+                  if (hit) setBottleId(hit.id)
+                  else toast.show(`No bottle matched “${text}”`, 'info')
+                }}
+              />
+            )}
           </div>
         </Field>
 
@@ -988,7 +1096,9 @@ function TransactionForm({
           </>
         )}
 
-        {showAmount && scaleKinds && bottle && (
+        {/* Scale entry reads the bottle's CURRENT weight, which already
+            includes the original's move — meaningless while correcting. */}
+        {showAmount && scaleKinds && bottle && !correcting && (
           <EntryModeToggle mode={entryMode} onChange={setEntryMode} />
         )}
 

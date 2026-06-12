@@ -296,8 +296,24 @@ export interface Transaction {
   // explanation. The original is NEVER edited or deleted: both rows stay
   // on the record and reference each other, so the full history is
   // preserved for an audit (a true voiding/offsetting entry).
+  //
+  // Two correction shapes exist:
+  // - Re-statement (kind === original's kind, charge/recover): the row
+  //   re-states the original with the corrected amount and the same
+  //   site/unit/work-date. The original is superseded — excluded from
+  //   leak stats, logbook/site totals and quarterly figures in favour
+  //   of this row (see supersededIds). The bottle is adjusted by the
+  //   delta between corrected and original amounts.
+  // - Legacy bottle adjustment (kind === 'adjust'): fixes the bottle
+  //   ledger only; the original keeps counting on the equipment side.
   correctsId?: string
   correctionReason?: string
+  // When the row was created (device clock), as distinct from `date`,
+  // the time the work happened. Lets a correction carry the original's
+  // work date (so leak windows and quarterly bucketing stay right)
+  // while the record still shows when the fix was logged. Unset on
+  // rows created before this field existed.
+  loggedAt?: string
   // Soft-delete fields. A row with deletedAt set is hidden from the
   // normal activity log, dashboard, and equipment logbook, and is
   // excluded from cumulative calcs (leak top-ups, totals). It stays
@@ -1061,13 +1077,41 @@ export interface LeakStatus {
   windowDays: number
 }
 
+// A correction that RE-STATES its original (same equipment-side kind,
+// as opposed to a legacy bottle-only 'adjust' correction). Re-statements
+// replace the original in every aggregate: the original stays on the
+// record for the audit trail but its amount no longer counts.
+export function isRestatement(t: Transaction): boolean {
+  return !!t.correctsId && (t.kind === 'charge' || t.kind === 'recover')
+}
+
+// Ids of transactions superseded by a live re-statement correction.
+// Aggregations (leak top-ups, logbook and site totals, quarterly
+// figures) must skip these rows — the linked correction carries the
+// true amount and is counted in their place. Chains work per-link:
+// if correction B is itself corrected by C, B's id is in the set too
+// and only C counts.
+export function supersededIds(
+  transactions: readonly Transaction[],
+): Set<string> {
+  const ids = new Set<string>()
+  for (const t of transactions) {
+    if (t.deletedAt) continue
+    if (isRestatement(t)) ids.add(t.correctsId!)
+  }
+  return ids
+}
+
 // Sum of charge transactions against a unit since `sinceISO`. Excludes
-// reason='install' (commissioning charge isn't a top-up).
+// reason='install' (commissioning charge isn't a top-up), soft-deleted
+// rows, and originals superseded by a re-statement correction (the
+// correction row itself is a charge and is counted instead).
 export function cumulativeTopUpKg(
   unitId: string,
   transactions: readonly Transaction[],
   sinceISO: string,
 ): number {
+  const superseded = supersededIds(transactions)
   let sum = 0
   for (const t of transactions) {
     if (t.unitId !== unitId) continue
@@ -1075,6 +1119,7 @@ export function cumulativeTopUpKg(
     if (t.reason === 'install') continue
     if (t.date < sinceISO) continue
     if (t.deletedAt) continue
+    if (superseded.has(t.id)) continue
     sum += t.amount
   }
   return sum

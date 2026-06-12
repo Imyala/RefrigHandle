@@ -670,8 +670,26 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const before = bottle.grossWeight
       // Bottle side may differ from equipment side (hose/decant losses).
       // For 'adjust', bottleAmount is ignored — adjust is the bottle delta directly.
-      const bottleDelta =
+      let bottleDelta =
         t.kind === 'adjust' ? t.amount : (t.bottleAmount ?? t.amount)
+      // Re-statement correction (charge/recover correcting an entry of
+      // the same kind): the original already moved refrigerant, so the
+      // bottle only changes by the DIFFERENCE between the corrected and
+      // the original bottle-side amounts. The row itself still records
+      // the full corrected amount — aggregates count it in place of the
+      // superseded original.
+      const original = t.correctsId
+        ? s.transactions.find((x) => x.id === t.correctsId)
+        : undefined
+      if (
+        original &&
+        original.kind === t.kind &&
+        (t.kind === 'charge' || t.kind === 'recover')
+      ) {
+        bottleDelta =
+          (t.bottleAmount ?? t.amount) -
+          (original.bottleAmount ?? original.amount)
+      }
       let after = before
       if (t.kind === 'charge') after = before - bottleDelta
       else if (t.kind === 'recover') after = before + bottleDelta
@@ -701,6 +719,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const tx: Transaction = {
         ...t,
         id: uid(),
+        loggedAt: new Date().toISOString(),
         weightBefore: before,
         weightAfter: after,
         sourceWeightBefore: sourceBefore,

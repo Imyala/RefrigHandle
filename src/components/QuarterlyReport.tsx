@@ -6,6 +6,7 @@ import {
   quarterKey,
   quarterLabel,
   quarterOfDay,
+  supersededIds,
   type Quarter,
   type Transaction,
   transactionLoss,
@@ -105,7 +106,14 @@ function QuarterlyReportModal({ onClose }: { onClose: () => void }) {
       }
       return b
     }
+    // Originals superseded by a re-statement correction are skipped —
+    // the correction row carries the true amount on the same work date,
+    // so it lands in the right quarter bucket. The set is built from ALL
+    // live rows: a correction logged in a later quarter still voids its
+    // original here.
+    const superseded = supersededIds(live)
     for (const t of live) {
+      if (superseded.has(t.id)) continue
       const q = quarterOfDay(dayOf(t))
       if (!q || quarterKey(q) !== selectedKey) continue
       const bottle = state.bottles.find((b) => b.id === t.bottleId)
