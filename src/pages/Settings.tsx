@@ -48,6 +48,7 @@ import {
   type CorruptedBackup,
   type StorageEstimate,
 } from '../lib/storage'
+import { downloadBackup, getLastBackupAt } from '../lib/backup'
 import type { PickerOption } from '../components/Picker'
 
 const WEIGHT_UNIT_OPTIONS: readonly PickerOption[] = [
@@ -91,6 +92,10 @@ export default function Settings() {
   const [editingTech, setEditingTech] = useState<Technician | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
   const favorites = state.favoriteRefrigerants
+  // Device-local backup freshness marker (see lib/backup.ts).
+  const [lastBackupAt, setLastBackupAt] = useState<string | null>(() =>
+    getLastBackupAt(),
+  )
 
   useEffect(
     () => setArcAuth(state.arcAuthorisationNumber),
@@ -230,15 +235,10 @@ export default function Settings() {
   // ----------------------------------------------------------------------
 
   function exportJson() {
-    const blob = new Blob([JSON.stringify(state, null, 2)], {
-      type: 'application/json',
-    })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `refrighandle-${new Date().toISOString().slice(0, 10)}.json`
-    a.click()
-    URL.revokeObjectURL(url)
+    // Shared with the overdue-backup alert — stamps the device-local
+    // "last backup" marker that drives the nudge.
+    downloadBackup(state)
+    setLastBackupAt(getLastBackupAt())
   }
 
   // Optional date range on the CSV export (inclusive local calendar
@@ -918,7 +918,18 @@ export default function Settings() {
         </div>
         <p className="mb-3 text-xs text-slate-500">
           CSV is the audit-friendly log. JSON is a full backup of all data
-          on this device.
+          on this device.{' '}
+          {lastBackupAt ? (
+            <>
+              Last full backup:{' '}
+              <strong>
+                {formatDateTime(lastBackupAt, state.location.timezone, state.clock)}
+              </strong>
+              .
+            </>
+          ) : (
+            <strong>No full backup has been saved from this device yet.</strong>
+          )}
         </p>
         <div className="mb-3 grid grid-cols-2 gap-2">
           <Field

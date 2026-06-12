@@ -1,22 +1,129 @@
+import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Card, Pill } from './ui'
+import { Button, Card, Pill } from './ui'
 import { useStore } from '../lib/store'
 import { expiryStatus, hydroStatusFor, type ExpiryStatus } from '../lib/types'
 import { euLeakCheckFor, profileFor } from '../lib/compliance'
 import { formatPlainDate } from '../lib/datetime'
+import {
+  BACKUP_STALE_DAYS,
+  backupStatus,
+  downloadBackup,
+  snoozeBackupReminder,
+} from '../lib/backup'
+import { isStoragePersisted, requestPersistentStorage } from '../lib/storage'
+import { useToast } from '../lib/toast'
 
 // Shared alert panel surfaced on both the Home and Log pages so a tech
 // sees compliance warnings no matter which screen they land on. Covers
-// AS 2030 cylinder hydrostatic test dates (overdue / due soon) and
+// AS 2030 cylinder hydrostatic test dates (overdue / due soon),
 // ARC licence/authorisation expiry (RHL per tech, RTA for the
-// business). Renders nothing when there's nothing to warn about.
+// business), and overdue full backups (records exist only in this
+// browser until team accounts land). Renders nothing when there's
+// nothing to warn about.
 export function Alerts() {
   return (
     <>
       <LicenceAlerts />
       <EuLeakCheckAlerts />
       <HydroAlerts />
+      <BackupAlert />
     </>
+  )
+}
+
+// RTA permit conditions require records kept five years and producible
+// on request — but until server-side accounts exist, those records
+// live in one browser's storage. This card nags (gently, snoozable)
+// when the newest full JSON backup is stale, and quietly asks the
+// browser for persistent storage so the origin isn't evicted.
+function BackupAlert() {
+  const { state } = useStore()
+  const toast = useToast()
+  // Bumped after "Back up now" / "Later" so the card re-evaluates the
+  // localStorage stamps it just wrote.
+  const [refresh, setRefresh] = useState(0)
+  const status = useMemo(
+    () => backupStatus(state),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [state, refresh],
+  )
+  const [persisted, setPersisted] = useState(true)
+
+  // Silently request persistent storage once real data exists.
+  // Chrome/Edge auto-grant for installed/bookmarked PWAs, Firefox may
+  // prompt, iOS Safari grants only once installed to Home Screen —
+  // all harmless to ask. The answer drives the eviction note below.
+  const hasData = state.transactions.length > 0
+  useEffect(() => {
+    if (!hasData) return
+    let cancelled = false
+    isStoragePersisted().then((p) => {
+      if (cancelled) return
+      if (p) {
+        setPersisted(true)
+        return
+      }
+      requestPersistentStorage().then((granted) => {
+        if (!cancelled) setPersisted(granted)
+      })
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [hasData])
+
+  if (!status.due) return null
+
+  return (
+    <Card className="!border-amber-300 !bg-amber-50 dark:!border-amber-900/50 dark:!bg-amber-900/20">
+      <div className="flex items-center justify-between gap-2">
+        <div className="text-sm font-semibold text-amber-900 dark:text-amber-200">
+          {status.lastBackupAt ? 'Backup overdue' : 'No backup yet'}
+        </div>
+        <Link
+          to="/settings"
+          className="text-xs font-medium text-amber-900 hover:underline dark:text-amber-200"
+        >
+          Settings
+        </Link>
+      </div>
+      <p className="mt-1 text-xs text-amber-900/80 dark:text-amber-100/80">
+        {status.lastBackupAt
+          ? `Last full backup was ${status.daysSinceBackup} days ago.`
+          : 'This device has never saved a full backup.'}{' '}
+        Refrigerant records must be producible for five years, but right
+        now they exist only in this browser
+        {persisted
+          ? '.'
+          : ' — and the browser hasn’t guaranteed it won’t clear them under storage pressure.'}{' '}
+        Save a copy somewhere safe (files, email, cloud drive).
+      </p>
+      <div className="mt-2 flex flex-wrap gap-2">
+        <Button
+          variant="secondary"
+          onClick={() => {
+            downloadBackup(state)
+            setRefresh((n) => n + 1)
+            toast.show('Backup saved — keep the file somewhere safe', 'success')
+          }}
+        >
+          Back up now
+        </Button>
+        <Button
+          variant="ghost"
+          onClick={() => {
+            snoozeBackupReminder()
+            setRefresh((n) => n + 1)
+          }}
+        >
+          Remind me in 7 days
+        </Button>
+      </div>
+      <p className="mt-2 text-[11px] text-amber-900/60 dark:text-amber-100/60">
+        Reminder repeats every {BACKUP_STALE_DAYS} days after a backup.
+      </p>
+    </Card>
   )
 }
 
