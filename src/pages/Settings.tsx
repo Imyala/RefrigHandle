@@ -57,6 +57,23 @@ const WEIGHT_UNIT_OPTIONS: readonly PickerOption[] = [
   { value: 'lb', label: 'Pounds (lb)' },
 ]
 
+// Editable local state that re-syncs whenever the backing store value
+// changes from outside (sync merge, JSON import, another card
+// committing). Uses the documented render-phase adjustment instead of
+// a setState-in-effect mirror, so the corrected value paints in the
+// same frame rather than one frame late.
+function useStoreSyncedState<T>(
+  source: T,
+): [T, React.Dispatch<React.SetStateAction<T>>] {
+  const [value, setValue] = useState(source)
+  const [prev, setPrev] = useState(source)
+  if (!Object.is(prev, source)) {
+    setPrev(source)
+    setValue(source)
+  }
+  return [value, setValue]
+}
+
 export default function Settings() {
   const {
     state,
@@ -83,12 +100,14 @@ export default function Settings() {
   } = useStore()
   const toast = useToast()
   const confirm = useConfirm()
-  const [arcAuth, setArcAuth] = useState(state.arcAuthorisationNumber)
-  const [bizName, setBizName] = useState(state.businessName)
-  const [abn, setAbn] = useState(state.businessAbn)
-  const [loc, setLoc] = useState<LocationSettings>(state.location)
+  // Editable mirrors of store values — re-synced when the store changes
+  // from outside this card (sync merge, JSON import, onboarding).
+  const [arcAuth, setArcAuth] = useStoreSyncedState(state.arcAuthorisationNumber)
+  const [bizName, setBizName] = useStoreSyncedState(state.businessName)
+  const [abn, setAbn] = useStoreSyncedState(state.businessAbn)
+  const [loc, setLoc] = useStoreSyncedState<LocationSettings>(state.location)
   const [newType, setNewType] = useState('')
-  const [teamIdInput, setTeamIdInput] = useState(state.sync.teamId)
+  const [teamIdInput, setTeamIdInput] = useStoreSyncedState(state.sync.teamId)
   const [techModalOpen, setTechModalOpen] = useState(false)
   const [editingTech, setEditingTech] = useState<Technician | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
@@ -97,15 +116,6 @@ export default function Settings() {
   const [lastBackupAt, setLastBackupAt] = useState<string | null>(() =>
     getLastBackupAt(),
   )
-
-  useEffect(
-    () => setArcAuth(state.arcAuthorisationNumber),
-    [state.arcAuthorisationNumber],
-  )
-  useEffect(() => setBizName(state.businessName), [state.businessName])
-  useEffect(() => setAbn(state.businessAbn), [state.businessAbn])
-  useEffect(() => setLoc(state.location), [state.location])
-  useEffect(() => setTeamIdInput(state.sync.teamId), [state.sync.teamId])
 
   // --- Auto-save for the compliance + location cards -------------------
   // These cards used to have explicit Save buttons. Now each field

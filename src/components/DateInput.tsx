@@ -145,7 +145,7 @@ export function DateInput({
       </div>
       {open && (
         <CalendarPopover
-          anchor={wrapperRef.current}
+          anchorRef={wrapperRef}
           selected={value || undefined}
           min={min}
           max={max}
@@ -165,14 +165,16 @@ export function DateInput({
 // --- Popover -----------------------------------------------------------
 
 function CalendarPopover({
-  anchor,
+  anchorRef,
   selected,
   min,
   max,
   onPick,
   onClose,
 }: {
-  anchor: HTMLElement | null
+  // The ref object (not .current) so the anchor element is read inside
+  // effects, never during render.
+  anchorRef: React.RefObject<HTMLElement | null>
   selected?: string
   min?: string
   max?: string
@@ -180,9 +182,6 @@ function CalendarPopover({
   onClose: () => void
 }) {
   const ref = useRef<HTMLDivElement>(null)
-  const [pos, setPos] = useState<{ top: number; left: number; width: number }>(
-    { top: 0, left: 0, width: 280 },
-  )
 
   // Initial month is the selected month, today's month, or min/max
   // clamped — whichever is most useful.
@@ -195,9 +194,13 @@ function CalendarPopover({
 
   // Position below the anchor using fixed coords (anchor is inside a
   // portaled modal that scrolls; the popover lives in its own portal
-  // so positioning ignores the modal's scroll offset).
+  // so positioning ignores the modal's scroll offset). Styles are
+  // written straight to the node — measuring the DOM and re-rendering
+  // through state would paint one frame in the wrong place.
   useLayoutEffect(() => {
-    if (!anchor) return
+    const anchor = anchorRef.current
+    const el = ref.current
+    if (!anchor || !el) return
     const r = anchor.getBoundingClientRect()
     const popWidth = 296
     const margin = 8
@@ -211,8 +214,9 @@ function CalendarPopover({
       wantTop + popHeight + margin > vh
         ? Math.max(margin, r.top - popHeight - 6)
         : wantTop
-    setPos({ top, left, width: popWidth })
-  }, [anchor])
+    el.style.top = `${top}px`
+    el.style.left = `${left}px`
+  }, [anchorRef])
 
   // Click-outside / Escape to close
   useEffect(() => {
@@ -220,7 +224,7 @@ function CalendarPopover({
       if (!ref.current) return
       const t = e.target as Node
       if (ref.current.contains(t)) return
-      if (anchor && anchor.contains(t)) return
+      if (anchorRef.current?.contains(t)) return
       onClose()
     }
     function onKey(e: KeyboardEvent) {
@@ -232,7 +236,7 @@ function CalendarPopover({
       document.removeEventListener('mousedown', onDoc)
       document.removeEventListener('keydown', onKey)
     }
-  }, [anchor, onClose])
+  }, [anchorRef, onClose])
 
   const today = todayYmd()
   const todayIso = isoFromYmd(today.y, today.m, today.d)
@@ -261,7 +265,8 @@ function CalendarPopover({
   return createPortal(
     <div
       ref={ref}
-      style={{ position: 'fixed', top: pos.top, left: pos.left, width: pos.width }}
+      // top/left are set by the layout effect above, before first paint.
+      style={{ position: 'fixed', top: 0, left: 0, width: 296 }}
       className="z-[70] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl dark:border-slate-700 dark:bg-slate-900"
       role="dialog"
       aria-label="Pick a date"

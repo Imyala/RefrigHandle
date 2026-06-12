@@ -138,7 +138,7 @@ export function MonthInput({
       </div>
       {open && (
         <MonthPopover
-          anchor={wrapperRef.current}
+          anchorRef={wrapperRef}
           selected={normalized || undefined}
           min={min}
           max={max}
@@ -158,14 +158,16 @@ export function MonthInput({
 // --- Popover -----------------------------------------------------------
 
 function MonthPopover({
-  anchor,
+  anchorRef,
   selected,
   min,
   max,
   onPick,
   onClose,
 }: {
-  anchor: HTMLElement | null
+  // The ref object (not .current) so the anchor element is read inside
+  // effects, never during render.
+  anchorRef: React.RefObject<HTMLElement | null>
   selected?: string
   min?: string
   max?: string
@@ -173,16 +175,17 @@ function MonthPopover({
   onClose: () => void
 }) {
   const ref = useRef<HTMLDivElement>(null)
-  const [pos, setPos] = useState<{ top: number; left: number; width: number }>(
-    { top: 0, left: 0, width: 280 },
-  )
 
   const today = todayYm()
   const initialY = selected ? Number(selected.slice(0, 4)) : today.y
   const [viewY, setViewY] = useState(initialY)
 
+  // Styles written straight to the node — see CalendarPopover in
+  // DateInput.tsx for the rationale.
   useLayoutEffect(() => {
-    if (!anchor) return
+    const anchor = anchorRef.current
+    const el = ref.current
+    if (!anchor || !el) return
     const r = anchor.getBoundingClientRect()
     const popWidth = 280
     const margin = 8
@@ -197,15 +200,16 @@ function MonthPopover({
       wantTop + popHeight + margin > vh
         ? Math.max(margin, r.top - popHeight - 6)
         : wantTop
-    setPos({ top, left, width: popWidth })
-  }, [anchor])
+    el.style.top = `${top}px`
+    el.style.left = `${left}px`
+  }, [anchorRef])
 
   useEffect(() => {
     function onDoc(e: MouseEvent) {
       if (!ref.current) return
       const t = e.target as Node
       if (ref.current.contains(t)) return
-      if (anchor && anchor.contains(t)) return
+      if (anchorRef.current?.contains(t)) return
       onClose()
     }
     function onKey(e: KeyboardEvent) {
@@ -217,7 +221,7 @@ function MonthPopover({
       document.removeEventListener('mousedown', onDoc)
       document.removeEventListener('keydown', onKey)
     }
-  }, [anchor, onClose])
+  }, [anchorRef, onClose])
 
   const minYm = min ?? ''
   const maxYm = max ?? ''
@@ -227,7 +231,7 @@ function MonthPopover({
   return createPortal(
     <div
       ref={ref}
-      style={{ position: 'fixed', top: pos.top, left: pos.left, width: pos.width }}
+      style={{ position: 'fixed', top: 0, left: 0, width: 280 }}
       className="z-[70] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl dark:border-slate-700 dark:bg-slate-900"
       role="dialog"
       aria-label="Pick a month"

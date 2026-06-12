@@ -1993,10 +1993,12 @@ function BottleForm({
   // Reactive snap: if the user is editing weights and the bottle's
   // net rises above ~zero while the status field is still Empty,
   // flip the status. This stops a user from holding the form in a
-  // contradictory state while they correct the gross weight.
-  useEffect(() => {
-    if (status === 'empty' && liveNet > 0.01) setStatus('in_stock')
-  }, [status, liveNet])
+  // contradictory state while they correct the gross weight. Adjusted
+  // during render (self-limiting: the set makes the condition false)
+  // so the corrected status paints immediately.
+  if (status === 'empty' && liveNet > 0.01) {
+    setStatus('in_stock')
+  }
 
   function submit(e: React.FormEvent) {
     e.preventDefault()

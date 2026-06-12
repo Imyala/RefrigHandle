@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Button, Field, Modal, TextInput } from './ui'
 import { verifyPassword } from '../lib/auth'
 import type { Technician } from '../lib/types'
@@ -22,9 +22,13 @@ export function PasswordPromptModal({
   const [seenId, setSeenId] = useState('')
   // Track the live prop inside async work — closures capture the value at
   // submit time, so without this a Cancel (or tech swap) mid-verify would
-  // still flow through to onVerified once the hash resolves.
+  // still flow through to onVerified once the hash resolves. Updated in
+  // an effect (not during render): submit's post-await check runs long
+  // after the commit, so the effect-time value is always current.
   const techRef = useRef(tech)
-  techRef.current = tech
+  useEffect(() => {
+    techRef.current = tech
+  }, [tech])
   if (open && tech && seenId !== tech.id) {
     setSeenId(tech.id)
     setPassword('')
