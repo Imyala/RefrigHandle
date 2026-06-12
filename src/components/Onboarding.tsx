@@ -61,6 +61,28 @@ function OnboardingScreen() {
   const locOk = isLocationComplete(loc)
   const canFinish = businessOk && abnOk && arcOk && techOk && locOk
 
+  // Exactly what's still outstanding, in field order — so a dead
+  // "Finish setup" button can't leave the tech guessing which field is
+  // the blocker. The ABN line is specific: a typed-but-invalid number
+  // reads differently from a blank one.
+  const missing: string[] = []
+  if (!businessOk) missing.push('business name')
+  if (!abnOk) {
+    missing.push(
+      abn.trim() === ''
+        ? profile.businessNumberLabel
+        : `a valid ${profile.businessNumberShort}`,
+    )
+  }
+  if (!arcOk) missing.push(profile.businessAuthShort)
+  if (techName.trim() === '') missing.push('technician name')
+  if (techRhl.trim() === '') missing.push(profile.techLicenceShort)
+  if (loc.country === 'Australia' && !loc.region.trim()) {
+    missing.push('state / territory')
+  }
+  if (!loc.city.trim()) missing.push('city / town')
+  if (!loc.timezone.trim()) missing.push('timezone')
+
   function finish() {
     if (!canFinish) return
     completeSetup({
@@ -232,12 +254,11 @@ function OnboardingScreen() {
           </Button>
           {!canFinish && (
             <p className="mt-2 text-center text-xs text-slate-500">
-              Fill in your business name, {profile.businessNumberLabel}
-              {profile.hasBusinessAuthorisation
-                ? `, ${profile.businessAuthShort}`
-                : ''}
-              , technician (name + {profile.techLicenceShort}) and location
-              to continue.
+              Still needed:{' '}
+              <span className="font-medium text-slate-700 dark:text-slate-300">
+                {missing.join(', ')}
+              </span>
+              .
             </p>
           )}
         </div>

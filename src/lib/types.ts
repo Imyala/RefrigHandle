@@ -1194,6 +1194,23 @@ export const AU_REGIONS: readonly string[] = [
   'NSW', 'VIC', 'QLD', 'SA', 'WA', 'TAS', 'NT', 'ACT',
 ] as const
 
+// Each state/territory's dominant IANA timezone — used to auto-fill the
+// timezone when a tech picks their state during onboarding / in
+// Settings, so they don't have to know to set it separately (the most
+// commonly missed setup field). Far-west NSW (Broken Hill) runs on ACST
+// rather than AEST, but Sydney is right for >99% of NSW; the picker
+// stays available to override.
+export const AU_REGION_TIMEZONE: Record<string, string> = {
+  NSW: 'Australia/Sydney',
+  ACT: 'Australia/Sydney',
+  VIC: 'Australia/Melbourne',
+  QLD: 'Australia/Brisbane',
+  SA: 'Australia/Adelaide',
+  WA: 'Australia/Perth',
+  TAS: 'Australia/Hobart',
+  NT: 'Australia/Darwin',
+}
+
 // Curated city/town lists for the City pickers, grouped by state so
 // the picker can filter. Covers the capitals plus the major regional
 // cities and towns in each state — a tech in a smaller locality picks

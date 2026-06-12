@@ -3,6 +3,7 @@ import { Field, TextInput } from './ui'
 import { Picker, type PickerOption } from './Picker'
 import {
   AU_CITIES_BY_REGION,
+  AU_REGION_TIMEZONE,
   AU_REGIONS,
   CITY_OTHER_VALUE,
   TIMEZONE_OPTIONS,
@@ -123,7 +124,15 @@ function AuLocationFields({
           title="State / territory"
           value={loc.region}
           onChange={(v) =>
-            setLoc((l) => ({ ...l, country: 'Australia', region: v }))
+            setLoc((l) => ({
+              ...l,
+              country: 'Australia',
+              region: v,
+              // Fill the timezone from the state so the tech isn't
+              // silently stuck on an unset timezone — but never
+              // override one they've already chosen.
+              timezone: l.timezone || AU_REGION_TIMEZONE[v] || l.timezone,
+            }))
           }
           emptyLabel="—"
           options={AU_REGION_OPTIONS}
