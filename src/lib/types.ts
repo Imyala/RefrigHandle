@@ -87,6 +87,13 @@ export interface Bottle {
   // "Awaiting retest" in place of the overdue alarm. Cleared when new
   // test dates are saved (the retest is done) or the tech cancels it.
   sentForRetestAt?: string
+  // Where the cylinder came from — supplier name and their invoice /
+  // docket number. ARC quarterly records require purchases to be
+  // traceable to paperwork, not just weights. Also stamped onto the
+  // intake transaction so the log row stays complete if the bottle
+  // record is later deleted.
+  supplier?: string
+  invoiceNumber?: string
   createdAt: string
   // Tech name + RHL frozen at the time the bottle was added to the
   // system. Useful when a crew shares a device — anyone glancing at
@@ -260,6 +267,14 @@ export interface Transaction {
   notes?: string
   // Where the bottle was returned (store / supplier) — only for 'return' kind
   returnDestination?: string
+  // Consignment / docket number for a return — the paper trail an ARC
+  // audit follows to the supplier or destruction facility (e.g. an
+  // RRA consignment note). Only for 'return' kind.
+  docketNumber?: string
+  // Supplier + invoice for an 'intake' row, frozen from the bottle at
+  // the time it entered the system (see Bottle.supplier).
+  supplier?: string
+  invoiceNumber?: string
   // Stamped when the tech proceeded with a charge/recover where the
   // bottle's refrigerant didn't match the unit's. Frozen at the time
   // of work — even if the unit's refrigerantType is later edited, the
@@ -386,6 +401,10 @@ export interface Technician {
   id: string
   name: string
   arcLicenceNumber: string // ARC RHL — personal licence, per tech
+  // RHL expiry date (YYYY-MM-DD). RHLs run for two years; logging work
+  // against a lapsed licence is itself a breach, so the app alerts as
+  // expiry approaches (see expiryStatus).
+  licenceExpiry?: string
   // Optional soft lock for switching the active profile on a shared
   // device. SHA-256 of `${id}:${password}` (id acts as salt). Storage
   // is localStorage, so this only deters casual snooping — anyone with
@@ -424,6 +443,8 @@ export interface AppState {
   // auto-stamped onto each new Transaction so the historical record
   // is preserved if the licence/RTA changes later.
   arcAuthorisationNumber: string // ARC Refrigerant Trading Authorisation (RTA), per business
+  // RTA expiry date (YYYY-MM-DD) — alerted on like RHL expiry.
+  arcAuthorisationExpiry: string
   businessName: string
   businessAbn: string // Australian Business Number (11 digits)
   location: LocationSettings
@@ -454,6 +475,7 @@ export const EMPTY_STATE: AppState = {
   technician: '',
   arcLicenceNumber: '',
   arcAuthorisationNumber: '',
+  arcAuthorisationExpiry: '',
   businessName: '',
   businessAbn: '',
   location: { country: '', region: '', city: '', timezone: '' },
@@ -1099,6 +1121,73 @@ export const AU_CITIES_BY_REGION: Record<string, readonly string[]> = {
 
 // The marker the City picker uses to mean "let me type my own".
 export const CITY_OTHER_VALUE = '__other__'
+
+// --- Licence / authorisation expiry ------------------------------------
+//
+// ARC Refrigerant Handling Licences run for two years and the business
+// RTA also has an expiry. Stamping work against a lapsed licence is a
+// breach in its own right, so the app warns ahead of time. 60 days
+// gives enough lead to lodge a renewal before the lapse.
+
+export const LICENCE_WARN_DAYS = 60
+
+export type ExpiryLevel = 'ok' | 'due_soon' | 'expired' | 'unknown'
+
+export interface ExpiryStatus {
+  level: ExpiryLevel
+  // Whole days from "now" to expiry midnight. Negative = days past.
+  daysLeft?: number
+}
+
+export function expiryStatus(
+  expiryYmd?: string,
+  nowISO: string = new Date().toISOString(),
+): ExpiryStatus {
+  if (!expiryYmd) return { level: 'unknown' }
+  const m = expiryYmd.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+  if (!m) return { level: 'unknown' }
+  // Licence is valid THROUGH its expiry date — compare against the end
+  // of that day in local time.
+  const end = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]), 23, 59, 59)
+  const days = Math.floor((end.getTime() - new Date(nowISO).getTime()) / 86_400_000)
+  if (days < 0) return { level: 'expired', daysLeft: days }
+  if (days <= LICENCE_WARN_DAYS) return { level: 'due_soon', daysLeft: days }
+  return { level: 'ok', daysLeft: days }
+}
+
+// --- Calendar quarters (ARC reporting periods) --------------------------
+//
+// RTA record-keeping is quarterly: amounts bought, recovered, sold and
+// disposed of each quarter, retained five years. These helpers bucket a
+// local calendar day (YYYY-MM-DD, already resolved in the business
+// timezone) into a calendar quarter.
+
+export interface Quarter {
+  year: number
+  q: 1 | 2 | 3 | 4
+}
+
+export function quarterOfDay(ymd: string): Quarter | null {
+  const m = ymd.match(/^(\d{4})-(\d{2})/)
+  if (!m) return null
+  const month = Number(m[2])
+  return { year: Number(m[1]), q: (Math.ceil(month / 3) as Quarter['q']) }
+}
+
+export function quarterKey(qt: Quarter): string {
+  return `${qt.year}-Q${qt.q}`
+}
+
+const QUARTER_MONTHS: Record<Quarter['q'], string> = {
+  1: 'Jan – Mar',
+  2: 'Apr – Jun',
+  3: 'Jul – Sep',
+  4: 'Oct – Dec',
+}
+
+export function quarterLabel(qt: Quarter): string {
+  return `Q${qt.q} ${qt.year} (${QUARTER_MONTHS[qt.q]})`
+}
 
 // --- Cylinder hydrostatic test ----------------------------------------
 //

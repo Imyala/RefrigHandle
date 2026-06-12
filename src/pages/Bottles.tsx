@@ -868,6 +868,7 @@ function QuickLogModal({
     leakTestPerformed?: boolean
     notes?: string
     returnDestination?: string
+    docketNumber?: string
     refrigerantMismatch?: { bottleType: string; unitType: string }
   }) => void
 }) {
@@ -905,6 +906,7 @@ function QuickLogModal({
   const [recoverSource, setRecoverSource] = useState<RecoverSource>('equipment')
   const [sourceBottleId, setSourceBottleId] = useState('')
   const [returnDestination, setReturnDestination] = useState('')
+  const [docketNumber, setDocketNumber] = useState('')
 
   // Quick-add modals
   const [quickAddBottleOpen, setQuickAddBottleOpen] = useState(false)
@@ -928,6 +930,7 @@ function QuickLogModal({
     setRecoverSource('equipment')
     setSourceBottleId('')
     setReturnDestination('')
+    setDocketNumber('')
   }
 
   if (!open || !bottle || !kind) return null
@@ -1073,6 +1076,10 @@ function QuickLogModal({
       returnDestination:
         kind === 'return' && returnDestination.trim()
           ? returnDestination.trim()
+          : undefined,
+      docketNumber:
+        kind === 'return' && docketNumber.trim()
+          ? docketNumber.trim()
           : undefined,
       refrigerantMismatch:
         unitRefrigerantMismatch && selectedUnit?.refrigerantType
@@ -1428,16 +1435,28 @@ function QuickLogModal({
           )}
 
           {kind === 'return' && !blockAlreadyReturned && (
-            <Field
-              label="Store / supplier"
-              hint="Where is the bottle being returned? Optional."
-            >
-              <TextInput
-                value={returnDestination}
-                onChange={(e) => setReturnDestination(e.target.value)}
-                placeholder="e.g. BOC, Refco depot, Beijer Ref"
-              />
-            </Field>
+            <>
+              <Field
+                label="Store / supplier"
+                hint="Where is the bottle being returned? Optional."
+              >
+                <TextInput
+                  value={returnDestination}
+                  onChange={(e) => setReturnDestination(e.target.value)}
+                  placeholder="e.g. BOC, Refco depot, Beijer Ref"
+                />
+              </Field>
+              <Field
+                label="Docket / consignment #"
+                hint="The paper trail an audit follows — e.g. an RRA consignment note for refrigerant sent for destruction."
+              >
+                <TextInput
+                  value={docketNumber}
+                  onChange={(e) => setDocketNumber(e.target.value)}
+                  placeholder="e.g. RRA-102938"
+                />
+              </Field>
+            </>
           )}
 
           <Field label="Date / time">
@@ -1753,6 +1772,8 @@ function BottleForm({
   )
   const [currentSiteId, setCurrentSiteId] = useState(bottle?.currentSiteId ?? '')
   const [notes, setNotes] = useState(bottle?.notes ?? '')
+  const [supplier, setSupplier] = useState(bottle?.supplier ?? '')
+  const [invoiceNumber, setInvoiceNumber] = useState(bottle?.invoiceNumber ?? '')
   const [lastHydro, setLastHydro] = useState(
     toYearMonth(bottle?.lastHydroTestDate ?? ''),
   )
@@ -1827,6 +1848,8 @@ function BottleForm({
     )
     setCurrentSiteId(bottle?.currentSiteId ?? '')
     setNotes(bottle?.notes ?? '')
+    setSupplier(bottle?.supplier ?? '')
+    setInvoiceNumber(bottle?.invoiceNumber ?? '')
     setCapacityWeight(
       initialDisplay(
         wcFromSafeFill(bottle?.initialNetWeight ?? 0, bottle?.refrigerantType),
@@ -1871,6 +1894,8 @@ function BottleForm({
       status,
       currentSiteId: currentSiteId || undefined,
       notes: notes.trim() || undefined,
+      supplier: supplier.trim() || undefined,
+      invoiceNumber: invoiceNumber.trim() || undefined,
       lastHydroTestDate: lastHydro || undefined,
       nextHydroTestDate: nextHydro || undefined,
     })
@@ -1995,6 +2020,26 @@ function BottleForm({
             </div>
           )
         })()}
+
+        <div className="grid grid-cols-2 gap-3">
+          <Field
+            label="Supplier"
+            hint="Who the cylinder came from — for the ARC purchase record."
+          >
+            <TextInput
+              value={supplier}
+              onChange={(e) => setSupplier(e.target.value)}
+              placeholder="e.g. BOC, Coregas"
+            />
+          </Field>
+          <Field label="Invoice / docket #">
+            <TextInput
+              value={invoiceNumber}
+              onChange={(e) => setInvoiceNumber(e.target.value)}
+              placeholder="e.g. INV-48213"
+            />
+          </Field>
+        </div>
 
         <Field
           label={`W.C (${unit})`}

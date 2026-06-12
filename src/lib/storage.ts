@@ -37,6 +37,7 @@ interface LegacyState
     | 'favoriteBottlePresets'
     | 'arcLicenceNumber'
     | 'arcAuthorisationNumber'
+    | 'arcAuthorisationExpiry'
     | 'businessName'
     | 'businessAbn'
     | 'location'
@@ -60,6 +61,7 @@ interface LegacyState
   favoriteBottlePresets?: AppState['favoriteBottlePresets']
   arcLicenceNumber?: string
   arcAuthorisationNumber?: string
+  arcAuthorisationExpiry?: string
   businessName?: string
   businessAbn?: string
   location?: Partial<AppState['location']>
@@ -189,6 +191,7 @@ function normalize(parsed: LegacyState): AppState {
     technician: parsed.technician ?? '',
     arcLicenceNumber: parsed.arcLicenceNumber ?? '',
     arcAuthorisationNumber: parsed.arcAuthorisationNumber ?? '',
+    arcAuthorisationExpiry: parsed.arcAuthorisationExpiry ?? '',
     businessName: parsed.businessName ?? '',
     businessAbn: parsed.businessAbn ?? '',
     location: {

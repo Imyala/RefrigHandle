@@ -77,6 +77,8 @@ export const BOTTLE_FIELDS: FieldLabels<Bottle> = {
   lastHydroTestDate: 'Last test',
   nextHydroTestDate: 'Next test',
   sentForRetestAt: 'Retest',
+  supplier: 'Supplier',
+  invoiceNumber: 'Invoice #',
 }
 
 export const SITE_FIELDS: FieldLabels<Site> = {
@@ -104,6 +106,7 @@ export const UNIT_FIELDS: FieldLabels<Unit> = {
 export const TECH_FIELDS: FieldLabels<Technician> = {
   name: 'Name',
   arcLicenceNumber: 'RHL',
+  licenceExpiry: 'RHL expiry',
 }
 
 function formatValue(v: unknown): string {

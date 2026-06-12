@@ -106,6 +106,7 @@ interface StoreApi {
   setTechnician: (name: string) => void
   setArcLicenceNumber: (n: string) => void
   setArcAuthorisationNumber: (n: string) => void
+  setArcAuthorisationExpiry: (d: string) => void
   setBusinessName: (n: string) => void
   setBusinessAbn: (n: string) => void
   setLocation: (l: LocationSettings) => void
@@ -248,6 +249,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         weightBefore: 0,
         weightAfter: bottle.grossWeight,
         date: bottle.createdAt,
+        // Paper trail for the quarterly "bought" record — frozen here so
+        // the log row survives later edits/deletion of the bottle.
+        supplier: bottle.supplier || undefined,
+        invoiceNumber: bottle.invoiceNumber || undefined,
         technician: activeTech?.name ?? (s.technician || undefined),
         technicianLicence:
           (activeTech?.arcLicenceNumber || undefined) ??
@@ -973,6 +978,25 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     [],
   )
 
+  const setArcAuthorisationExpiry = useCallback(
+    (d: string) =>
+      setState((s) =>
+        s.arcAuthorisationExpiry === d.trim()
+          ? s
+          : {
+              ...s,
+              arcAuthorisationExpiry: d.trim(),
+              auditLog: settingsChange(
+                s,
+                'RTA expiry',
+                s.arcAuthorisationExpiry,
+                d.trim(),
+              ),
+            },
+      ),
+    [],
+  )
+
   const setBusinessName = useCallback(
     (n: string) =>
       setState((s) =>
@@ -1211,6 +1235,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       activeTechnicianId: s.activeTechnicianId,
       arcLicenceNumber: s.arcLicenceNumber,
       arcAuthorisationNumber: s.arcAuthorisationNumber,
+      arcAuthorisationExpiry: s.arcAuthorisationExpiry,
       businessName: s.businessName,
       businessAbn: s.businessAbn,
       location: s.location,
@@ -1268,6 +1293,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setTechnician,
       setArcLicenceNumber,
       setArcAuthorisationNumber,
+      setArcAuthorisationExpiry,
       setBusinessName,
       setBusinessAbn,
       setLocation,
@@ -1308,6 +1334,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setTechnician,
       setArcLicenceNumber,
       setArcAuthorisationNumber,
+      setArcAuthorisationExpiry,
       setBusinessName,
       setBusinessAbn,
       setLocation,

@@ -8,10 +8,13 @@ import {
   TextInput,
 } from '../components/ui'
 import { Picker } from '../components/Picker'
+import { DateInput } from '../components/DateInput'
 import { LocationFields } from '../components/LocationFields'
 import { InstallAppButton } from '../components/InstallAppButton'
+import { QuarterlyReportCard } from '../components/QuarterlyReport'
 import { useStore } from '../lib/store'
 import {
+  expiryStatus,
   isValidAbn,
   REFRIGERANT_TYPES,
   transactionLabel,
@@ -22,7 +25,11 @@ import {
   type Theme,
   type WeightUnit,
 } from '../lib/types'
-import { formatDateTime } from '../lib/datetime'
+import {
+  formatDateTime,
+  formatPlainDate,
+  localDateTimeInput,
+} from '../lib/datetime'
 import { formatWeight } from '../lib/units'
 import { useToast } from '../lib/toast'
 import { useConfirm } from '../lib/confirm'
@@ -55,6 +62,7 @@ export default function Settings() {
     setActiveTechnicianId,
     restoreTransaction,
     setArcAuthorisationNumber,
+    setArcAuthorisationExpiry,
     setBusinessName,
     setBusinessAbn,
     setLocation,
@@ -226,7 +234,21 @@ export default function Settings() {
     URL.revokeObjectURL(url)
   }
 
+  // Optional date range on the CSV export (inclusive local calendar
+  // days in the business timezone). Auditors ask for periods — "the
+  // last two quarters" — not the whole history.
+  const [exportFrom, setExportFrom] = useState('')
+  const [exportTo, setExportTo] = useState('')
+
   function exportCsv() {
+    const inRange = (iso: string) => {
+      if (!exportFrom && !exportTo) return true
+      const day = localDateTimeInput(new Date(iso), state.location.timezone)
+        .slice(0, 10)
+      if (exportFrom && day < exportFrom) return false
+      if (exportTo && day > exportTo) return false
+      return true
+    }
     // Two sections in one file: live transactions first, then a
     // separator row + a "Deleted transactions (audit trail)" header,
     // then every soft-deleted transaction. Auditors comparing the
@@ -257,6 +279,9 @@ export default function Settings() {
       'correctsId',
       'correctionReason',
       'returnDestination',
+      'docketNumber',
+      'supplier',
+      'invoiceNumber',
       'technician',
       'technicianLicence',
       'businessName',
@@ -310,6 +335,9 @@ export default function Settings() {
         t.correctsId ?? '',
         (t.correctionReason ?? '').replace(/[\r\n]+/g, ' '),
         t.returnDestination ?? '',
+        t.docketNumber ?? '',
+        t.supplier ?? '',
+        t.invoiceNumber ?? '',
         t.technician ?? '',
         t.technicianLicence ?? '',
         t.businessName ?? '',
@@ -318,9 +346,11 @@ export default function Settings() {
         (t.notes ?? '').replace(/[\r\n]+/g, ' '),
       ]
     }
-    const liveTxs = state.transactions.filter((t) => !t.deletedAt)
+    const liveTxs = state.transactions.filter(
+      (t) => !t.deletedAt && inRange(t.date),
+    )
     const deletedTxs = state.transactions
-      .filter((t) => !!t.deletedAt)
+      .filter((t) => !!t.deletedAt && inRange(t.date))
       .slice()
       .sort((a, b) =>
         (b.deletedAt ?? '').localeCompare(a.deletedAt ?? ''),
@@ -366,7 +396,11 @@ export default function Settings() {
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `refrighandle-log-${new Date().toISOString().slice(0, 10)}.csv`
+    const range =
+      exportFrom || exportTo
+        ? `-${exportFrom || 'start'}-to-${exportTo || 'now'}`
+        : ''
+    a.download = `refrighandle-log${range}-${new Date().toISOString().slice(0, 10)}.csv`
     a.click()
     URL.revokeObjectURL(url)
   }
@@ -445,6 +479,24 @@ export default function Settings() {
                       {t.arcLicenceNumber
                         ? `RHL ${t.arcLicenceNumber}`
                         : 'No RHL recorded'}
+                      {t.licenceExpiry && (() => {
+                        const ex = expiryStatus(t.licenceExpiry)
+                        return (
+                          <span
+                            className={
+                              ex.level === 'expired'
+                                ? 'font-semibold text-red-600 dark:text-red-400'
+                                : ex.level === 'due_soon'
+                                  ? 'font-semibold text-amber-600 dark:text-amber-400'
+                                  : ''
+                            }
+                          >
+                            {' · '}
+                            {ex.level === 'expired' ? 'expired ' : 'expires '}
+                            {formatPlainDate(t.licenceExpiry)}
+                          </span>
+                        )
+                      })()}
                     </div>
                   </div>
                   <div className="flex shrink-0 items-center gap-1">
@@ -532,6 +584,19 @@ export default function Settings() {
               onChange={(e) => setArcAuth(e.target.value)}
               onBlur={commitArcAuth}
               placeholder="e.g. AU00000"
+            />
+          </Field>
+          <Field
+            label="RTA expiry"
+            hint="The app warns before the authorisation lapses."
+          >
+            <DateInput
+              value={state.arcAuthorisationExpiry}
+              onChange={(v) => {
+                setArcAuthorisationExpiry(v)
+                flashComp()
+              }}
+              ariaLabel="RTA expiry date"
             />
           </Field>
           <p className="text-xs text-slate-500">
@@ -785,14 +850,37 @@ export default function Settings() {
         <InstallAppButton variant="full" />
       </Card>
 
+      <QuarterlyReportCard />
+
       <Card>
         <div className="mb-3 text-sm font-semibold text-slate-700 dark:text-slate-200">
           Backup &amp; export
         </div>
         <p className="mb-3 text-xs text-slate-500">
-          CSV is the F-Gas-friendly log. JSON is a full backup of all data
+          CSV is the audit-friendly log. JSON is a full backup of all data
           on this device.
         </p>
+        <div className="mb-3 grid grid-cols-2 gap-2">
+          <Field
+            label="From"
+            hint="Optional — limits the CSV to a period."
+          >
+            <DateInput
+              value={exportFrom}
+              onChange={setExportFrom}
+              max={exportTo || undefined}
+              ariaLabel="Export from date"
+            />
+          </Field>
+          <Field label="To">
+            <DateInput
+              value={exportTo}
+              onChange={setExportTo}
+              min={exportFrom || undefined}
+              ariaLabel="Export to date"
+            />
+          </Field>
+        </div>
         <div className="flex flex-wrap gap-2">
           <Button variant="secondary" onClick={exportJson}>
             Export JSON
@@ -970,6 +1058,7 @@ export default function Settings() {
             updateTechnician(editingTech.id, {
               name: data.name,
               arcLicenceNumber: data.arcLicenceNumber,
+              licenceExpiry: data.licenceExpiry,
               ...passwordHashPatch,
             })
             toast.show('Tech updated')
@@ -977,6 +1066,7 @@ export default function Settings() {
             const created = addTechnician({
               name: data.name,
               arcLicenceNumber: data.arcLicenceNumber,
+              licenceExpiry: data.licenceExpiry,
               passwordHash:
                 data.passwordChange?.kind === 'set'
                   ? data.passwordChange.hash
@@ -1024,6 +1114,7 @@ export default function Settings() {
 type TechSavePayload = {
   name: string
   arcLicenceNumber: string
+  licenceExpiry?: string
   // 'set' = replace hash, 'remove' = clear it, undefined = leave unchanged.
   passwordChange?: { kind: 'set'; hash: string } | { kind: 'remove' }
 }
@@ -1043,6 +1134,7 @@ function TechnicianModal({
 }) {
   const [name, setName] = useState('')
   const [rhl, setRhl] = useState('')
+  const [licenceExpiry, setLicenceExpiry] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPw, setConfirmPw] = useState('')
   const [removePassword, setRemovePassword] = useState(false)
@@ -1054,6 +1146,7 @@ function TechnicianModal({
     setSeenKey(key)
     setName(editing?.name ?? '')
     setRhl(editing?.arcLicenceNumber ?? '')
+    setLicenceExpiry(editing?.licenceExpiry ?? '')
     setPassword('')
     setConfirmPw('')
     setRemovePassword(false)
@@ -1091,6 +1184,7 @@ function TechnicianModal({
     onSave({
       name: name.trim(),
       arcLicenceNumber: rhl.trim(),
+      licenceExpiry: licenceExpiry || undefined,
       passwordChange,
     })
   }
@@ -1115,6 +1209,16 @@ function TechnicianModal({
             value={rhl}
             onChange={(e) => setRhl(e.target.value)}
             placeholder="e.g. L000000"
+          />
+        </Field>
+        <Field
+          label="RHL expiry"
+          hint="RHLs run for two years — the app warns before this lapses, since logging work on an expired licence is a breach."
+        >
+          <DateInput
+            value={licenceExpiry}
+            onChange={setLicenceExpiry}
+            ariaLabel="RHL expiry date"
           />
         </Field>
 

@@ -346,9 +346,18 @@ export default function Transactions() {
                         {t.reason && REASON_LABELS[t.reason]}
                       </div>
                     )}
-                    {t.kind === 'return' && t.returnDestination && (
+                    {t.kind === 'return' && (t.returnDestination || t.docketNumber) && (
                       <div className="text-xs text-slate-500">
-                        Returned to: {t.returnDestination}
+                        {t.returnDestination && `Returned to: ${t.returnDestination}`}
+                        {t.returnDestination && t.docketNumber && ' · '}
+                        {t.docketNumber && `Docket ${t.docketNumber}`}
+                      </div>
+                    )}
+                    {t.kind === 'intake' && (t.supplier || t.invoiceNumber) && (
+                      <div className="text-xs text-slate-500">
+                        {t.supplier && `Supplier: ${t.supplier}`}
+                        {t.supplier && t.invoiceNumber && ' · '}
+                        {t.invoiceNumber && `Invoice ${t.invoiceNumber}`}
                       </div>
                     )}
                     {t.leakTestPerformed !== undefined && (
@@ -519,6 +528,8 @@ function TransactionForm({
     reason?: TransactionReason
     leakTestPerformed?: boolean
     notes?: string
+    returnDestination?: string
+    docketNumber?: string
     correctsId?: string
     correctionReason?: string
     refrigerantMismatch?: { bottleType: string; unitType: string }
@@ -556,6 +567,8 @@ function TransactionForm({
   const [leakTest, setLeakTest] = useState<boolean | null>(null)
   // Required when in correction mode — why the original was wrong.
   const [correctionReason, setCorrectionReason] = useState('')
+  const [returnDestination, setReturnDestination] = useState('')
+  const [docketNumber, setDocketNumber] = useState('')
   const [notes, setNotes] = useState('')
   const [addingSite, setAddingSite] = useState(false)
   const [addingUnit, setAddingUnit] = useState(false)
@@ -590,6 +603,8 @@ function TransactionForm({
     setEquipment('')
     setReason('')
     setLeakTest(null)
+    setReturnDestination('')
+    setDocketNumber('')
     setNotes('')
   } else if (!open && lastOpen) {
     setLastOpen(false)
@@ -700,6 +715,14 @@ function TransactionForm({
       equipment: equipment.trim() || undefined,
       reason: reason || undefined,
       leakTestPerformed: showCompliance && leakTest !== null ? leakTest : undefined,
+      returnDestination:
+        kind === 'return' && returnDestination.trim()
+          ? returnDestination.trim()
+          : undefined,
+      docketNumber:
+        kind === 'return' && docketNumber.trim()
+          ? docketNumber.trim()
+          : undefined,
       notes: notes.trim() || undefined,
       correctsId: correcting?.id,
       correctionReason: correcting ? correctionReason.trim() : undefined,
@@ -1018,6 +1041,31 @@ function TransactionForm({
                   </button>
                 ))}
               </div>
+            </Field>
+          </>
+        )}
+
+        {kind === 'return' && (
+          <>
+            <Field
+              label="Store / supplier"
+              hint="Where is the bottle being returned? Optional."
+            >
+              <TextInput
+                value={returnDestination}
+                onChange={(e) => setReturnDestination(e.target.value)}
+                placeholder="e.g. BOC, Refco depot, Beijer Ref"
+              />
+            </Field>
+            <Field
+              label="Docket / consignment #"
+              hint="The paper trail an audit follows — e.g. an RRA consignment note for refrigerant sent for destruction."
+            >
+              <TextInput
+                value={docketNumber}
+                onChange={(e) => setDocketNumber(e.target.value)}
+                placeholder="e.g. RRA-102938"
+              />
             </Field>
           </>
         )}
