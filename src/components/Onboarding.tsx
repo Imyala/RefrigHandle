@@ -1,13 +1,17 @@
 import { useState, type ReactNode } from 'react'
 import { Button, Card, Field, TextInput } from './ui'
+import { Picker } from './Picker'
 import { LocationFields, type LocationErrors } from './LocationFields'
 import { useStore } from '../lib/store'
 import { useToast } from '../lib/toast'
 import {
   isLocationComplete,
   isSetupComplete,
+  roleInfo,
+  SETUP_ROLE_CHOICES,
   type Jurisdiction,
   type LocationSettings,
+  type TechnicianRole,
 } from '../lib/types'
 import { profileFor } from '../lib/compliance'
 
@@ -35,6 +39,10 @@ function OnboardingScreen() {
   const [arcAuth, setArcAuth] = useState('')
   const [techName, setTechName] = useState('')
   const [techRhl, setTechRhl] = useState('')
+  // Role of the very first account: business owner, or supervisor for a
+  // larger org where the owner won't use the app and a supervisor needs
+  // full access. Restricted to SETUP_ROLE_CHOICES here.
+  const [role, setRole] = useState<TechnicianRole>('owner')
   const [loc, setLoc] = useState<LocationSettings>({
     country: 'Australia',
     region: '',
@@ -114,7 +122,7 @@ function OnboardingScreen() {
       businessName,
       businessAbn: abn,
       arcAuthorisationNumber: profile.hasBusinessAuthorisation ? arcAuth : '',
-      technician: { name: techName, arcLicenceNumber: techRhl },
+      technician: { name: techName, arcLicenceNumber: techRhl, role },
       location: loc,
       jurisdiction,
     })
@@ -214,14 +222,37 @@ function OnboardingScreen() {
 
           <Card>
             <div className="mb-1 text-sm font-semibold text-slate-700 dark:text-slate-200">
-              First technician
+              First account
             </div>
             <p className="mb-3 text-xs text-slate-500">
               This profile becomes the active technician. Their name and{' '}
               {profile.techLicenceLabel} are stamped onto each transaction
-              they log. You can add more technicians later.
+              they log. You can add more people later — only supervisors and
+              owners can create accounts.
             </p>
             <div className="space-y-3">
+              <Field
+                label="Your role *"
+                hint={
+                  role === 'supervisor'
+                    ? 'Choose Supervisor if the business owner won’t use the app — a supervisor gets full access when there’s no owner account.'
+                    : roleInfo(role).blurb
+                }
+              >
+                <Picker
+                  title="Your role"
+                  value={role}
+                  onChange={(v) => setRole(v as TechnicianRole)}
+                  options={SETUP_ROLE_CHOICES.map((r) => ({
+                    value: r,
+                    label: roleInfo(r).label,
+                    hint:
+                      r === 'owner'
+                        ? 'You run the business and use the app.'
+                        : 'For larger orgs — full access when the owner doesn’t use the app.',
+                  }))}
+                />
+              </Field>
               <Field label="Technician name *" error={techNameErr}>
                 <TextInput
                   value={techName}

@@ -19,12 +19,15 @@ import {
   type Site,
   type SyncSettings,
   type Technician,
+  type TechnicianRole,
   type Theme,
   type Transaction,
   type Unit,
   type WeightUnit,
   transactionLabel,
   DEFAULT_TECHNICIAN_ROLE,
+  TECHNICIAN_PURGE_DAYS,
+  daysUntilPurge,
 } from './types'
 import {
   BOTTLE_FIELDS,
@@ -101,6 +104,10 @@ interface StoreApi {
   // technician profiles
   addTechnician: (t: Omit<Technician, 'id' | 'createdAt'>) => Technician
   updateTechnician: (id: string, patch: Partial<Technician>) => void
+  // Soft-disable a profile (a tech who left). Kept for the retention
+  // window, then purged. Reassigns the active seat if needed.
+  deactivateTechnician: (id: string) => void
+  reactivateTechnician: (id: string) => void
   deleteTechnician: (id: string) => void
   setActiveTechnicianId: (id: string | undefined) => void
   // first-run onboarding — writes business identity, ARC RTA, the first
@@ -110,7 +117,12 @@ interface StoreApi {
     businessName: string
     businessAbn: string
     arcAuthorisationNumber: string
-    technician: { name: string; arcLicenceNumber: string }
+    technician: {
+      name: string
+      arcLicenceNumber: string
+      // owner or supervisor — chosen at setup (SETUP_ROLE_CHOICES).
+      role: TechnicianRole
+    }
     location: LocationSettings
     jurisdiction: Jurisdiction
   }) => void
@@ -215,6 +227,65 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     }
   }, [state.auditLog])
 
+  // Purge profiles deactivated beyond the retention window
+  // (TECHNICIAN_PURGE_DAYS). Best-effort and client-side: it fires
+  // whenever the app is open once a deactivation passes 90 days. The
+  // tech's logged work is preserved — transactions freeze the
+  // name/licence/role at the time of work — so only the now-empty
+  // profile reference is removed. Authoritative scheduling moves to the
+  // server once team accounts exist.
+  useEffect(() => {
+    const now = new Date()
+    const due = state.technicians.filter((t) => {
+      const d = daysUntilPurge(t, now)
+      return d !== null && d <= 0
+    })
+    if (due.length === 0) return
+    const dueIds = new Set(due.map((t) => t.id))
+    // Defer the write off the effect body (same pattern as the audit
+    // sealer above) so it isn't a synchronous setState-in-effect.
+    let cancelled = false
+    void Promise.resolve().then(() => {
+      if (cancelled) return
+      setState((s) => {
+        let auditLog = s.auditLog
+        for (const t of due) {
+          auditLog = withAudit(
+            { ...s, auditLog },
+            {
+              action: 'delete',
+              entity: 'technician',
+              entityId: t.id,
+              target: t.name,
+              summary: `Auto-deleted technician ${t.name} after ${TECHNICIAN_PURGE_DAYS}-day retention; their logged work is retained`,
+            },
+          )
+        }
+        const remaining = s.technicians.filter((t) => !dueIds.has(t.id))
+        const at = new Date().toISOString()
+        return {
+          ...s,
+          technicians: remaining,
+          activeTechnicianId: dueIds.has(s.activeTechnicianId ?? '')
+            ? remaining.find((t) => !t.deactivatedAt)?.id
+            : s.activeTechnicianId,
+          tombstones: [
+            ...s.tombstones,
+            ...due.map((t) => ({
+              entity: 'technician' as const,
+              id: t.id,
+              at,
+            })),
+          ],
+          auditLog,
+        }
+      })
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [state.technicians])
+
   const lastPushedRef = useRef<string>('')
   const remoteApplyRef = useRef(false)
   // Latest state, readable from sync callbacks without re-subscribing
@@ -314,6 +385,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         technicianLicence:
           (activeTech?.arcLicenceNumber || undefined) ??
           (s.arcLicenceNumber || undefined),
+        technicianRole: activeTech?.role,
         businessName: s.businessName || undefined,
         businessAbn: s.businessAbn || undefined,
         arcAuthorisationNumber: s.arcAuthorisationNumber || undefined,
@@ -730,6 +802,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           t.technicianLicence ??
           (activeTech?.arcLicenceNumber || undefined) ??
           (s.arcLicenceNumber || undefined),
+        technicianRole: t.technicianRole ?? activeTech?.role,
         businessName: t.businessName ?? (s.businessName || undefined),
         businessAbn: t.businessAbn ?? (s.businessAbn || undefined),
         arcAuthorisationNumber:
@@ -969,6 +1042,62 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     })
   }, [])
 
+  const deactivateTechnician: StoreApi['deactivateTechnician'] = useCallback(
+    (id) => {
+      setState((s) => {
+        const target = s.technicians.find((t) => t.id === id)
+        if (!target || target.deactivatedAt) return s
+        const now = new Date().toISOString()
+        const technicians = s.technicians.map((t) =>
+          t.id === id ? { ...t, deactivatedAt: now, updatedAt: now } : t,
+        )
+        // Don't leave the deactivated profile in the seat — hand it to
+        // the first profile that's still active, if any.
+        const nextActive =
+          s.activeTechnicianId === id
+            ? technicians.find((t) => !t.deactivatedAt)?.id
+            : s.activeTechnicianId
+        return {
+          ...s,
+          technicians,
+          activeTechnicianId: nextActive,
+          auditLog: withAudit(s, {
+            action: 'update',
+            entity: 'technician',
+            entityId: id,
+            target: target.name,
+            summary: `Deactivated technician ${target.name} — kept ${TECHNICIAN_PURGE_DAYS} days, then deleted; their logged work is retained`,
+          }),
+        }
+      })
+    },
+    [],
+  )
+
+  const reactivateTechnician: StoreApi['reactivateTechnician'] = useCallback(
+    (id) => {
+      setState((s) => {
+        const target = s.technicians.find((t) => t.id === id)
+        if (!target || !target.deactivatedAt) return s
+        const now = new Date().toISOString()
+        return {
+          ...s,
+          technicians: s.technicians.map((t) =>
+            t.id === id ? { ...t, deactivatedAt: undefined, updatedAt: now } : t,
+          ),
+          auditLog: withAudit(s, {
+            action: 'update',
+            entity: 'technician',
+            entityId: id,
+            target: target.name,
+            summary: `Reactivated technician ${target.name}`,
+          }),
+        }
+      })
+    },
+    [],
+  )
+
   const setActiveTechnicianId: StoreApi['setActiveTechnicianId'] = useCallback(
     (id) => setState((s) => ({ ...s, activeTechnicianId: id })),
     [],
@@ -981,9 +1110,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         id: uid(),
         name: data.technician.name.trim(),
         arcLicenceNumber: data.technician.arcLicenceNumber.trim(),
-        // Whoever runs first-time setup is the business owner — they hold
-        // the top access tier the rest of the crew is added under.
-        role: 'owner',
+        // Top authority for the install — owner, or supervisor for an org
+        // whose owner won't use the app. Chosen on the setup screen.
+        role: data.technician.role,
         createdAt: now,
       }
       // Build the audit entries by hand: withAudit() would attribute
@@ -1461,6 +1590,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       restoreTransaction,
       addTechnician,
       updateTechnician,
+      deactivateTechnician,
+      reactivateTechnician,
       deleteTechnician,
       setActiveTechnicianId,
       completeSetup,
@@ -1503,6 +1634,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       restoreTransaction,
       addTechnician,
       updateTechnician,
+      deactivateTechnician,
+      reactivateTechnician,
       deleteTechnician,
       setActiveTechnicianId,
       completeSetup,

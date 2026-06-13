@@ -8,6 +8,9 @@ import {
   isOverfilled,
   netWeight,
   overfillKg,
+  canManageTechnicians,
+  daysUntilPurge,
+  isTechnicianActive,
   quarterKey,
   quarterOfDay,
   roleAtLeast,
@@ -186,5 +189,33 @@ describe('technician roles', () => {
     expect(roleAtLeast('apprentice', 'technician')).toBe(false)
     expect(roleAtLeast(undefined, 'technician')).toBe(true)
     expect(roleAtLeast(undefined, 'supervisor')).toBe(false)
+  })
+})
+
+describe('technician deactivation lifecycle', () => {
+  it('canManageTechnicians is supervisor and above', () => {
+    expect(canManageTechnicians('owner')).toBe(true)
+    expect(canManageTechnicians('supervisor')).toBe(true)
+    expect(canManageTechnicians('technician')).toBe(false)
+    expect(canManageTechnicians('apprentice')).toBe(false)
+    // Unset reads as the default (technician) tier — no management.
+    expect(canManageTechnicians(undefined)).toBe(false)
+  })
+
+  it('isTechnicianActive reflects the deactivatedAt flag', () => {
+    expect(isTechnicianActive({})).toBe(true)
+    expect(isTechnicianActive({ deactivatedAt: '2026-01-01T00:00:00.000Z' })).toBe(false)
+  })
+
+  it('daysUntilPurge counts down 90 days from deactivation', () => {
+    const now = new Date('2026-06-13T00:00:00.000Z')
+    expect(daysUntilPurge({}, now)).toBeNull()
+    expect(daysUntilPurge({ deactivatedAt: '2026-06-13T00:00:00.000Z' }, now)).toBe(90)
+    // Deactivated 10 days ago → 80 days left.
+    expect(daysUntilPurge({ deactivatedAt: '2026-06-03T00:00:00.000Z' }, now)).toBe(80)
+    // Deactivated 95 days ago → overdue (negative).
+    const overdue = daysUntilPurge({ deactivatedAt: '2026-03-10T00:00:00.000Z' }, now)
+    expect(overdue).not.toBeNull()
+    expect(overdue as number).toBeLessThan(0)
   })
 })

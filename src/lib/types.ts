@@ -255,6 +255,10 @@ export interface Transaction {
   // work — frozen so a logbook printed years later still shows the
   // licence that was in force, not what the tech happens to hold now.
   technicianLicence?: string
+  // Access role the tech held when this was logged, frozen for the same
+  // reason. A role change (e.g. apprentice → technician) applies only to
+  // work logged from that point on; past rows keep the role of the day.
+  technicianRole?: TechnicianRole
   // Business trading name, ABN and ARC Refrigerant Trading
   // Authorisation (RTA) frozen at the time of work for the same reason
   // as the RHL above — an audit needs to see the operator that was in
@@ -523,6 +527,56 @@ export function roleAtLeast(
   return roleInfo(role).level >= roleInfo(min).level
 }
 
+// Roles offered when creating the very first account at first-run setup:
+// the business owner, or a supervisor for larger organisations where the
+// owner won't use the app themselves and a supervisor needs full access.
+export const SETUP_ROLE_CHOICES: readonly TechnicianRole[] = [
+  'owner',
+  'supervisor',
+]
+
+// --- Capability gates -------------------------------------------------
+// Descriptive today; the backend enforces them once per-tech sign-in
+// exists. Until then the UI uses them as soft guidance (the active
+// profile on a shared device can still be switched freely).
+
+// Create / deactivate / re-role other technicians. Supervisor and above.
+export function canManageTechnicians(role: TechnicianRole | undefined): boolean {
+  return roleAtLeast(role, 'supervisor')
+}
+
+// Correct or delete logged records. Supervisor and above — an apprentice
+// can record work but never remove it.
+export function canDeleteRecords(role: TechnicianRole | undefined): boolean {
+  return roleAtLeast(role, 'supervisor')
+}
+
+// --- Deactivation lifecycle ------------------------------------------
+// A technician who leaves is first deactivated (account disabled but
+// kept), then fully purged after this many days. Their logged work is
+// NEVER removed — transactions freeze the name/licence/role at the time
+// of work — so deleting the profile leaves the audit trail intact.
+export const TECHNICIAN_PURGE_DAYS = 90
+
+export function isTechnicianActive(
+  t: Pick<Technician, 'deactivatedAt'>,
+): boolean {
+  return !t.deactivatedAt
+}
+
+// Whole days until a deactivated profile is purged (0 or negative means
+// it is due now). Returns null for an active profile.
+export function daysUntilPurge(
+  t: Pick<Technician, 'deactivatedAt'>,
+  now: Date,
+): number | null {
+  if (!t.deactivatedAt) return null
+  const elapsedDays = Math.floor(
+    (now.getTime() - new Date(t.deactivatedAt).getTime()) / 86_400_000,
+  )
+  return TECHNICIAN_PURGE_DAYS - elapsedDays
+}
+
 export interface Technician {
   id: string
   name: string
@@ -531,6 +585,10 @@ export interface Technician {
   // default tier via roleInfo(). normalize() promotes one profile per
   // install to owner.
   role?: TechnicianRole
+  // Set when the profile is deactivated (a tech who left). The account
+  // is disabled but kept for TECHNICIAN_PURGE_DAYS so their recent work
+  // stays attributable, then it is purged. Unset = active.
+  deactivatedAt?: string
   arcLicenceNumber: string // ARC RHL — personal licence, per tech
   // RHL expiry date (YYYY-MM-DD). RHLs run for two years; logging work
   // against a lapsed licence is itself a breach, so the app alerts as

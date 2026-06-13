@@ -26,7 +26,11 @@ import {
   type WeightUnit,
   TECHNICIAN_ROLES,
   DEFAULT_TECHNICIAN_ROLE,
+  TECHNICIAN_PURGE_DAYS,
   roleInfo,
+  daysUntilPurge,
+  isTechnicianActive,
+  canManageTechnicians,
 } from '../lib/types'
 import { profileFor } from '../lib/compliance'
 import {
@@ -82,6 +86,8 @@ export default function Settings() {
     state,
     addTechnician,
     updateTechnician,
+    deactivateTechnician,
+    reactivateTechnician,
     deleteTechnician,
     setActiveTechnicianId,
     restoreTransaction,
@@ -131,6 +137,15 @@ export default function Settings() {
   // Active jurisdiction profile — drives licence terminology, business
   // number validation, and which compliance fields exist at all.
   const profile = profileFor(state.jurisdiction)
+
+  // Whether the profile currently in the seat may manage accounts
+  // (add/deactivate/re-role). Supervisor and above. Soft today — there
+  // are no per-tech logins yet, so the active profile can be switched —
+  // but it reflects the rule the backend will enforce.
+  const activeTech = state.technicians.find(
+    (t) => t.id === state.activeTechnicianId,
+  )
+  const canManage = canManageTechnicians(activeTech?.role)
 
   // The business number is held back from the store until it passes the
   // profile's validation (AU: ABN checksum; others: free-form).
@@ -184,6 +199,22 @@ export default function Settings() {
     } else {
       setActiveTechnicianId(t.id)
       toast.show(`Active tech: ${t.name}`)
+    }
+  }
+
+  // Skip the rest of the 90-day retention and purge the profile now.
+  // Their logged work is kept regardless (frozen on each transaction).
+  async function requestDeleteNow(t: Technician) {
+    const ok = await confirm({
+      title: `Delete ${t.name} now?`,
+      message:
+        'Removes this profile immediately instead of waiting out the retention window. Everything they logged stays in the records for audit. This cannot be undone.',
+      confirmLabel: 'Delete',
+      danger: true,
+    })
+    if (ok) {
+      deleteTechnician(t.id)
+      toast.show(`${t.name} deleted`)
     }
   }
 
@@ -472,17 +503,27 @@ export default function Settings() {
           <div className="text-sm font-semibold text-slate-700 dark:text-slate-200">
             Technicians
           </div>
-          <Button onClick={openAddTech}>+ Add tech</Button>
+          <Button onClick={openAddTech} disabled={!canManage}>
+            + Add tech
+          </Button>
         </div>
         <p className="mb-3 text-xs text-slate-500">
           Each profile carries a name, a role and {profile.id === 'AU' ? 'an' : 'a'}{' '}
           {profile.techLicenceLabel}. Pick the active tech here — every
-          transaction logged is stamped with that profile's name and licence,
-          frozen so the historical record is preserved if a tech later
-          changes their licence. Roles (owner, supervisor, technician,
-          apprentice) set each person's access level — they take effect once
-          per-tech sign-in is added.
+          transaction logged is stamped with that profile's name, licence and
+          role, frozen so the historical record is preserved if a tech later
+          changes their licence or role. Roles (owner, supervisor, technician,
+          apprentice) set each person's access level — only supervisors and
+          owners can add or manage accounts. Access takes effect once per-tech
+          sign-in is added.
         </p>
+        {!canManage && (
+          <p className="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:bg-amber-900/30 dark:text-amber-200">
+            This profile ({roleInfo(activeTech?.role).label}) is below
+            supervisor, so account management is read-only. Switch to a
+            supervisor or owner profile to add or deactivate technicians.
+          </p>
+        )}
         {state.technicians.length === 0 ? (
           <p className="text-sm text-slate-500">
             No tech profiles yet. Add one so transactions can be attributed for
@@ -492,21 +533,32 @@ export default function Settings() {
           <div className="space-y-2">
             {state.technicians.map((t) => {
               const isActive = state.activeTechnicianId === t.id
+              const active = isTechnicianActive(t)
+              const untilPurge = active ? null : daysUntilPurge(t, new Date())
               return (
                 <div
                   key={t.id}
                   className={`flex items-center justify-between gap-2 rounded-lg px-3 py-2 ${
-                    isActive
-                      ? 'bg-brand-50 dark:bg-brand-900/20'
-                      : 'bg-slate-100 dark:bg-slate-800'
+                    !active
+                      ? 'bg-slate-50 dark:bg-slate-800/40'
+                      : isActive
+                        ? 'bg-brand-50 dark:bg-brand-900/20'
+                        : 'bg-slate-100 dark:bg-slate-800'
                   }`}
                 >
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className="truncate font-medium text-slate-900 dark:text-slate-100">
+                      <span
+                        className={`truncate font-medium ${
+                          active
+                            ? 'text-slate-900 dark:text-slate-100'
+                            : 'text-slate-500 dark:text-slate-400'
+                        }`}
+                      >
                         {t.name || '(unnamed)'}
                       </span>
-                      {isActive && <Pill tone="green">Active</Pill>}
+                      {isActive && active && <Pill tone="green">Active</Pill>}
+                      {!active && <Pill tone="amber">Deactivated</Pill>}
                       <Pill tone={roleInfo(t.role).level >= 3 ? 'blue' : 'slate'}>
                         {roleInfo(t.role).label}
                       </Pill>
@@ -534,6 +586,13 @@ export default function Settings() {
                         )
                       })()}
                     </div>
+                    {!active && untilPurge !== null && (
+                      <div className="text-xs font-medium text-amber-700 dark:text-amber-300">
+                        {untilPurge > 0
+                          ? `Deletes in ${untilPurge} day${untilPurge === 1 ? '' : 's'} · work logged stays for audit`
+                          : 'Deletion due — removed on next open · work logged stays for audit'}
+                      </div>
+                    )}
                   </div>
                   <div className="flex shrink-0 items-center gap-1">
                     {t.passwordHash && (
@@ -545,17 +604,40 @@ export default function Settings() {
                         🔒
                       </span>
                     )}
-                    {!isActive && (
-                      <Button
-                        variant="secondary"
-                        onClick={() => requestActivate(t)}
-                      >
-                        Use
-                      </Button>
+                    {active ? (
+                      <>
+                        {!isActive && (
+                          <Button
+                            variant="secondary"
+                            onClick={() => requestActivate(t)}
+                          >
+                            Use
+                          </Button>
+                        )}
+                        {canManage && (
+                          <Button variant="ghost" onClick={() => openEditTech(t)}>
+                            Edit
+                          </Button>
+                        )}
+                      </>
+                    ) : (
+                      canManage && (
+                        <>
+                          <Button
+                            variant="secondary"
+                            onClick={() => reactivateTechnician(t.id)}
+                          >
+                            Reactivate
+                          </Button>
+                          <Button
+                            variant="danger"
+                            onClick={() => requestDeleteNow(t)}
+                          >
+                            Delete now
+                          </Button>
+                        </>
+                      )
                     )}
-                    <Button variant="ghost" onClick={() => openEditTech(t)}>
-                      Edit
-                    </Button>
                   </div>
                 </div>
               )
@@ -1154,15 +1236,14 @@ export default function Settings() {
           editingTech
             ? async () => {
                 const ok = await confirm({
-                  title: `Remove ${editingTech.name}?`,
-                  message:
-                    'They will be removed from the active tech list. Past transactions stamped with their name + RHL stay frozen on the record.',
-                  confirmLabel: 'Remove',
+                  title: `Deactivate ${editingTech.name}?`,
+                  message: `For a tech who has left. The account is disabled now and fully deleted after ${TECHNICIAN_PURGE_DAYS} days; everything they logged stays frozen on the record for audit. You can reactivate them before then.`,
+                  confirmLabel: 'Deactivate',
                   danger: true,
                 })
                 if (ok) {
-                  deleteTechnician(editingTech.id)
-                  toast.show('Tech removed', 'info')
+                  deactivateTechnician(editingTech.id)
+                  toast.show('Tech deactivated', 'info')
                   setTechModalOpen(false)
                 }
               }
@@ -1380,7 +1461,7 @@ function TechnicianModal({
           </Button>
           {onDelete && (
             <Button type="button" variant="danger" onClick={onDelete}>
-              Remove
+              Deactivate
             </Button>
           )}
         </div>
