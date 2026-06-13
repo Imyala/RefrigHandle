@@ -9,8 +9,10 @@ import {
   netWeight,
   overfillKg,
   canManageTechnicians,
+  composeName,
   daysUntilPurge,
   isTechnicianActive,
+  splitName,
   quarterKey,
   quarterOfDay,
   roleAtLeast,
@@ -217,5 +219,27 @@ describe('technician deactivation lifecycle', () => {
     const overdue = daysUntilPurge({ deactivatedAt: '2026-03-10T00:00:00.000Z' }, now)
     expect(overdue).not.toBeNull()
     expect(overdue as number).toBeLessThan(0)
+  })
+})
+
+describe('structured names', () => {
+  it('composeName joins parts and drops blanks', () => {
+    expect(composeName({ firstName: 'Jane', middleName: 'Quinn', lastName: 'Smith' })).toBe('Jane Quinn Smith')
+    expect(composeName({ firstName: 'Jane', lastName: 'Smith' })).toBe('Jane Smith')
+    expect(composeName({ firstName: '  Jane  ', middleName: '', lastName: 'Smith' })).toBe('Jane Smith')
+    expect(composeName({})).toBe('')
+  })
+
+  it('splitName seeds first / middle / surname from a single name', () => {
+    expect(splitName('Jane Smith')).toEqual({ firstName: 'Jane', middleName: '', lastName: 'Smith' })
+    expect(splitName('Jane Quinn Smith')).toEqual({ firstName: 'Jane', middleName: 'Quinn', lastName: 'Smith' })
+    expect(splitName('Jane Q A Smith')).toEqual({ firstName: 'Jane', middleName: 'Q A', lastName: 'Smith' })
+    expect(splitName('Cher')).toEqual({ firstName: 'Cher', middleName: '', lastName: '' })
+    expect(splitName('   ')).toEqual({ firstName: '', middleName: '', lastName: '' })
+  })
+
+  it('compose and split round-trip a simple first+last name', () => {
+    const parts = splitName('Jane Smith')
+    expect(composeName(parts)).toBe('Jane Smith')
   })
 })

@@ -25,6 +25,7 @@ import {
   type Unit,
   type WeightUnit,
   transactionLabel,
+  composeName,
   DEFAULT_TECHNICIAN_ROLE,
   TECHNICIAN_PURGE_DAYS,
   daysUntilPurge,
@@ -118,10 +119,14 @@ interface StoreApi {
     businessAbn: string
     arcAuthorisationNumber: string
     technician: {
-      name: string
+      firstName: string
+      middleName?: string
+      lastName: string
       arcLicenceNumber: string
+      licenceExpiry: string
       // owner or supervisor — chosen at setup (SETUP_ROLE_CHOICES).
       role: TechnicianRole
+      passwordHash?: string
     }
     location: LocationSettings
     jurisdiction: Jurisdiction
@@ -942,7 +947,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const addTechnician: StoreApi['addTechnician'] = useCallback((t) => {
     const tech: Technician = {
       ...t,
-      name: t.name.trim(),
+      firstName: t.firstName?.trim() || undefined,
+      middleName: t.middleName?.trim() || undefined,
+      lastName: t.lastName?.trim() || undefined,
+      // Prefer the composed parts; fall back to a passed-in display name.
+      name: composeName(t) || t.name.trim(),
       arcLicenceNumber: t.arcLicenceNumber.trim(),
       role: t.role ?? DEFAULT_TECHNICIAN_ROLE,
       id: uid(),
@@ -1108,8 +1117,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const now = new Date().toISOString()
       const tech: Technician = {
         id: uid(),
-        name: data.technician.name.trim(),
+        firstName: data.technician.firstName.trim(),
+        middleName: data.technician.middleName?.trim() || undefined,
+        lastName: data.technician.lastName.trim(),
+        name: composeName(data.technician),
         arcLicenceNumber: data.technician.arcLicenceNumber.trim(),
+        licenceExpiry: data.technician.licenceExpiry || undefined,
+        passwordHash: data.technician.passwordHash,
         // Top authority for the install — owner, or supervisor for an org
         // whose owner won't use the app. Chosen on the setup screen.
         role: data.technician.role,

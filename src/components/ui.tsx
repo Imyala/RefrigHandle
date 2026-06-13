@@ -105,7 +105,7 @@ function WarningIcon() {
 // otherwise both border-colour utilities land in the class list and
 // Tailwind's output order, not ours, decides which wins.
 const inputBase =
-  'w-full rounded-xl border bg-white px-3 py-3 text-base text-slate-900 outline-none dark:bg-slate-900 dark:text-slate-100'
+  'w-full rounded-xl border bg-white px-3 py-3 text-base text-slate-900 outline-none disabled:cursor-not-allowed disabled:opacity-60 dark:bg-slate-900 dark:text-slate-100'
 const inputNormal =
   'border-slate-300 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/30 dark:border-slate-700'
 const inputInvalid =

@@ -1,9 +1,11 @@
 import { useState, type ReactNode } from 'react'
 import { Button, Card, Field, TextInput } from './ui'
 import { Picker } from './Picker'
+import { DateInput } from './DateInput'
 import { LocationFields, type LocationErrors } from './LocationFields'
 import { useStore } from '../lib/store'
 import { useToast } from '../lib/toast'
+import { hashPassword } from '../lib/auth'
 import {
   isLocationComplete,
   isSetupComplete,
@@ -37,8 +39,14 @@ function OnboardingScreen() {
   const [businessName, setBusinessName] = useState('')
   const [abn, setAbn] = useState('')
   const [arcAuth, setArcAuth] = useState('')
-  const [techName, setTechName] = useState('')
+  const [techFirst, setTechFirst] = useState('')
+  const [techMiddle, setTechMiddle] = useState('')
+  const [techLast, setTechLast] = useState('')
   const [techRhl, setTechRhl] = useState('')
+  const [techExpiry, setTechExpiry] = useState('')
+  const [password, setPassword] = useState('')
+  const [confirmPw, setConfirmPw] = useState('')
+  const [busy, setBusy] = useState(false)
   // Role of the very first account: business owner, or supervisor for a
   // larger org where the owner won't use the app and a supervisor needs
   // full access. Restricted to SETUP_ROLE_CHOICES here.
@@ -60,7 +68,12 @@ function OnboardingScreen() {
   const businessOk = businessName.trim() !== ''
   const abnOk = abn.trim() !== '' && profile.validateBusinessNumber(abn)
   const arcOk = !profile.hasBusinessAuthorisation || arcAuth.trim() !== ''
-  const techOk = techName.trim() !== '' && techRhl.trim() !== ''
+  const nameOk = techFirst.trim() !== '' && techLast.trim() !== ''
+  const expiryOk = techExpiry !== ''
+  // Every account gets a password — it secures profile switching today
+  // and becomes the sign-in once team accounts land.
+  const passwordOk = password.length >= 4 && password === confirmPw
+  const techOk = nameOk && techRhl.trim() !== '' && expiryOk && passwordOk
   const locOk = isLocationComplete(loc)
   const canFinish = businessOk && abnOk && arcOk && techOk && locOk
 
@@ -78,8 +91,11 @@ function OnboardingScreen() {
     )
   }
   if (!arcOk) missing.push(profile.businessAuthShort)
-  if (techName.trim() === '') missing.push('technician name')
+  if (techFirst.trim() === '') missing.push('first name')
+  if (techLast.trim() === '') missing.push('surname')
   if (techRhl.trim() === '') missing.push(profile.techLicenceShort)
+  if (!expiryOk) missing.push(`${profile.techLicenceShort} expiry`)
+  if (!passwordOk) missing.push('password')
   if (loc.country === 'Australia' && !loc.region.trim()) {
     missing.push('state / territory')
   }
@@ -97,10 +113,23 @@ function OnboardingScreen() {
       : `Enter a valid ${profile.businessNumberShort}.`,
   )
   const arcErr = err(!arcOk, `Enter your ${profile.businessAuthShort}.`)
-  const techNameErr = err(techName.trim() === '', 'Enter the technician name.')
+  const techFirstErr = err(techFirst.trim() === '', 'Enter your first name.')
+  const techLastErr = err(techLast.trim() === '', 'Enter your surname.')
   const techRhlErr = err(
     techRhl.trim() === '',
-    `Enter the technician's ${profile.techLicenceShort}.`,
+    `Enter your ${profile.techLicenceShort}.`,
+  )
+  const techExpiryErr = err(
+    !expiryOk,
+    `Enter your ${profile.techLicenceShort} expiry date.`,
+  )
+  const pwErr = err(
+    !passwordOk,
+    password === ''
+      ? 'Set a password (at least 4 characters).'
+      : password.length < 4
+        ? 'Password must be at least 4 characters.'
+        : 'Passwords don’t match.',
   )
   const locErrors: LocationErrors = {
     region: err(
@@ -111,18 +140,30 @@ function OnboardingScreen() {
     timezone: err(!loc.timezone.trim(), 'Choose your timezone.'),
   }
 
-  function finish() {
+  async function finish() {
+    if (busy) return
     if (!canFinish) {
       // Reveal the red markers and let the tech see every blocker at once
       // instead of silently doing nothing.
       setAttempted(true)
       return
     }
+    setBusy(true)
+    const passwordHash = await hashPassword(password)
+    setBusy(false)
     completeSetup({
       businessName,
       businessAbn: abn,
       arcAuthorisationNumber: profile.hasBusinessAuthorisation ? arcAuth : '',
-      technician: { name: techName, arcLicenceNumber: techRhl, role },
+      technician: {
+        firstName: techFirst,
+        middleName: techMiddle,
+        lastName: techLast,
+        arcLicenceNumber: techRhl,
+        licenceExpiry: techExpiry,
+        role,
+        passwordHash,
+      },
       location: loc,
       jurisdiction,
     })
@@ -253,12 +294,27 @@ function OnboardingScreen() {
                   }))}
                 />
               </Field>
-              <Field label="Technician name *" error={techNameErr}>
+              <Field label="First name *" error={techFirstErr}>
                 <TextInput
-                  value={techName}
-                  invalid={!!techNameErr}
-                  onChange={(e) => setTechName(e.target.value)}
-                  placeholder="e.g. Jane Smith"
+                  value={techFirst}
+                  invalid={!!techFirstErr}
+                  onChange={(e) => setTechFirst(e.target.value)}
+                  placeholder="e.g. Jane"
+                />
+              </Field>
+              <Field label="Middle name" hint="Optional.">
+                <TextInput
+                  value={techMiddle}
+                  onChange={(e) => setTechMiddle(e.target.value)}
+                  placeholder="e.g. Quinn"
+                />
+              </Field>
+              <Field label="Surname *" error={techLastErr}>
+                <TextInput
+                  value={techLast}
+                  invalid={!!techLastErr}
+                  onChange={(e) => setTechLast(e.target.value)}
+                  placeholder="e.g. Smith"
                 />
               </Field>
               <Field
@@ -271,6 +327,42 @@ function OnboardingScreen() {
                   invalid={!!techRhlErr}
                   onChange={(e) => setTechRhl(e.target.value)}
                   placeholder={profile.id === 'AU' ? 'e.g. L000000' : undefined}
+                />
+              </Field>
+              <Field
+                label={`${profile.techLicenceShort} expiry *`}
+                error={techExpiryErr}
+                hint="RHLs run for two years; the app warns before this lapses."
+              >
+                <DateInput
+                  value={techExpiry}
+                  onChange={setTechExpiry}
+                  invalid={!!techExpiryErr}
+                  ariaLabel="Licence expiry date"
+                />
+              </Field>
+              <Field
+                label="Password *"
+                error={pwErr}
+                hint="Secures switching into this profile, and becomes your sign-in once team accounts are added."
+              >
+                <TextInput
+                  type="password"
+                  autoComplete="new-password"
+                  value={password}
+                  invalid={!!pwErr}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="At least 4 characters"
+                />
+              </Field>
+              <Field label="Confirm password *">
+                <TextInput
+                  type="password"
+                  autoComplete="new-password"
+                  value={confirmPw}
+                  invalid={!!pwErr && password !== confirmPw}
+                  onChange={(e) => setConfirmPw(e.target.value)}
+                  placeholder="Re-enter password"
                 />
               </Field>
             </div>
@@ -302,8 +394,8 @@ function OnboardingScreen() {
           {/* Left enabled even when incomplete: pressing it reveals the
               red field markers (via finish() → setAttempted) rather than
               sitting dead and leaving the tech to guess the blocker. */}
-          <Button full onClick={finish}>
-            Finish setup
+          <Button full onClick={finish} disabled={busy}>
+            {busy ? 'Finishing…' : 'Finish setup'}
           </Button>
           {!canFinish && (
             <p

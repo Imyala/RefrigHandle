@@ -31,6 +31,8 @@ import {
   daysUntilPurge,
   isTechnicianActive,
   canManageTechnicians,
+  composeName,
+  splitName,
 } from '../lib/types'
 import { profileFor } from '../lib/compliance'
 import {
@@ -146,6 +148,22 @@ export default function Settings() {
     (t) => t.id === state.activeTechnicianId,
   )
   const canManage = canManageTechnicians(activeTech?.role)
+
+  // Company identity (business name, ABN, ARC RTA number) is stamped onto
+  // every record, so it's locked read-only once entered and only an
+  // owner/supervisor can deliberately unlock it. The RTA *expiry* stays
+  // freely editable (it changes on renewal). Re-locks when leaving the page.
+  const [companyUnlocked, setCompanyUnlocked] = useState(false)
+  const companyLocked = !companyUnlocked && state.businessName.trim() !== ''
+  async function unlockCompany() {
+    const ok = await confirm({
+      title: 'Edit company details?',
+      message:
+        'Business name, ABN and ARC RTA number are stamped onto every record and rarely change. Unlock only to correct a genuine mistake — past transactions keep the details they were logged with.',
+      confirmLabel: 'Unlock',
+    })
+    if (ok) setCompanyUnlocked(true)
+  }
 
   // The business number is held back from the store until it passes the
   // profile's validation (AU: ABN checksum; others: free-form).
@@ -648,10 +666,31 @@ export default function Settings() {
 
       <Card>
         <div className="mb-1 flex items-center justify-between gap-2">
-          <div className="text-sm font-semibold text-slate-700 dark:text-slate-200">
+          <div className="flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-200">
             Compliance details — {profile.name}
+            {companyLocked && (
+              <span
+                className="text-slate-400 dark:text-slate-500"
+                aria-label="Locked"
+                title="Company identity is locked"
+              >
+                🔒
+              </span>
+            )}
           </div>
-          <SavedFlash show={compSaved} />
+          <div className="flex items-center gap-2">
+            <SavedFlash show={compSaved} />
+            {companyLocked &&
+              (canManage ? (
+                <Button variant="ghost" onClick={unlockCompany}>
+                  Edit
+                </Button>
+              ) : (
+                <span className="text-xs text-slate-400">
+                  Owner/supervisor only
+                </span>
+              ))}
+          </div>
         </div>
         <p className="mb-3 text-xs text-slate-500">
           Used on logbook printouts and stamped onto every transaction at the
@@ -675,6 +714,7 @@ export default function Settings() {
           <Field label="Trading / business name">
             <TextInput
               value={bizName}
+              disabled={companyLocked}
               onChange={(e) => setBizName(e.target.value)}
               onBlur={commitBizName}
               placeholder="e.g. Acme Refrigeration Pty Ltd"
@@ -692,6 +732,7 @@ export default function Settings() {
             <TextInput
               value={abn}
               invalid={abnInvalid}
+              disabled={companyLocked}
               onChange={(e) => setAbn(e.target.value)}
               onBlur={commitAbn}
               inputMode={profile.id === 'AU' ? 'numeric' : undefined}
@@ -712,6 +753,7 @@ export default function Settings() {
               >
                 <TextInput
                   value={arcAuth}
+                  disabled={companyLocked}
                   onChange={(e) => setArcAuth(e.target.value)}
                   onBlur={commitArcAuth}
                   placeholder={profile.id === 'AU' ? 'e.g. AU00000' : undefined}
@@ -1209,6 +1251,9 @@ export default function Settings() {
                 : {}
           if (editingTech) {
             updateTechnician(editingTech.id, {
+              firstName: data.firstName,
+              middleName: data.middleName,
+              lastName: data.lastName,
               name: data.name,
               role: data.role,
               arcLicenceNumber: data.arcLicenceNumber,
@@ -1218,6 +1263,9 @@ export default function Settings() {
             toast.show('Tech updated')
           } else {
             const created = addTechnician({
+              firstName: data.firstName,
+              middleName: data.middleName,
+              lastName: data.lastName,
               name: data.name,
               role: data.role,
               arcLicenceNumber: data.arcLicenceNumber,
@@ -1266,10 +1314,13 @@ export default function Settings() {
 
 
 type TechSavePayload = {
-  name: string
+  firstName: string
+  middleName?: string
+  lastName: string
+  name: string // composed from the parts above
   role: TechnicianRole
   arcLicenceNumber: string
-  licenceExpiry?: string
+  licenceExpiry: string // required on every account
   // 'set' = replace hash, 'remove' = clear it, undefined = leave unchanged.
   passwordChange?: { kind: 'set'; hash: string } | { kind: 'remove' }
 }
@@ -1289,26 +1340,41 @@ function TechnicianModal({
 }) {
   const { state } = useStore()
   const profile = profileFor(state.jurisdiction)
-  const [name, setName] = useState('')
+  const [firstName, setFirstName] = useState('')
+  const [middleName, setMiddleName] = useState('')
+  const [lastName, setLastName] = useState('')
   const [role, setRole] = useState<TechnicianRole>(DEFAULT_TECHNICIAN_ROLE)
   const [rhl, setRhl] = useState('')
   const [licenceExpiry, setLicenceExpiry] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPw, setConfirmPw] = useState('')
   const [removePassword, setRemovePassword] = useState(false)
+  const [attempted, setAttempted] = useState(false)
   const [pwError, setPwError] = useState('')
   const [busy, setBusy] = useState(false)
   const key = editing?.id ?? 'new'
   const [seenKey, setSeenKey] = useState('')
   if (open && seenKey !== key) {
     setSeenKey(key)
-    setName(editing?.name ?? '')
+    // Seed the parts from the structured fields, falling back to a split
+    // of the legacy single name for profiles saved before the split.
+    const seed = editing
+      ? {
+          firstName: editing.firstName ?? splitName(editing.name).firstName,
+          middleName: editing.middleName ?? splitName(editing.name).middleName,
+          lastName: editing.lastName ?? splitName(editing.name).lastName,
+        }
+      : { firstName: '', middleName: '', lastName: '' }
+    setFirstName(seed.firstName)
+    setMiddleName(seed.middleName)
+    setLastName(seed.lastName)
     setRole(editing?.role ?? DEFAULT_TECHNICIAN_ROLE)
     setRhl(editing?.arcLicenceNumber ?? '')
     setLicenceExpiry(editing?.licenceExpiry ?? '')
     setPassword('')
     setConfirmPw('')
     setRemovePassword(false)
+    setAttempted(false)
     setPwError('')
   }
   if (!open && seenKey !== '') {
@@ -1316,11 +1382,26 @@ function TechnicianModal({
   }
 
   const hasExistingPassword = !!editing?.passwordHash
+  // A password is mandatory when creating an account; on edit the
+  // existing one is kept unless a new one is typed.
+  const passwordRequired = !editing
+
+  // Field-level validation, surfaced after the first save attempt.
+  const firstErr = attempted && !firstName.trim() ? 'First name is required.' : undefined
+  const lastErr = attempted && !lastName.trim() ? 'Surname is required.' : undefined
+  const expiryErr =
+    attempted && !licenceExpiry
+      ? `${profile.techLicenceShort} expiry date is required.`
+      : undefined
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
-    if (!name.trim() || busy) return
+    if (busy) return
+    setAttempted(true)
     setPwError('')
+
+    // Block on the required identity/compliance fields first.
+    if (!firstName.trim() || !lastName.trim() || !licenceExpiry) return
 
     let passwordChange: TechSavePayload['passwordChange']
     if (password) {
@@ -1336,15 +1417,24 @@ function TechnicianModal({
       const hash = await hashPassword(password)
       setBusy(false)
       passwordChange = { kind: 'set', hash }
+    } else if (passwordRequired) {
+      setPwError('A password is required for a new account.')
+      return
     } else if (removePassword && hasExistingPassword) {
       passwordChange = { kind: 'remove' }
     }
 
+    const parts = {
+      firstName: firstName.trim(),
+      middleName: middleName.trim() || undefined,
+      lastName: lastName.trim(),
+    }
     onSave({
-      name: name.trim(),
+      ...parts,
+      name: composeName(parts),
       role,
       arcLicenceNumber: rhl.trim(),
-      licenceExpiry: licenceExpiry || undefined,
+      licenceExpiry,
       passwordChange,
     })
   }
@@ -1352,13 +1442,28 @@ function TechnicianModal({
   return (
     <Modal open={open} onClose={onClose} title={editing ? 'Edit tech' : 'Add tech'}>
       <form onSubmit={submit} className="space-y-3">
-        <Field label="Name">
+        <Field label="First name *" error={firstErr}>
           <TextInput
-            required
             autoFocus
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="e.g. Jane Smith"
+            value={firstName}
+            invalid={!!firstErr}
+            onChange={(e) => setFirstName(e.target.value)}
+            placeholder="e.g. Jane"
+          />
+        </Field>
+        <Field label="Middle name" hint="Optional.">
+          <TextInput
+            value={middleName}
+            onChange={(e) => setMiddleName(e.target.value)}
+            placeholder="e.g. Quinn"
+          />
+        </Field>
+        <Field label="Surname *" error={lastErr}>
+          <TextInput
+            value={lastName}
+            invalid={!!lastErr}
+            onChange={(e) => setLastName(e.target.value)}
+            placeholder="e.g. Smith"
           />
         </Field>
         <Field label="Role" hint={roleInfo(role).blurb}>
@@ -1386,12 +1491,14 @@ function TechnicianModal({
         {/* EPA §608 certification is permanent — no expiry to track. */}
         {profile.id !== 'US' && (
           <Field
-            label={`${profile.techLicenceShort} expiry`}
+            label={`${profile.techLicenceShort} expiry *`}
+            error={expiryErr}
             hint="The app warns before this lapses, since logging work on an expired licence is a breach."
           >
             <DateInput
               value={licenceExpiry}
               onChange={setLicenceExpiry}
+              invalid={!!expiryErr}
               ariaLabel="Licence expiry date"
             />
           </Field>
@@ -1399,13 +1506,19 @@ function TechnicianModal({
 
         <div className="rounded-xl border border-slate-200 p-3 dark:border-slate-800">
           <div className="mb-1 text-sm font-semibold text-slate-700 dark:text-slate-200">
-            {hasExistingPassword ? 'Password' : 'Set password (optional)'}
+            {hasExistingPassword
+              ? 'Password'
+              : passwordRequired
+                ? 'Set password *'
+                : 'Set password (optional)'}
           </div>
           <p className="mb-3 text-xs text-slate-500">
-            Prompts on a shared device when someone tries to switch into this
-            profile. {hasExistingPassword
-              ? 'Leave blank to keep the current password.'
-              : 'Leave blank for no password.'}{' '}
+            {passwordRequired
+              ? 'Each account needs a password — it secures switching into this profile and becomes their sign-in once team accounts are added. '
+              : 'Prompts on a shared device when someone tries to switch into this profile. '}
+            {hasExistingPassword
+              ? 'Leave blank to keep the current password. '
+              : ''}
             Stored hashed in this browser — not real account security.
           </p>
           <div className="space-y-2">
@@ -1413,6 +1526,7 @@ function TechnicianModal({
               type="password"
               autoComplete="new-password"
               value={password}
+              invalid={!!pwError}
               onChange={(e) => {
                 setPassword(e.target.value)
                 if (e.target.value) setRemovePassword(false)

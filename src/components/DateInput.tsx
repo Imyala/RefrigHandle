@@ -25,6 +25,8 @@ interface DateInputProps {
   disabled?: boolean
   ariaLabel?: string
   required?: boolean
+  // Red border for required-field validation, matching TextInput/Picker.
+  invalid?: boolean
   // Marks the input as the "first" date in a date-range — currently
   // only affects ARIA labelling on the calendar grid header.
   className?: string
@@ -39,6 +41,7 @@ export function DateInput({
   disabled,
   ariaLabel,
   required,
+  invalid,
   className = '',
 }: DateInputProps) {
   const [text, setText] = useState(() => ddmmyyyyFromIso(value))
@@ -102,9 +105,11 @@ export function DateInput({
   return (
     <div ref={wrapperRef} className={`relative ${className}`}>
       <div
-        className={`flex w-full items-stretch rounded-xl border border-slate-300 bg-white text-slate-900 outline-none focus-within:border-brand-500 focus-within:ring-2 focus-within:ring-brand-500/30 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 ${
-          disabled ? 'opacity-50' : ''
-        }`}
+        className={`flex w-full items-stretch rounded-xl border bg-white text-slate-900 outline-none focus-within:ring-2 dark:bg-slate-900 dark:text-slate-100 ${
+          invalid
+            ? 'border-red-400 focus-within:border-red-500 focus-within:ring-red-500/30 dark:border-red-500/70'
+            : 'border-slate-300 focus-within:border-brand-500 focus-within:ring-brand-500/30 dark:border-slate-700'
+        } ${disabled ? 'opacity-50' : ''}`}
       >
         <input
           ref={inputRef}

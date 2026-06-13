@@ -577,9 +577,52 @@ export function daysUntilPurge(
   return TECHNICIAN_PURGE_DAYS - elapsedDays
 }
 
+// --- Structured names -------------------------------------------------
+
+// Build the single display name from first / middle / surname, dropping
+// blanks and collapsing whitespace.
+export function composeName(parts: {
+  firstName?: string
+  middleName?: string
+  lastName?: string
+}): string {
+  return [parts.firstName, parts.middleName, parts.lastName]
+    .map((p) => (p ?? '').trim())
+    .filter(Boolean)
+    .join(' ')
+}
+
+// Seed the three boxes from a legacy single name when editing a profile
+// saved before the split: first token → first name, last token →
+// surname, anything between → middle.
+export function splitName(name: string): {
+  firstName: string
+  middleName: string
+  lastName: string
+} {
+  const tokens = name.trim().split(/\s+/).filter(Boolean)
+  if (tokens.length === 0) return { firstName: '', middleName: '', lastName: '' }
+  if (tokens.length === 1) {
+    return { firstName: tokens[0], middleName: '', lastName: '' }
+  }
+  return {
+    firstName: tokens[0],
+    lastName: tokens[tokens.length - 1],
+    middleName: tokens.slice(1, -1).join(' '),
+  }
+}
+
 export interface Technician {
   id: string
+  // Composed display name (e.g. "Jane Q Smith"), kept in sync from the
+  // parts below so all existing name displays/stamps keep working.
   name: string
+  // Structured name captured on account creation. Optional for profiles
+  // saved before the split existed — splitName() seeds the boxes from
+  // `name` when editing those.
+  firstName?: string
+  middleName?: string
+  lastName?: string
   // Access tier (owner / supervisor / technician / apprentice). Optional
   // for back-compat: profiles saved before roles existed read as the
   // default tier via roleInfo(). normalize() promotes one profile per
