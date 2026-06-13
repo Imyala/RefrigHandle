@@ -1,7 +1,6 @@
 import { useState, type ReactNode } from 'react'
 import { Button, Card, Field, TextInput } from './ui'
-import { Picker } from './Picker'
-import { LocationFields } from './LocationFields'
+import { LocationFields, type LocationErrors } from './LocationFields'
 import { useStore } from '../lib/store'
 import { useToast } from '../lib/toast'
 import {
@@ -10,7 +9,7 @@ import {
   type Jurisdiction,
   type LocationSettings,
 } from '../lib/types'
-import { COMPLIANCE_PROFILES, profileFor } from '../lib/compliance'
+import { profileFor } from '../lib/compliance'
 
 // Gate the whole app behind a one-time setup. Until the business
 // identity, ARC RTA, first technician and location are entered, the
@@ -28,7 +27,9 @@ function OnboardingScreen() {
   const { completeSetup } = useStore()
   const toast = useToast()
 
-  const [jurisdiction, setJurisdiction] = useState<Jurisdiction>('AU')
+  // Australia-only product: the jurisdiction is fixed to AU rather than
+  // picked, so every install runs on the ARC (RHL/RTA) profile.
+  const jurisdiction: Jurisdiction = 'AU'
   const [businessName, setBusinessName] = useState('')
   const [abn, setAbn] = useState('')
   const [arcAuth, setArcAuth] = useState('')
@@ -40,19 +41,13 @@ function OnboardingScreen() {
     city: '',
     timezone: '',
   })
+  // Flips true the first time "Finish setup" is pressed while something
+  // is still missing. Until then the form stays clean (no red on fields
+  // the tech hasn't reached yet); after a blocked attempt every
+  // outstanding field is marked red so nothing is left to guess.
+  const [attempted, setAttempted] = useState(false)
 
   const profile = profileFor(jurisdiction)
-
-  function pickJurisdiction(j: Jurisdiction) {
-    setJurisdiction(j)
-    // Reset the country default to match — AU stamps 'Australia';
-    // other regimes leave it for the tech to type.
-    setLoc((l) => ({
-      ...l,
-      country: j === 'AU' ? 'Australia' : l.country === 'Australia' ? '' : l.country,
-      region: j === 'AU' ? l.region : l.region,
-    }))
-  }
 
   const businessOk = businessName.trim() !== ''
   const abnOk = abn.trim() !== '' && profile.validateBusinessNumber(abn)
@@ -83,8 +78,38 @@ function OnboardingScreen() {
   if (!loc.city.trim()) missing.push('city / town')
   if (!loc.timezone.trim()) missing.push('timezone')
 
+  // Per-field red markers, shown only after a blocked finish attempt.
+  const err = (show: boolean, msg: string) =>
+    attempted && show ? msg : undefined
+  const businessNameErr = err(!businessOk, 'Enter your trading / business name.')
+  const abnErr = err(
+    !abnOk,
+    abn.trim() === ''
+      ? `Enter your ${profile.businessNumberShort}.`
+      : `Enter a valid ${profile.businessNumberShort}.`,
+  )
+  const arcErr = err(!arcOk, `Enter your ${profile.businessAuthShort}.`)
+  const techNameErr = err(techName.trim() === '', 'Enter the technician name.')
+  const techRhlErr = err(
+    techRhl.trim() === '',
+    `Enter the technician's ${profile.techLicenceShort}.`,
+  )
+  const locErrors: LocationErrors = {
+    region: err(
+      loc.country === 'Australia' && !loc.region.trim(),
+      'Choose your state / territory.',
+    ),
+    city: err(!loc.city.trim(), 'Choose or type your city / town.'),
+    timezone: err(!loc.timezone.trim(), 'Choose your timezone.'),
+  }
+
   function finish() {
-    if (!canFinish) return
+    if (!canFinish) {
+      // Reveal the red markers and let the tech see every blocker at once
+      // instead of silently doing nothing.
+      setAttempted(true)
+      return
+    }
     completeSetup({
       businessName,
       businessAbn: abn,
@@ -123,25 +148,6 @@ function OnboardingScreen() {
 
           <Card>
             <div className="mb-1 text-sm font-semibold text-slate-700 dark:text-slate-200">
-              Where do you operate?
-            </div>
-            <p className="mb-3 text-xs text-slate-500">
-              Sets the licence terminology, leak-monitoring rules and report
-              citations. You can change it later in Settings.
-            </p>
-            <Picker
-              title="Jurisdiction"
-              value={jurisdiction}
-              onChange={(v) => pickJurisdiction(v as Jurisdiction)}
-              options={Object.values(COMPLIANCE_PROFILES).map((p) => ({
-                value: p.id,
-                label: p.name,
-              }))}
-            />
-          </Card>
-
-          <Card>
-            <div className="mb-1 text-sm font-semibold text-slate-700 dark:text-slate-200">
               Business
             </div>
             {profile.id === 'AU' && (
@@ -160,15 +166,17 @@ function OnboardingScreen() {
               </p>
             )}
             <div className="space-y-3">
-              <Field label="Trading / business name *">
+              <Field label="Trading / business name *" error={businessNameErr}>
                 <TextInput
                   value={businessName}
+                  invalid={!!businessNameErr}
                   onChange={(e) => setBusinessName(e.target.value)}
                   placeholder="e.g. Acme Refrigeration Pty Ltd"
                 />
               </Field>
               <Field
                 label={`${profile.businessNumberLabel} *`}
+                error={abnErr}
                 hint={
                   abn.trim() !== '' && !abnOk
                     ? 'Must be a valid 11-digit ABN.'
@@ -177,6 +185,7 @@ function OnboardingScreen() {
               >
                 <TextInput
                   value={abn}
+                  invalid={!!abnErr}
                   onChange={(e) => setAbn(e.target.value)}
                   inputMode={profile.id === 'AU' ? 'numeric' : undefined}
                   placeholder={
@@ -187,10 +196,12 @@ function OnboardingScreen() {
               {profile.hasBusinessAuthorisation && (
                 <Field
                   label={`${profile.businessAuthLabel} *`}
+                  error={arcErr}
                   hint="Required to handle, buy or sell refrigerant."
                 >
                   <TextInput
                     value={arcAuth}
+                    invalid={!!arcErr}
                     onChange={(e) => setArcAuth(e.target.value)}
                     placeholder={
                       profile.id === 'AU' ? 'e.g. AU00000' : undefined
@@ -211,19 +222,22 @@ function OnboardingScreen() {
               they log. You can add more technicians later.
             </p>
             <div className="space-y-3">
-              <Field label="Technician name *">
+              <Field label="Technician name *" error={techNameErr}>
                 <TextInput
                   value={techName}
+                  invalid={!!techNameErr}
                   onChange={(e) => setTechName(e.target.value)}
                   placeholder="e.g. Jane Smith"
                 />
               </Field>
               <Field
                 label={`${profile.techLicenceLabel} *`}
+                error={techRhlErr}
                 hint="The technician's personal licence number."
               >
                 <TextInput
                   value={techRhl}
+                  invalid={!!techRhlErr}
                   onChange={(e) => setTechRhl(e.target.value)}
                   placeholder={profile.id === 'AU' ? 'e.g. L000000' : undefined}
                 />
@@ -239,7 +253,12 @@ function OnboardingScreen() {
               Sets the timezone used for "now" defaults on transactions and the
               generated-at line on logbook PDFs.
             </p>
-            <LocationFields loc={loc} setLoc={setLoc} jurisdiction={jurisdiction} />
+            <LocationFields
+              loc={loc}
+              setLoc={setLoc}
+              jurisdiction={jurisdiction}
+              errors={locErrors}
+            />
           </Card>
         </div>
       </main>
@@ -249,16 +268,20 @@ function OnboardingScreen() {
         style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 0.75rem)' }}
       >
         <div className="mx-auto max-w-2xl">
-          <Button full disabled={!canFinish} onClick={finish}>
+          {/* Left enabled even when incomplete: pressing it reveals the
+              red field markers (via finish() → setAttempted) rather than
+              sitting dead and leaving the tech to guess the blocker. */}
+          <Button full onClick={finish}>
             Finish setup
           </Button>
           {!canFinish && (
-            <p className="mt-2 text-center text-xs text-slate-500">
+            <p
+              className={`mt-2 text-center text-xs ${
+                attempted ? 'text-red-600 dark:text-red-400' : 'text-slate-500'
+              }`}
+            >
               Still needed:{' '}
-              <span className="font-medium text-slate-700 dark:text-slate-300">
-                {missing.join(', ')}
-              </span>
-              .
+              <span className="font-medium">{missing.join(', ')}</span>.
             </p>
           )}
         </div>

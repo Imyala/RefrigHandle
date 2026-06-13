@@ -38,46 +38,107 @@ export function Button({
 export function Field({
   label,
   hint,
+  error,
   children,
   className = '',
 }: {
   label: string
   hint?: string
+  // When set, the field reads as invalid: the label gets a red marker and
+  // this message replaces the hint, shown in red. Drives the red-marker
+  // validation used on first-run setup and other required forms.
+  error?: string
   children: ReactNode
   className?: string
 }) {
   return (
     <label className={`flex flex-col gap-1.5 ${className}`}>
-      <span className="text-sm font-medium text-slate-700 dark:text-slate-200">
+      <span
+        className={`text-sm font-medium ${
+          error
+            ? 'text-red-600 dark:text-red-400'
+            : 'text-slate-700 dark:text-slate-200'
+        }`}
+      >
         {label}
+        {error && <span aria-hidden className="ml-1 text-red-600 dark:text-red-400">●</span>}
       </span>
       {children}
-      {hint && (
-        <span className="text-xs text-slate-500 dark:text-slate-400">{hint}</span>
+      {error ? (
+        <span
+          role="alert"
+          className="flex items-start gap-1 text-xs font-medium text-red-600 dark:text-red-400"
+        >
+          <WarningIcon />
+          {error}
+        </span>
+      ) : (
+        hint && (
+          <span className="text-xs text-slate-500 dark:text-slate-400">{hint}</span>
+        )
       )}
     </label>
   )
 }
 
-const inputStyle =
-  'w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-base text-slate-900 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/30 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100'
-
-export function TextInput(props: InputHTMLAttributes<HTMLInputElement>) {
-  return <input {...props} className={`${inputStyle} ${props.className ?? ''}`} />
-}
-
-export function Select(props: SelectHTMLAttributes<HTMLSelectElement>) {
-  return <select {...props} className={`${inputStyle} ${props.className ?? ''}`} />
-}
-
-export function TextArea(props: TextareaHTMLAttributes<HTMLTextAreaElement>) {
+function WarningIcon() {
   return (
-    <textarea
-      rows={3}
-      {...props}
-      className={`${inputStyle} ${props.className ?? ''}`}
-    />
+    <svg
+      aria-hidden
+      viewBox="0 0 24 24"
+      className="mt-px h-3.5 w-3.5 shrink-0"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M12 9v4" />
+      <path d="M12 17h.01" />
+      <path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z" />
+    </svg>
   )
+}
+
+// Border/focus colours split out from the structural classes so the
+// invalid (red) variant cleanly replaces the normal (slate/brand) one —
+// otherwise both border-colour utilities land in the class list and
+// Tailwind's output order, not ours, decides which wins.
+const inputBase =
+  'w-full rounded-xl border bg-white px-3 py-3 text-base text-slate-900 outline-none dark:bg-slate-900 dark:text-slate-100'
+const inputNormal =
+  'border-slate-300 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/30 dark:border-slate-700'
+const inputInvalid =
+  'border-red-400 focus:border-red-500 focus:ring-2 focus:ring-red-500/30 dark:border-red-500/70'
+
+function inputCls(invalid?: boolean, extra = '') {
+  return `${inputBase} ${invalid ? inputInvalid : inputNormal} ${extra}`
+}
+
+type Invalidable<T> = T & { invalid?: boolean }
+
+export function TextInput({
+  invalid,
+  className,
+  ...props
+}: Invalidable<InputHTMLAttributes<HTMLInputElement>>) {
+  return <input {...props} className={inputCls(invalid, className ?? '')} />
+}
+
+export function Select({
+  invalid,
+  className,
+  ...props
+}: Invalidable<SelectHTMLAttributes<HTMLSelectElement>>) {
+  return <select {...props} className={inputCls(invalid, className ?? '')} />
+}
+
+export function TextArea({
+  invalid,
+  className,
+  ...props
+}: Invalidable<TextareaHTMLAttributes<HTMLTextAreaElement>>) {
+  return <textarea rows={3} {...props} className={inputCls(invalid, className ?? '')} />
 }
 
 export function Card({

@@ -18,13 +18,23 @@ interface PickerProps {
   emptyLabel?: string
   emptyValue?: string
   required?: boolean
+  // When true the trigger shows a red border — used for required-field
+  // validation (e.g. first-run setup) the same way TextInput does.
+  invalid?: boolean
   disabled?: boolean
   className?: string
   trailing?: ReactNode
 }
 
-const triggerStyle =
-  'flex w-full items-center justify-between gap-2 rounded-xl border border-slate-300 bg-white px-3 py-3 text-base text-left text-slate-900 outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-500/30 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100'
+// Border/focus colours are split from the structural classes so the
+// invalid (red) variant cleanly replaces the normal one — see the same
+// note in ui.tsx.
+const triggerBase =
+  'flex w-full items-center justify-between gap-2 rounded-xl border bg-white px-3 py-3 text-base text-left text-slate-900 outline-none transition disabled:cursor-not-allowed disabled:opacity-60 dark:bg-slate-900 dark:text-slate-100'
+const triggerNormal =
+  'border-slate-300 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/30 dark:border-slate-700'
+const triggerInvalid =
+  'border-red-400 focus:border-red-500 focus:ring-2 focus:ring-red-500/30 dark:border-red-500/70'
 
 export function Picker({
   value,
@@ -35,6 +45,7 @@ export function Picker({
   emptyLabel,
   emptyValue = '',
   required = false,
+  invalid = false,
   disabled = false,
   className = '',
   trailing,
@@ -70,7 +81,7 @@ export function Picker({
       <button
         type="button"
         onClick={() => !disabled && setOpen(true)}
-        className={`${triggerStyle} ${className}`}
+        className={`${triggerBase} ${invalid ? triggerInvalid : triggerNormal} ${className}`}
         disabled={disabled}
         aria-haspopup="dialog"
       >

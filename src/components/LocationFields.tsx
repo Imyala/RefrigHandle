@@ -18,6 +18,15 @@ const AU_REGION_OPTIONS: readonly PickerOption[] = AU_REGIONS.map((r) => ({
 
 type SetLoc = React.Dispatch<React.SetStateAction<LocationSettings>>
 
+// Per-field validation messages. When a key is set the matching field
+// shows a red marker (used by first-run setup); omit the prop entirely
+// and the fields render normally — Settings passes nothing.
+export type LocationErrors = {
+  region?: string
+  city?: string
+  timezone?: string
+}
+
 // State / city / timezone, shared between Settings and the first-run
 // onboarding screen so both stay in lock-step. Under the AU profile the
 // fields are the curated Australian pickers (every edit stamps
@@ -29,23 +38,27 @@ export function LocationFields({
   loc,
   setLoc,
   jurisdiction = 'AU',
+  errors,
 }: {
   loc: LocationSettings
   setLoc: SetLoc
   jurisdiction?: Jurisdiction
+  errors?: LocationErrors
 }) {
   if (jurisdiction !== 'AU') {
-    return <GenericLocationFields loc={loc} setLoc={setLoc} />
+    return <GenericLocationFields loc={loc} setLoc={setLoc} errors={errors} />
   }
-  return <AuLocationFields loc={loc} setLoc={setLoc} />
+  return <AuLocationFields loc={loc} setLoc={setLoc} errors={errors} />
 }
 
 function GenericLocationFields({
   loc,
   setLoc,
+  errors,
 }: {
   loc: LocationSettings
   setLoc: SetLoc
+  errors?: LocationErrors
 }) {
   // Full IANA timezone list, grouped by continent. Falls back to the
   // curated AU list on engines without Intl.supportedValuesOf.
@@ -73,25 +86,29 @@ function GenericLocationFields({
           placeholder="e.g. Germany, United States"
         />
       </Field>
-      <Field label="State / region">
+      <Field label="State / region" error={errors?.region}>
         <TextInput
           value={loc.region}
+          invalid={!!errors?.region}
           onChange={(e) => setLoc((l) => ({ ...l, region: e.target.value }))}
         />
       </Field>
-      <Field label="City / town">
+      <Field label="City / town" error={errors?.city}>
         <TextInput
           value={loc.city}
+          invalid={!!errors?.city}
           onChange={(e) => setLoc((l) => ({ ...l, city: e.target.value }))}
         />
       </Field>
       <Field
         label="Timezone"
         hint='Used for "now" defaults and timestamp display.'
+        error={errors?.timezone}
       >
         <Picker
           title="Timezone"
           value={loc.timezone}
+          invalid={!!errors?.timezone}
           onChange={(v) => setLoc((l) => ({ ...l, timezone: v }))}
           emptyLabel="— follow this device —"
           options={timezoneOptions}
@@ -104,9 +121,11 @@ function GenericLocationFields({
 function AuLocationFields({
   loc,
   setLoc,
+  errors,
 }: {
   loc: LocationSettings
   setLoc: SetLoc
+  errors?: LocationErrors
 }) {
   const timezoneOptions = useMemo<PickerOption[]>(
     () =>
@@ -119,10 +138,11 @@ function AuLocationFields({
 
   return (
     <div className="space-y-3">
-      <Field label="State / territory">
+      <Field label="State / territory" error={errors?.region}>
         <Picker
           title="State / territory"
           value={loc.region}
+          invalid={!!errors?.region}
           onChange={(v) =>
             setLoc((l) => ({
               ...l,
@@ -138,16 +158,18 @@ function AuLocationFields({
           options={AU_REGION_OPTIONS}
         />
       </Field>
-      <Field label="City / town">
-        <CityField loc={loc} setLoc={setLoc} />
+      <Field label="City / town" error={errors?.city}>
+        <CityField loc={loc} setLoc={setLoc} invalid={!!errors?.city} />
       </Field>
       <Field
         label="Timezone"
         hint='Used for "now" defaults and timestamp display. Pick the one your work day actually runs in.'
+        error={errors?.timezone}
       >
         <Picker
           title="Timezone"
           value={loc.timezone}
+          invalid={!!errors?.timezone}
           onChange={(v) =>
             setLoc((l) => ({ ...l, country: 'Australia', timezone: v }))
           }
@@ -162,9 +184,11 @@ function AuLocationFields({
 export function CityField({
   loc,
   setLoc,
+  invalid,
 }: {
   loc: LocationSettings
   setLoc: SetLoc
+  invalid?: boolean
 }) {
   // Cities for the picked state; until a state is chosen, offer the
   // whole country grouped by state (same behaviour as the Sites form).
@@ -208,6 +232,7 @@ export function CityField({
       <Picker
         title="City / town"
         value={pickerValue}
+        invalid={invalid && !isCustom}
         onChange={(v) => {
           if (v === CITY_OTHER_VALUE) {
             // Switching to Other clears the stored city only if it's
@@ -228,6 +253,7 @@ export function CityField({
       {(pickerValue === CITY_OTHER_VALUE || isCustom) && (
         <TextInput
           value={loc.city}
+          invalid={invalid && !loc.city.trim()}
           onChange={(e) =>
             setLoc((l) => ({
               ...l,

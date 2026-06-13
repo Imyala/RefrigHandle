@@ -19,13 +19,12 @@ import {
   transactionLabel,
   transactionLoss,
   type ClockFormat,
-  type Jurisdiction,
   type LocationSettings,
   type Technician,
   type Theme,
   type WeightUnit,
 } from '../lib/types'
-import { COMPLIANCE_PROFILES, profileFor } from '../lib/compliance'
+import { profileFor } from '../lib/compliance'
 import {
   formatDateTime,
   formatPlainDate,
@@ -86,7 +85,6 @@ export default function Settings() {
     setArcAuthorisationExpiry,
     setBusinessName,
     setBusinessAbn,
-    setJurisdiction,
     setLocation,
     setUnit,
     setTheme,
@@ -558,36 +556,6 @@ export default function Settings() {
       </Card>
 
       <Card>
-        <Field
-          label="Jurisdiction / regulatory scheme"
-          hint="Drives licence terminology, leak-monitoring rules, validation and the citations on printed reports. Your data is unaffected when switching."
-        >
-          <Picker
-            title="Jurisdiction"
-            value={state.jurisdiction}
-            onChange={(v) => {
-              setJurisdiction(v as Jurisdiction)
-              toast.show(
-                `Switched to ${profileFor(v as Jurisdiction).name}`,
-              )
-            }}
-            options={(
-              Object.values(COMPLIANCE_PROFILES)
-            ).map((p) => ({
-              value: p.id,
-              label: p.name,
-              hint:
-                p.id === 'AU'
-                  ? 'ARC RHL/RTA · CoP 2025 · 5-year records'
-                  : p.id === 'EU'
-                    ? 'F-Gas 2024/573 · CO₂e leak-check schedule · 5-year records'
-                    : 'EPA §608 / AIM Act · leak-rate thresholds · 3-year records',
-            }))}
-          />
-        </Field>
-      </Card>
-
-      <Card>
         <div className="mb-1 flex items-center justify-between gap-2">
           <div className="text-sm font-semibold text-slate-700 dark:text-slate-200">
             Compliance details — {profile.name}
@@ -623,14 +591,16 @@ export default function Settings() {
           </Field>
           <Field
             label={profile.businessNumberLabel}
-            hint={
+            error={
               abnInvalid
                 ? 'Must be a valid 11-digit ABN — not saved until corrected.'
-                : profile.businessNumberHint
+                : undefined
             }
+            hint={profile.businessNumberHint}
           >
             <TextInput
               value={abn}
+              invalid={abnInvalid}
               onChange={(e) => setAbn(e.target.value)}
               onBlur={commitAbn}
               inputMode={profile.id === 'AU' ? 'numeric' : undefined}
