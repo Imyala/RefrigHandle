@@ -10,8 +10,11 @@ import {
   overfillKg,
   quarterKey,
   quarterOfDay,
+  roleAtLeast,
+  roleInfo,
   safeFillKgFor,
   scaleDeltaKg,
+  TECHNICIAN_ROLES,
   tonnesCO2eFor,
   transactionLoss,
 } from '../types'
@@ -161,5 +164,27 @@ describe('AS 2030 hydro test status', () => {
   })
   it('unknown without a stamp', () => {
     expect(hydroStatusFor(makeBottle(), now).status).toBe('unknown')
+  })
+})
+
+describe('technician roles', () => {
+  it('roleInfo falls back to the default tier for unset/legacy profiles', () => {
+    expect(roleInfo(undefined).value).toBe('technician')
+    expect(roleInfo('owner').label).toBe('Business owner')
+    expect(roleInfo('apprentice').level).toBe(1)
+  })
+
+  it('roles are ordered highest access first by level', () => {
+    const levels = TECHNICIAN_ROLES.map((r) => r.level)
+    expect(levels).toEqual([4, 3, 2, 1])
+    expect(TECHNICIAN_ROLES[0].value).toBe('owner')
+  })
+
+  it('roleAtLeast compares access tiers, treating unset as technician', () => {
+    expect(roleAtLeast('owner', 'supervisor')).toBe(true)
+    expect(roleAtLeast('supervisor', 'supervisor')).toBe(true)
+    expect(roleAtLeast('apprentice', 'technician')).toBe(false)
+    expect(roleAtLeast(undefined, 'technician')).toBe(true)
+    expect(roleAtLeast(undefined, 'supervisor')).toBe(false)
   })
 })

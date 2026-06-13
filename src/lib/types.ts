@@ -454,9 +454,83 @@ export interface LocationSettings {
 // stamped onto every transaction the tech logs. Multiple profiles let
 // a multi-tech crew use the same device (or, once cloud sync is real,
 // the same business account) without overwriting each other's RHL.
+// Access tier for a technician profile. Ordered highest-access first by
+// `level`. Today roles are descriptive only — they drive labelling,
+// ordering and the future permission model, but nothing is *enforced*
+// because there are no per-tech logins yet (the server-side auth work is
+// parked, see project roadmap). Once each tech signs in, `level` is the
+// hook the backend gates features on: who can edit business details,
+// manage other techs, or delete/correct records.
+export type TechnicianRole = 'owner' | 'supervisor' | 'technician' | 'apprentice'
+
+export interface TechnicianRoleInfo {
+  value: TechnicianRole
+  label: string
+  // Coarse access tier: 4 = owner … 1 = apprentice. Higher can do
+  // everything a lower tier can. Compare with roleAtLeast().
+  level: number
+  // Plain-English summary of the access this tier is intended to grant,
+  // shown under the role picker so the choice is obvious.
+  blurb: string
+}
+
+export const TECHNICIAN_ROLES: readonly TechnicianRoleInfo[] = [
+  {
+    value: 'owner',
+    label: 'Business owner',
+    level: 4,
+    blurb:
+      'Full access — business and compliance details, all technicians, and every record.',
+  },
+  {
+    value: 'supervisor',
+    label: 'Supervisor',
+    level: 3,
+    blurb:
+      'Manage technicians and review all work; can correct and delete records.',
+  },
+  {
+    value: 'technician',
+    label: 'Technician',
+    level: 2,
+    blurb: 'Full day-to-day refrigerant handling; logs and edits their own work.',
+  },
+  {
+    value: 'apprentice',
+    label: 'Apprentice',
+    level: 1,
+    blurb: 'Logs work under supervision; cannot delete records or change settings.',
+  },
+]
+
+export const DEFAULT_TECHNICIAN_ROLE: TechnicianRole = 'technician'
+
+// Falls back to the default tier for older profiles saved before roles
+// existed, so callers never have to null-check.
+export function roleInfo(role: TechnicianRole | undefined): TechnicianRoleInfo {
+  return (
+    TECHNICIAN_ROLES.find((r) => r.value === role) ??
+    TECHNICIAN_ROLES.find((r) => r.value === DEFAULT_TECHNICIAN_ROLE)!
+  )
+}
+
+// True when `role` sits at or above `min`'s access tier. The backend
+// will use this to gate features once logins land.
+export function roleAtLeast(
+  role: TechnicianRole | undefined,
+  min: TechnicianRole,
+): boolean {
+  return roleInfo(role).level >= roleInfo(min).level
+}
+
 export interface Technician {
   id: string
   name: string
+  // Access tier (owner / supervisor / technician / apprentice). Optional
+  // for back-compat: profiles saved before roles existed read as the
+  // default tier via roleInfo(). normalize() promotes one profile per
+  // install to owner.
+  role?: TechnicianRole
   arcLicenceNumber: string // ARC RHL — personal licence, per tech
   // RHL expiry date (YYYY-MM-DD). RHLs run for two years; logging work
   // against a lapsed licence is itself a breach, so the app alerts as

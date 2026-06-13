@@ -1,5 +1,6 @@
 import {
   EMPTY_STATE,
+  DEFAULT_TECHNICIAN_ROLE,
   type AppState,
   type AuditEntry,
   type Bottle,
@@ -158,6 +159,22 @@ function normalize(parsed: LegacyState): AppState {
     !technicians.some((t) => t.id === activeTechnicianId)
   ) {
     activeTechnicianId = technicians[0]?.id
+  }
+
+  // Roles were added after the first technician profiles shipped. Seed a
+  // default tier for any profile that predates them, then make sure the
+  // install has exactly one clear owner — the active profile (or the
+  // first one) — so the future per-tech logins have an admin to anchor
+  // to. Profiles that already carry a role are left untouched.
+  technicians = technicians.map((t) => ({
+    ...t,
+    role: t.role ?? DEFAULT_TECHNICIAN_ROLE,
+  }))
+  if (technicians.length > 0 && !technicians.some((t) => t.role === 'owner')) {
+    const ownerId = activeTechnicianId ?? technicians[0].id
+    technicians = technicians.map((t) =>
+      t.id === ownerId ? { ...t, role: 'owner' } : t,
+    )
   }
 
   // Grandfather existing installs past the first-run onboarding gate.

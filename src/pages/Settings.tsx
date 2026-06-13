@@ -21,8 +21,12 @@ import {
   type ClockFormat,
   type LocationSettings,
   type Technician,
+  type TechnicianRole,
   type Theme,
   type WeightUnit,
+  TECHNICIAN_ROLES,
+  DEFAULT_TECHNICIAN_ROLE,
+  roleInfo,
 } from '../lib/types'
 import { profileFor } from '../lib/compliance'
 import {
@@ -471,11 +475,13 @@ export default function Settings() {
           <Button onClick={openAddTech}>+ Add tech</Button>
         </div>
         <p className="mb-3 text-xs text-slate-500">
-          Each profile carries a name and {profile.id === 'AU' ? 'an' : 'a'}{' '}
+          Each profile carries a name, a role and {profile.id === 'AU' ? 'an' : 'a'}{' '}
           {profile.techLicenceLabel}. Pick the active tech here — every
           transaction logged is stamped with that profile's name and licence,
           frozen so the historical record is preserved if a tech later
-          changes their licence.
+          changes their licence. Roles (owner, supervisor, technician,
+          apprentice) set each person's access level — they take effect once
+          per-tech sign-in is added.
         </p>
         {state.technicians.length === 0 ? (
           <p className="text-sm text-slate-500">
@@ -496,11 +502,14 @@ export default function Settings() {
                   }`}
                 >
                   <div className="min-w-0">
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       <span className="truncate font-medium text-slate-900 dark:text-slate-100">
                         {t.name || '(unnamed)'}
                       </span>
                       {isActive && <Pill tone="green">Active</Pill>}
+                      <Pill tone={roleInfo(t.role).level >= 3 ? 'blue' : 'slate'}>
+                        {roleInfo(t.role).label}
+                      </Pill>
                     </div>
                     <div className="text-xs text-slate-500">
                       {t.arcLicenceNumber
@@ -1119,6 +1128,7 @@ export default function Settings() {
           if (editingTech) {
             updateTechnician(editingTech.id, {
               name: data.name,
+              role: data.role,
               arcLicenceNumber: data.arcLicenceNumber,
               licenceExpiry: data.licenceExpiry,
               ...passwordHashPatch,
@@ -1127,6 +1137,7 @@ export default function Settings() {
           } else {
             const created = addTechnician({
               name: data.name,
+              role: data.role,
               arcLicenceNumber: data.arcLicenceNumber,
               licenceExpiry: data.licenceExpiry,
               passwordHash:
@@ -1175,6 +1186,7 @@ export default function Settings() {
 
 type TechSavePayload = {
   name: string
+  role: TechnicianRole
   arcLicenceNumber: string
   licenceExpiry?: string
   // 'set' = replace hash, 'remove' = clear it, undefined = leave unchanged.
@@ -1197,6 +1209,7 @@ function TechnicianModal({
   const { state } = useStore()
   const profile = profileFor(state.jurisdiction)
   const [name, setName] = useState('')
+  const [role, setRole] = useState<TechnicianRole>(DEFAULT_TECHNICIAN_ROLE)
   const [rhl, setRhl] = useState('')
   const [licenceExpiry, setLicenceExpiry] = useState('')
   const [password, setPassword] = useState('')
@@ -1209,6 +1222,7 @@ function TechnicianModal({
   if (open && seenKey !== key) {
     setSeenKey(key)
     setName(editing?.name ?? '')
+    setRole(editing?.role ?? DEFAULT_TECHNICIAN_ROLE)
     setRhl(editing?.arcLicenceNumber ?? '')
     setLicenceExpiry(editing?.licenceExpiry ?? '')
     setPassword('')
@@ -1247,6 +1261,7 @@ function TechnicianModal({
 
     onSave({
       name: name.trim(),
+      role,
       arcLicenceNumber: rhl.trim(),
       licenceExpiry: licenceExpiry || undefined,
       passwordChange,
@@ -1263,6 +1278,18 @@ function TechnicianModal({
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="e.g. Jane Smith"
+          />
+        </Field>
+        <Field label="Role" hint={roleInfo(role).blurb}>
+          <Picker
+            title="Role"
+            value={role}
+            onChange={(v) => setRole(v as TechnicianRole)}
+            options={TECHNICIAN_ROLES.map((r) => ({
+              value: r.value,
+              label: r.label,
+              hint: r.blurb,
+            }))}
           />
         </Field>
         <Field

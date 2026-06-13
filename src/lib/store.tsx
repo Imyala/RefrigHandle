@@ -24,6 +24,7 @@ import {
   type Unit,
   type WeightUnit,
   transactionLabel,
+  DEFAULT_TECHNICIAN_ROLE,
 } from './types'
 import {
   BOTTLE_FIELDS,
@@ -870,6 +871,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       ...t,
       name: t.name.trim(),
       arcLicenceNumber: t.arcLicenceNumber.trim(),
+      role: t.role ?? DEFAULT_TECHNICIAN_ROLE,
       id: uid(),
       createdAt: new Date().toISOString(),
     }
@@ -979,6 +981,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         id: uid(),
         name: data.technician.name.trim(),
         arcLicenceNumber: data.technician.arcLicenceNumber.trim(),
+        // Whoever runs first-time setup is the business owner — they hold
+        // the top access tier the rest of the crew is added under.
+        role: 'owner',
         createdAt: now,
       }
       // Build the audit entries by hand: withAudit() would attribute
