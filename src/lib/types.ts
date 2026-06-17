@@ -416,12 +416,11 @@ export interface Tombstone {
   at: string // ISO timestamp of the deletion
 }
 
-// Which regulatory regime the business operates under. Drives
-// terminology (licence names, business-number labels), leak-monitoring
-// rules, validation, and the citations on printed reports — see
-// lib/compliance.ts for the profiles. 'AU' is the default and the
-// original behaviour of the app.
-export type Jurisdiction = 'AU' | 'EU' | 'US'
+// The app is Australia-only (the ARC RHL/RTA scheme). The type is kept
+// as a single-member union so stored data and the compliance profile
+// indirection in lib/compliance.ts stay typed, rather than being a bare
+// string literal scattered through the code.
+export type Jurisdiction = 'AU'
 
 export type WeightUnit = 'kg' | 'lb'
 

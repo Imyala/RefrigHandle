@@ -199,21 +199,19 @@ function OnboardingScreen() {
             <div className="mb-1 text-sm font-semibold text-slate-700 dark:text-slate-200">
               Business
             </div>
-            {profile.id === 'AU' && (
-              <p className="mb-3 text-xs text-slate-500">
-                Your ARC Refrigerant Trading Authorisation (RTA) is issued to
-                the business — look it up at{' '}
-                <a
-                  href="https://www.arctick.org/"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="font-medium text-brand-600 hover:underline"
-                >
-                  arctick.org
-                </a>
-                .
-              </p>
-            )}
+            <p className="mb-3 text-xs text-slate-500">
+              Your ARC Refrigerant Trading Authorisation (RTA) is issued to
+              the business — look it up at{' '}
+              <a
+                href="https://www.arctick.org/"
+                target="_blank"
+                rel="noreferrer"
+                className="font-medium text-brand-600 hover:underline"
+              >
+                arctick.org
+              </a>
+              .
+            </p>
             <div className="space-y-3">
               <Field label="Trading / business name *" error={businessNameErr}>
                 <TextInput
@@ -236,10 +234,8 @@ function OnboardingScreen() {
                   value={abn}
                   invalid={!!abnErr}
                   onChange={(e) => setAbn(e.target.value)}
-                  inputMode={profile.id === 'AU' ? 'numeric' : undefined}
-                  placeholder={
-                    profile.id === 'AU' ? 'e.g. 51 824 753 556' : undefined
-                  }
+                  inputMode="numeric"
+                  placeholder="e.g. 51 824 753 556"
                 />
               </Field>
               {profile.hasBusinessAuthorisation && (
@@ -252,9 +248,7 @@ function OnboardingScreen() {
                     value={arcAuth}
                     invalid={!!arcErr}
                     onChange={(e) => setArcAuth(e.target.value)}
-                    placeholder={
-                      profile.id === 'AU' ? 'e.g. AU00000' : undefined
-                    }
+                    placeholder="e.g. AU00000"
                   />
                 </Field>
               )}
@@ -326,7 +320,7 @@ function OnboardingScreen() {
                   value={techRhl}
                   invalid={!!techRhlErr}
                   onChange={(e) => setTechRhl(e.target.value)}
-                  placeholder={profile.id === 'AU' ? 'e.g. L000000' : undefined}
+                  placeholder="e.g. L000000"
                 />
               </Field>
               <Field
@@ -376,12 +370,7 @@ function OnboardingScreen() {
               Sets the timezone used for "now" defaults on transactions and the
               generated-at line on logbook PDFs.
             </p>
-            <LocationFields
-              loc={loc}
-              setLoc={setLoc}
-              jurisdiction={jurisdiction}
-              errors={locErrors}
-            />
+            <LocationFields loc={loc} setLoc={setLoc} errors={locErrors} />
           </Card>
         </div>
       </main>

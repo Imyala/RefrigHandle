@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { Button, Card, Pill } from './ui'
 import { useStore } from '../lib/store'
 import { expiryStatus, hydroStatusFor, type ExpiryStatus } from '../lib/types'
-import { euLeakCheckFor, profileFor } from '../lib/compliance'
+import { profileFor } from '../lib/compliance'
 import { formatPlainDate } from '../lib/datetime'
 import {
   BACKUP_STALE_DAYS,
@@ -25,7 +25,6 @@ export function Alerts() {
   return (
     <>
       <LicenceAlerts />
-      <EuLeakCheckAlerts />
       <HydroAlerts />
       <BackupAlert />
     </>
@@ -201,78 +200,6 @@ function LicenceAlerts() {
       </ul>
     </Card>
   )
-}
-
-// EU F-Gas leak-check schedule (Regulation (EU) 2024/573): units whose
-// mandatory check is overdue, due within 30 days, or has never been
-// recorded. Only rendered under the EU profile.
-function EuLeakCheckAlerts() {
-  const { state } = useStore()
-  const profile = profileFor(state.jurisdiction)
-  if (profile.leakRegime !== 'co2e-schedule') return null
-
-  const rows = state.units
-    .filter((u) => u.status === 'active')
-    .map((u) => ({ u, c: euLeakCheckFor(u, state.transactions) }))
-    .filter(
-      (x) =>
-        x.c.status === 'overdue' ||
-        x.c.status === 'due_soon' ||
-        x.c.status === 'no_check',
-    )
-    // Overdue first, then never-checked, then due soon.
-    .sort((a, b) => rank(a.c.status) - rank(b.c.status))
-
-  if (rows.length === 0) return null
-
-  return (
-    <Card className="!border-red-300 !bg-red-50 dark:!border-red-900/50 dark:!bg-red-900/20">
-      <div className="flex items-center justify-between gap-2">
-        <div className="text-sm font-semibold text-red-900 dark:text-red-200">
-          Mandatory leak checks (EU 2024/573)
-        </div>
-        <Link
-          to="/sites"
-          className="text-xs font-medium text-red-900 hover:underline dark:text-red-200"
-        >
-          View sites
-        </Link>
-      </div>
-      <ul className="mt-2 space-y-1 text-sm">
-        {rows.slice(0, 6).map(({ u, c }) => (
-          <li
-            key={u.id}
-            className="flex items-center justify-between gap-2 text-red-900 dark:text-red-100"
-          >
-            <span className="min-w-0 truncate">
-              <strong>{u.name}</strong>
-              {c.tCO2e != null && ` · ${c.tCO2e.toFixed(1)} t CO₂e`}
-            </span>
-            {c.status === 'overdue' ? (
-              <Pill tone="red">
-                Overdue since {formatPlainDate((c.dueBy ?? '').slice(0, 10))}
-              </Pill>
-            ) : c.status === 'no_check' ? (
-              <Pill tone="amber">No check on record</Pill>
-            ) : (
-              <Pill tone="amber">
-                Due by {formatPlainDate((c.dueBy ?? '').slice(0, 10))}
-              </Pill>
-            )}
-          </li>
-        ))}
-        {rows.length > 6 && (
-          <li className="text-xs text-red-900/70 dark:text-red-100/70">
-            +{rows.length - 6} more
-          </li>
-        )}
-      </ul>
-    </Card>
-  )
-}
-
-function rank(s: string): number {
-  return s === 'overdue' ? 0 : s === 'no_check' ? 1 : 2
 }
 
 function HydroAlerts() {

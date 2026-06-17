@@ -138,7 +138,6 @@ interface StoreApi {
   setArcAuthorisationExpiry: (d: string) => void
   setBusinessName: (n: string) => void
   setBusinessAbn: (n: string) => void
-  setJurisdiction: (j: Jurisdiction) => void
   setLocation: (l: LocationSettings) => void
   setUnit: (u: WeightUnit) => void
   setTheme: (t: Theme) => void
@@ -1294,21 +1293,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     [],
   )
 
-  const setJurisdiction = useCallback(
-    (j: Jurisdiction) =>
-      setState((s) =>
-        s.jurisdiction === j
-          ? s
-          : {
-              ...s,
-              jurisdiction: j,
-              settingsUpdatedAt: new Date().toISOString(),
-              auditLog: settingsChange(s, 'Jurisdiction', s.jurisdiction, j),
-            },
-      ),
-    [],
-  )
-
   const setLocation = useCallback(
     (location: LocationSettings) =>
       setState((s) => {
@@ -1615,7 +1599,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setArcAuthorisationExpiry,
       setBusinessName,
       setBusinessAbn,
-      setJurisdiction,
       setLocation,
       setUnit,
       setTheme,
@@ -1659,7 +1642,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setArcAuthorisationExpiry,
       setBusinessName,
       setBusinessAbn,
-      setJurisdiction,
       setLocation,
       setUnit,
       setTheme,

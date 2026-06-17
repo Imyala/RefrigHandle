@@ -526,7 +526,7 @@ export default function Settings() {
           </Button>
         </div>
         <p className="mb-3 text-xs text-slate-500">
-          Each profile carries a name, a role and {profile.id === 'AU' ? 'an' : 'a'}{' '}
+          Each profile carries a name, a role and an{' '}
           {profile.techLicenceLabel}. Pick the active tech here — every
           transaction logged is stamped with that profile's name, licence and
           role, frozen so the historical record is preserved if a tech later
@@ -694,21 +694,16 @@ export default function Settings() {
         </div>
         <p className="mb-3 text-xs text-slate-500">
           Used on logbook printouts and stamped onto every transaction at the
-          time of work.
-          {profile.id === 'AU' && (
-            <>
-              {' '}Look up your numbers at{' '}
-              <a
-                href="https://www.arctick.org/"
-                target="_blank"
-                rel="noreferrer"
-                className="font-medium text-brand-600 hover:underline"
-              >
-                arctick.org
-              </a>
-              .
-            </>
-          )}
+          time of work. Look up your numbers at{' '}
+          <a
+            href="https://www.arctick.org/"
+            target="_blank"
+            rel="noreferrer"
+            className="font-medium text-brand-600 hover:underline"
+          >
+            arctick.org
+          </a>
+          .
         </p>
         <div className="space-y-3">
           <Field label="Trading / business name">
@@ -735,28 +730,22 @@ export default function Settings() {
               disabled={companyLocked}
               onChange={(e) => setAbn(e.target.value)}
               onBlur={commitAbn}
-              inputMode={profile.id === 'AU' ? 'numeric' : undefined}
-              placeholder={
-                profile.id === 'AU' ? 'e.g. 51 824 753 556' : undefined
-              }
+              inputMode="numeric"
+              placeholder="e.g. 51 824 753 556"
             />
           </Field>
           {profile.hasBusinessAuthorisation && (
             <>
               <Field
                 label={profile.businessAuthLabel}
-                hint={
-                  profile.id === 'AU'
-                    ? 'Issued by the Australian Refrigeration Council to your business — required to handle/buy/sell refrigerant.'
-                    : 'The company-level certificate required to undertake refrigerant work.'
-                }
+                hint="Issued by the Australian Refrigeration Council to your business — required to handle/buy/sell refrigerant."
               >
                 <TextInput
                   value={arcAuth}
                   disabled={companyLocked}
                   onChange={(e) => setArcAuth(e.target.value)}
                   onBlur={commitArcAuth}
-                  placeholder={profile.id === 'AU' ? 'e.g. AU00000' : undefined}
+                  placeholder="e.g. AU00000"
                 />
               </Field>
               <Field
@@ -794,11 +783,7 @@ export default function Settings() {
           generated-at line on logbook PDFs. Leave blank to follow this
           device's settings.
         </p>
-        <LocationFields
-          loc={loc}
-          setLoc={setLoc}
-          jurisdiction={state.jurisdiction}
-        />
+        <LocationFields loc={loc} setLoc={setLoc} />
       </Card>
 
       <Card>
@@ -1031,10 +1016,8 @@ export default function Settings() {
         <InstallAppButton variant="full" />
       </Card>
 
-      {/* The quarterly record matches the ARC RTA permit conditions —
-          only meaningful under the AU profile. EU/US use the date-range
-          CSV export and equipment logbooks instead. */}
-      {state.jurisdiction === 'AU' && <QuarterlyReportCard />}
+      {/* The quarterly record matches the ARC RTA permit conditions. */}
+      <QuarterlyReportCard />
 
       <Card>
         <div className="mb-3 text-sm font-semibold text-slate-700 dark:text-slate-200">
@@ -1485,24 +1468,21 @@ function TechnicianModal({
           <TextInput
             value={rhl}
             onChange={(e) => setRhl(e.target.value)}
-            placeholder={profile.id === 'AU' ? 'e.g. L000000' : undefined}
+            placeholder="e.g. L000000"
           />
         </Field>
-        {/* EPA §608 certification is permanent — no expiry to track. */}
-        {profile.id !== 'US' && (
-          <Field
-            label={`${profile.techLicenceShort} expiry *`}
-            error={expiryErr}
-            hint="The app warns before this lapses, since logging work on an expired licence is a breach."
-          >
-            <DateInput
-              value={licenceExpiry}
-              onChange={setLicenceExpiry}
-              invalid={!!expiryErr}
-              ariaLabel="Licence expiry date"
-            />
-          </Field>
-        )}
+        <Field
+          label={`${profile.techLicenceShort} expiry *`}
+          error={expiryErr}
+          hint="The app warns before this lapses, since logging work on an expired licence is a breach."
+        >
+          <DateInput
+            value={licenceExpiry}
+            onChange={setLicenceExpiry}
+            invalid={!!expiryErr}
+            ariaLabel="Licence expiry date"
+          />
+        </Field>
 
         <div className="rounded-xl border border-slate-200 p-3 dark:border-slate-800">
           <div className="mb-1 text-sm font-semibold text-slate-700 dark:text-slate-200">

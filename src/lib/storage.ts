@@ -213,10 +213,8 @@ function normalize(parsed: LegacyState): AppState {
     arcLicenceNumber: parsed.arcLicenceNumber ?? '',
     arcAuthorisationNumber: parsed.arcAuthorisationNumber ?? '',
     arcAuthorisationExpiry: parsed.arcAuthorisationExpiry ?? '',
-    jurisdiction:
-      parsed.jurisdiction === 'EU' || parsed.jurisdiction === 'US'
-        ? parsed.jurisdiction
-        : 'AU',
+    // Australia-only app — any legacy EU/US value is folded back to AU.
+    jurisdiction: 'AU',
     businessName: parsed.businessName ?? '',
     businessAbn: parsed.businessAbn ?? '',
     location: {

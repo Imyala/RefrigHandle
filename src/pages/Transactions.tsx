@@ -1499,9 +1499,7 @@ function TransactionForm({
               <TextInput
                 value={newTechRhl}
                 onChange={(e) => setNewTechRhl(e.target.value)}
-                placeholder={
-                  state.jurisdiction === 'AU' ? 'e.g. L000000' : undefined
-                }
+                placeholder="e.g. L000000"
               />
             </Field>
             <div className="flex gap-2">

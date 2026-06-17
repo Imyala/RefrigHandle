@@ -98,10 +98,10 @@ describe('leakStatusFor', () => {
     expect(leakStatusFor(unit, [], NOW).level).toBe('ok')
   })
 
-  it('honours jurisdiction-specific thresholds (EPA §608 style)', () => {
+  it('honours custom watch / suspected thresholds passed in', () => {
     const unit = makeUnit({ id: 'u1', refrigerantCharge: 10 })
-    // 15% top-up: suspected under AU (≥10%) but below a 20% commercial-
-    // refrigeration threshold with watch at half.
+    // 15% top-up: suspected under the AU defaults (≥10%) but only "watch"
+    // when the caller supplies a higher 20% suspected line (watch at half).
     const s = leakStatusFor(unit, [charge({ amount: 1.5 })], NOW, {
       watch: 0.1,
       suspected: 0.2,

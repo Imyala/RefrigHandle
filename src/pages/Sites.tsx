@@ -37,13 +37,7 @@ import {
 import { RefrigerantSelect } from '../components/RefrigerantSelect'
 import { DateInput } from '../components/DateInput'
 import { formatDate, formatDateTime, formatPlainDate } from '../lib/datetime'
-import {
-  euLeakCheckFor,
-  leakThresholdsFor,
-  profileFor,
-  usThresholdApplies,
-  type EuLeakCheck,
-} from '../lib/compliance'
+import { profileFor } from '../lib/compliance'
 import { useToast } from '../lib/toast'
 import { useConfirm } from '../lib/confirm'
 import { displayToKg, formatWeight, kgToDisplay } from '../lib/units'
@@ -913,17 +907,7 @@ function UnitCard({
   onLogbook: () => void
 }) {
   const { state } = useStore()
-  const profile = profileFor(state.jurisdiction)
-  const leak = leakStatusFor(
-    u,
-    state.transactions,
-    undefined,
-    leakThresholdsFor(profile.id, u),
-  )
-  const euCheck =
-    profile.leakRegime === 'co2e-schedule'
-      ? euLeakCheckFor(u, state.transactions)
-      : null
+  const leak = leakStatusFor(u, state.transactions)
   return (
     <Card className="!p-3">
       <div className="flex items-start justify-between gap-3">
@@ -932,11 +916,7 @@ function UnitCard({
             <span className="font-semibold text-slate-900 dark:text-slate-100">
               {u.name}
             </span>
-            <LeakPill
-              leak={leak}
-              regulatory={profile.id === 'US' && usThresholdApplies(u)}
-            />
-            {euCheck && <EuCheckPill check={euCheck} />}
+            <LeakPill leak={leak} />
           </div>
           <div className="text-sm text-slate-600 dark:text-slate-300">
             {u.kind ? UNIT_KIND_LABELS[u.kind] : 'Unit'}
@@ -964,15 +944,7 @@ function UnitCard({
   )
 }
 
-function LeakPill({
-  leak,
-  regulatory = false,
-}: {
-  leak: LeakStatus
-  // True when the suspected threshold is a binding regulatory limit
-  // (US §608 with charge ≥ 15 lb) rather than an advisory level.
-  regulatory?: boolean
-}) {
+function LeakPill({ leak }: { leak: LeakStatus }) {
   if (leak.level === 'ok') return null
   if (leak.level === 'unknown') {
     return (
@@ -986,11 +958,7 @@ function LeakPill({
     return (
       <Pill
         tone="amber"
-        title={`Top-ups in last 12 months: ${leak.topUpKg.toFixed(2)} kg (${pct}% of charge). ${
-          regulatory
-            ? 'Trending toward the EPA §608 leak-rate threshold.'
-            : 'Investigate per AIRAH DA19.'
-        }`}
+        title={`Top-ups in last 12 months: ${leak.topUpKg.toFixed(2)} kg (${pct}% of charge). Investigate per AIRAH DA19.`}
       >
         Leak watch · {pct}%
       </Pill>
@@ -999,44 +967,9 @@ function LeakPill({
   return (
     <Pill
       tone="red"
-      title={`Top-ups in last 12 months: ${leak.topUpKg.toFixed(2)} kg (${pct}% of charge). ${
-        regulatory
-          ? 'Exceeds the EPA §608 leak-rate threshold for this appliance type — leak repair duty triggered.'
-          : 'Repeated top-ups — investigate and rectify per AIRAH DA19 / Refrigerant Handling Code of Practice 2025.'
-      }`}
+      title={`Top-ups in last 12 months: ${leak.topUpKg.toFixed(2)} kg (${pct}% of charge). Repeated top-ups — investigate and rectify per AIRAH DA19 / Refrigerant Handling Code of Practice 2025.`}
     >
-      {regulatory ? `Leak rate · ${pct}%` : `Leak suspected · ${pct}%`}
-    </Pill>
-  )
-}
-
-// EU F-Gas leak-check schedule pill (Regulation (EU) 2024/573 Art. 4).
-function EuCheckPill({ check }: { check: EuLeakCheck }) {
-  if (check.status === 'exempt' || check.status === 'ok') return null
-  if (check.status === 'no_check') {
-    return (
-      <Pill
-        tone="amber"
-        title={`Charge is ${check.tCO2e?.toFixed(1)} t CO₂e — a leak check is required every ${check.intervalMonths} months, but none is on record yet.`}
-      >
-        Leak check required
-      </Pill>
-    )
-  }
-  const due = check.dueBy ? formatPlainDate(check.dueBy.slice(0, 10)) : ''
-  return check.status === 'overdue' ? (
-    <Pill
-      tone="red"
-      title={`Mandatory leak check overdue since ${due} (every ${check.intervalMonths} months at ${check.tCO2e?.toFixed(1)} t CO₂e).`}
-    >
-      Check overdue
-    </Pill>
-  ) : (
-    <Pill
-      tone="amber"
-      title={`Next mandatory leak check due by ${due} (every ${check.intervalMonths} months).`}
-    >
-      Check due soon
+      Leak suspected · {pct}%
     </Pill>
   )
 }
@@ -1179,36 +1112,21 @@ export function SiteForm({
           label="State"
           hint="Used by the state filter at the top of the Sites page."
         >
-          {state.jurisdiction === 'AU' ? (
-            <StateField
-              value={stateVal}
-              onChange={(v) => {
-                setStateVal(v)
-                setCity('')
-              }}
-            />
-          ) : (
-            <TextInput
-              value={stateVal}
-              onChange={(e) => setStateVal(e.target.value)}
-              placeholder="e.g. Bavaria, Texas"
-            />
-          )}
+          <StateField
+            value={stateVal}
+            onChange={(v) => {
+              setStateVal(v)
+              setCity('')
+            }}
+          />
         </Field>
         <Field label="Town / city">
-          {state.jurisdiction === 'AU' ? (
-            <CityField
-              key={resetKey}
-              stateCode={stateVal}
-              value={city}
-              onChange={setCity}
-            />
-          ) : (
-            <TextInput
-              value={city}
-              onChange={(e) => setCity(e.target.value)}
-            />
-          )}
+          <CityField
+            key={resetKey}
+            stateCode={stateVal}
+            value={city}
+            onChange={setCity}
+          />
         </Field>
         <Field label="Functional location">
           <TextInput
@@ -1574,16 +1492,7 @@ function UnitLogbook({
     .filter((t) => !t.deletedAt)
     .slice()
     .sort((a, b) => (a.date < b.date ? 1 : -1))
-  const leak = leakStatusFor(
-    unit,
-    state.transactions,
-    undefined,
-    leakThresholdsFor(profile.id, unit),
-  )
-  const euCheck =
-    profile.leakRegime === 'co2e-schedule'
-      ? euLeakCheckFor(unit, state.transactions)
-      : null
+  const leak = leakStatusFor(unit, state.transactions)
   const gwp = gwpFor(unit.refrigerantType)
   const tCO2e = unit.refrigerantCharge
     ? tonnesCO2eFor(unit.refrigerantCharge, unit.refrigerantType)
@@ -1693,30 +1602,6 @@ function UnitLogbook({
               }`}
             />
             <Kv label="Leak status" v={leakLevelLabel(leak.level)} />
-            {euCheck && (
-              <>
-                <Kv
-                  label="EU leak-check interval"
-                  v={
-                    euCheck.status === 'exempt'
-                      ? 'Exempt (below 5 t CO₂e)'
-                      : `Every ${euCheck.intervalMonths} months (${euCheck.tCO2e?.toFixed(1)} t CO₂e)`
-                  }
-                />
-                <Kv
-                  label="Next check due"
-                  v={
-                    euCheck.status === 'exempt'
-                      ? '—'
-                      : euCheck.status === 'no_check'
-                        ? 'No check on record — due now'
-                        : `${formatPlainDate((euCheck.dueBy ?? '').slice(0, 10))}${
-                            euCheck.status === 'overdue' ? ' (OVERDUE)' : ''
-                          }`
-                  }
-                />
-              </>
-            )}
             <Kv label="Total charged (lifetime)" v={`${totalCharged.toFixed(3)} kg`} />
             <Kv
               label="Total recovered (lifetime)"
@@ -2219,8 +2104,7 @@ function SiteAuditModal({
 
         <footer className="border-t border-slate-300 pt-3 text-[11px] text-slate-500 dark:border-slate-700">
           <p>
-            {profile.citation}
-            {profile.id === 'AU' && ' Cylinder periodic test dates per AS 2030.'}
+            {profile.citation} Cylinder periodic test dates per AS 2030.
           </p>
           {(totalCharged > 0 || totalRecovered > 0) && (
             <p className="mt-2">
