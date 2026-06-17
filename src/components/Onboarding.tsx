@@ -5,7 +5,7 @@ import { DateInput } from './DateInput'
 import { LocationFields, type LocationErrors } from './LocationFields'
 import { useStore } from '../lib/store'
 import { useToast } from '../lib/toast'
-import { hashPassword } from '../lib/auth'
+import { hashPassword, MIN_PASSWORD_LENGTH } from '../lib/auth'
 import {
   isLocationComplete,
   isSetupComplete,
@@ -72,7 +72,8 @@ function OnboardingScreen() {
   const expiryOk = techExpiry !== ''
   // Every account gets a password — it secures profile switching today
   // and becomes the sign-in once team accounts land.
-  const passwordOk = password.length >= 4 && password === confirmPw
+  const passwordOk =
+    password.length >= MIN_PASSWORD_LENGTH && password === confirmPw
   const techOk = nameOk && techRhl.trim() !== '' && expiryOk && passwordOk
   const locOk = isLocationComplete(loc)
   const canFinish = businessOk && abnOk && arcOk && techOk && locOk
@@ -126,9 +127,9 @@ function OnboardingScreen() {
   const pwErr = err(
     !passwordOk,
     password === ''
-      ? 'Set a password (at least 4 characters).'
-      : password.length < 4
-        ? 'Password must be at least 4 characters.'
+      ? `Set a password (at least ${MIN_PASSWORD_LENGTH} characters).`
+      : password.length < MIN_PASSWORD_LENGTH
+        ? `Password must be at least ${MIN_PASSWORD_LENGTH} characters.`
         : 'Passwords don’t match.',
   )
   const locErrors: LocationErrors = {
@@ -346,7 +347,7 @@ function OnboardingScreen() {
                   value={password}
                   invalid={!!pwErr}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="At least 4 characters"
+                  placeholder={`At least ${MIN_PASSWORD_LENGTH} characters`}
                 />
               </Field>
               <Field label="Confirm password *">

@@ -43,7 +43,7 @@ import {
 import { formatWeight } from '../lib/units'
 import { useToast } from '../lib/toast'
 import { useConfirm } from '../lib/confirm'
-import { hashPassword } from '../lib/auth'
+import { hashPassword, MIN_PASSWORD_LENGTH } from '../lib/auth'
 import { PasswordPromptModal } from '../components/PasswordPromptModal'
 import { isSyncConfigured } from '../lib/sync'
 import { verifyAuditChains, type ChainReport } from '../lib/auditChain'
@@ -1388,8 +1388,8 @@ function TechnicianModal({
 
     let passwordChange: TechSavePayload['passwordChange']
     if (password) {
-      if (password.length < 4) {
-        setPwError('Password must be at least 4 characters.')
+      if (password.length < MIN_PASSWORD_LENGTH) {
+        setPwError(`Password must be at least ${MIN_PASSWORD_LENGTH} characters.`)
         return
       }
       if (password !== confirmPw) {

@@ -637,9 +637,9 @@ export interface Technician {
   // expiry approaches (see expiryStatus).
   licenceExpiry?: string
   // Optional soft lock for switching the active profile on a shared
-  // device. SHA-256 of `${id}:${password}` (id acts as salt). Storage
-  // is localStorage, so this only deters casual snooping — anyone with
-  // dev-tools access can still read every other tech's data.
+  // device. A salted PBKDF2 derivation of the password (see lib/auth.ts).
+  // Storage is localStorage, so this only deters casual snooping —
+  // anyone with dev-tools access can still read every other tech's data.
   passwordHash?: string
   createdAt: string
   // Stamped on every edit — drives last-write-wins per record when two
