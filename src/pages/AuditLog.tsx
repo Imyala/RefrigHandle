@@ -109,8 +109,9 @@ export default function AuditLog() {
           Change log
         </h2>
         <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">
-          Every other app action — bottles, sites, units, technicians and
-          settings. Refrigerant movements live on the Refrigerant log.
+          A time-stamped record of every change — what changed, who changed it,
+          and when. Covers bottles, sites, equipment, technicians and settings;
+          refrigerant movements are on the Refrigerant log. Read-only.
         </p>
       </div>
 

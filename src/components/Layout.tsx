@@ -78,7 +78,7 @@ export function Layout() {
         className="fixed bottom-0 left-0 right-0 z-30 border-t border-slate-200 bg-white/95 backdrop-blur dark:border-slate-800 dark:bg-slate-950/95"
       >
         <div
-          className="relative mx-auto grid max-w-3xl grid-cols-6"
+          className="relative mx-auto grid max-w-3xl grid-cols-5"
           style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
         >
           <TabLink to="/" end label="Home" icon={<HomeIcon />} />
@@ -111,12 +111,6 @@ export function Layout() {
             label="Log"
             aria="Refrigerant log"
             icon={<LogIcon />}
-          />
-          <TabLink
-            to="/history"
-            label="History"
-            aria="Change log"
-            icon={<HistoryIcon />}
           />
           <TabLink to="/settings" label="Settings" icon={<SettingsIcon />} />
         </div>
@@ -180,16 +174,6 @@ function LogIcon() {
       <rect x="5" y="4" width="14" height="17" rx="2" />
       <path d="M9 4.5h6V7H9z" />
       <path d="M8.5 11.5h7M8.5 15.5h4.5" />
-    </Icon>
-  )
-}
-
-function HistoryIcon() {
-  return (
-    <Icon>
-      <path d="M3.5 12a8.5 8.5 0 1 0 2.6-6.1" />
-      <path d="M3 4v4h4" />
-      <path d="M12 8v4.3l3 1.8" />
     </Icon>
   )
 }

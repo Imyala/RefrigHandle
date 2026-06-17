@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { Link } from 'react-router-dom'
 import {
   Button,
   Card,
@@ -996,6 +997,23 @@ export default function Settings() {
             )}
           </div>
         )}
+      </Card>
+
+      <Card>
+        <div className="mb-1 text-sm font-semibold text-slate-700 dark:text-slate-200">
+          Change log
+        </div>
+        <p className="mb-3 text-xs text-slate-500">
+          A complete, time-stamped record of every change made in the app —
+          bottles, sites and equipment added or edited, transactions corrected
+          or deleted, and technicians or settings changed — each stamped with
+          who did it and when. It's the audit history owners and supervisors
+          use to review the team's activity. Anyone on this device can open and
+          read it; it can't be edited.
+        </p>
+        <Link to="/history" className="inline-block">
+          <Button variant="secondary">Open change log</Button>
+        </Link>
       </Card>
 
       <DeletedTransactionsCard onRestore={restoreTransaction} />
