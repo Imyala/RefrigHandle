@@ -44,6 +44,7 @@ import { formatWeight } from '../lib/units'
 import { useToast } from '../lib/toast'
 import { useConfirm } from '../lib/confirm'
 import { hashPassword, MIN_PASSWORD_LENGTH } from '../lib/auth'
+import { screenNewPassword } from '../lib/passwordStrength'
 import { PasswordPromptModal } from '../components/PasswordPromptModal'
 import { isSyncConfigured } from '../lib/sync'
 import { verifyAuditChains, type ChainReport } from '../lib/auditChain'
@@ -1397,6 +1398,14 @@ function TechnicianModal({
         return
       }
       setBusy(true)
+      // Reject the most common passwords and any found in a known breach
+      // (best-effort — skipped silently when offline).
+      const pwReason = await screenNewPassword(password)
+      if (pwReason) {
+        setBusy(false)
+        setPwError(pwReason)
+        return
+      }
       const hash = await hashPassword(password)
       setBusy(false)
       passwordChange = { kind: 'set', hash }
@@ -1499,7 +1508,9 @@ function TechnicianModal({
             {hasExistingPassword
               ? 'Leave blank to keep the current password. '
               : ''}
-            Stored hashed in this browser — not real account security.
+            A longer passphrase beats a short, complex one; common or
+            breached passwords are rejected. Stored hashed in this browser —
+            not real account security.
           </p>
           <div className="space-y-2">
             <TextInput
@@ -1509,6 +1520,7 @@ function TechnicianModal({
               invalid={!!pwError}
               onChange={(e) => {
                 setPassword(e.target.value)
+                setPwError('')
                 if (e.target.value) setRemovePassword(false)
               }}
               placeholder={hasExistingPassword ? 'New password' : 'Password'}
@@ -1548,7 +1560,7 @@ function TechnicianModal({
         <div className="flex gap-2">
           <Button type="submit" full disabled={busy}>
             {busy
-              ? 'Hashing…'
+              ? 'Checking…'
               : editing
                 ? 'Save changes'
                 : 'Add tech'}

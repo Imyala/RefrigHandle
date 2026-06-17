@@ -6,6 +6,7 @@ import { LocationFields, type LocationErrors } from './LocationFields'
 import { useStore } from '../lib/store'
 import { useToast } from '../lib/toast'
 import { hashPassword, MIN_PASSWORD_LENGTH } from '../lib/auth'
+import { screenNewPassword } from '../lib/passwordStrength'
 import {
   isLocationComplete,
   isSetupComplete,
@@ -47,6 +48,10 @@ function OnboardingScreen() {
   const [password, setPassword] = useState('')
   const [confirmPw, setConfirmPw] = useState('')
   const [busy, setBusy] = useState(false)
+  // Async "known-bad password" reason (too common / found in a breach),
+  // surfaced after a finish attempt. Cleared as soon as the password is
+  // edited so the tech isn't stuck staring at a stale warning.
+  const [pwBlock, setPwBlock] = useState<string | null>(null)
   // Role of the very first account: business owner, or supervisor for a
   // larger org where the owner won't use the app and a supervisor needs
   // full access. Restricted to SETUP_ROLE_CHOICES here.
@@ -150,6 +155,15 @@ function OnboardingScreen() {
       return
     }
     setBusy(true)
+    // Reject the most common passwords and any that have turned up in a
+    // known breach (best-effort — skipped silently if offline).
+    const pwReason = await screenNewPassword(password)
+    if (pwReason) {
+      setBusy(false)
+      setPwBlock(pwReason)
+      setAttempted(true)
+      return
+    }
     const passwordHash = await hashPassword(password)
     setBusy(false)
     completeSetup({
@@ -338,15 +352,18 @@ function OnboardingScreen() {
               </Field>
               <Field
                 label="Password *"
-                error={pwErr}
-                hint="Secures switching into this profile, and becomes your sign-in once team accounts are added."
+                error={pwErr ?? pwBlock ?? undefined}
+                hint={`Secures switching into this profile, and becomes your sign-in once team accounts are added. A longer passphrase you'll remember beats a short, complex one — at least ${MIN_PASSWORD_LENGTH} characters.`}
               >
                 <TextInput
                   type="password"
                   autoComplete="new-password"
                   value={password}
-                  invalid={!!pwErr}
-                  onChange={(e) => setPassword(e.target.value)}
+                  invalid={!!pwErr || !!pwBlock}
+                  onChange={(e) => {
+                    setPassword(e.target.value)
+                    setPwBlock(null)
+                  }}
                   placeholder={`At least ${MIN_PASSWORD_LENGTH} characters`}
                 />
               </Field>

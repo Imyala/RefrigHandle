@@ -15,8 +15,10 @@
 // keep working until the tech next changes them.
 
 // Minimum password length, shared by the onboarding and Settings forms
-// so the rule lives in one place.
-export const MIN_PASSWORD_LENGTH = 6
+// so the rule lives in one place. Per NIST 800-63B we favour length over
+// complexity (no character-class rules), and screen new passwords against
+// common/breached lists instead — see lib/passwordStrength.ts.
+export const MIN_PASSWORD_LENGTH = 8
 
 // OWASP-recommended floor for PBKDF2-HMAC-SHA256 (2023). Runs in well
 // under a second on a phone for a single check, but makes a large

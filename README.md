@@ -79,7 +79,9 @@ store/supplier, **intake** of a new cylinder, and manual **adjustments**.
   (frozen) onto every transaction they log
 * Roles — owner, supervisor, technician, apprentice
 * A password lock guards switching profiles on a shared device
-  (PBKDF2-hashed, stored locally)
+  (PBKDF2-hashed, stored locally). New passwords favour length over
+  complexity and are screened against common and known-breached
+  passwords (via the Have I Been Pwned k-anonymity API)
 
 ### Backup, export & sync
 
