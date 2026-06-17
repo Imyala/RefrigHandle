@@ -1,35 +1,56 @@
 import { NavLink, Outlet } from 'react-router-dom'
 import type { ReactNode } from 'react'
 
-// Bottom tab bar. Each tab pairs a glyph with a short, plain label so the
-// six destinations stay legible on a narrow phone (text-only labels like
-// "Refrigerant Log" used to wrap and crowd each other). `aria`/`title`
-// carry the full name for screen readers and long-press tooltips where
-// the visible label is abbreviated.
-const tabs: {
+// Bottom tab bar — "floating centre button" layout. Bottles is the core
+// entity, so it's promoted to a raised circular button in the middle,
+// flanked by the other destinations as outline-icon tabs. Short labels
+// plus a glyph keep everything legible on a narrow phone; the full names
+// ride on aria-label/title where a label is abbreviated.
+function TabLink({
+  to,
+  end,
+  label,
+  aria,
+  icon,
+}: {
   to: string
+  end?: boolean
   label: string
   aria?: string
-  end?: boolean
   icon: ReactNode
-}[] = [
-  { to: '/', label: 'Home', end: true, icon: <HomeIcon /> },
-  { to: '/bottles', label: 'Bottles', icon: <BottleIcon /> },
-  { to: '/sites', label: 'Sites', icon: <SitesIcon /> },
-  {
-    to: '/transactions',
-    label: 'Log',
-    aria: 'Refrigerant log',
-    icon: <LogIcon />,
-  },
-  {
-    to: '/history',
-    label: 'Changes',
-    aria: 'Change log',
-    icon: <HistoryIcon />,
-  },
-  { to: '/settings', label: 'Settings', icon: <SettingsIcon /> },
-]
+}) {
+  return (
+    <NavLink
+      to={to}
+      end={end}
+      aria-label={aria ?? label}
+      title={aria ?? label}
+      className={({ isActive }) =>
+        `flex flex-col items-center justify-center gap-1 px-0.5 py-2.5 transition ${
+          isActive
+            ? 'text-brand-600 dark:text-brand-400'
+            : 'text-slate-500 dark:text-slate-400'
+        }`
+      }
+    >
+      {({ isActive }) => (
+        <>
+          <span
+            aria-hidden
+            className={`flex h-8 w-full max-w-[3.25rem] items-center justify-center rounded-full transition ${
+              isActive ? 'bg-brand-50 dark:bg-brand-900/30' : ''
+            }`}
+          >
+            {icon}
+          </span>
+          <span className="text-[11px] font-medium leading-none tracking-tight">
+            {label}
+          </span>
+        </>
+      )}
+    </NavLink>
+  )
+}
 
 export function Layout() {
   return (
@@ -48,7 +69,7 @@ export function Layout() {
         </div>
       </header>
 
-      <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-4 pb-24">
+      <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-4 pb-28">
         <Outlet />
       </main>
 
@@ -57,58 +78,63 @@ export function Layout() {
         className="fixed bottom-0 left-0 right-0 z-30 border-t border-slate-200 bg-white/95 backdrop-blur dark:border-slate-800 dark:bg-slate-950/95"
       >
         <div
-          className="mx-auto grid max-w-3xl grid-cols-6"
+          className="relative mx-auto grid max-w-3xl grid-cols-6"
           style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
         >
-          {tabs.map((t) => (
+          <TabLink to="/" end label="Home" icon={<HomeIcon />} />
+          <TabLink to="/sites" label="Sites" icon={<SitesIcon />} />
+
+          {/* Centre slot: the raised Bottles button floating above the bar. */}
+          <div className="relative">
             <NavLink
-              key={t.to}
-              to={t.to}
-              end={t.end}
-              aria-label={t.aria ?? t.label}
-              title={t.aria ?? t.label}
-              className={({ isActive }) =>
-                `flex flex-col items-center justify-center gap-1 px-0.5 py-2.5 transition ${
-                  isActive
-                    ? 'text-brand-600 dark:text-brand-400'
-                    : 'text-slate-500 dark:text-slate-400'
-                }`
-              }
+              to="/bottles"
+              aria-label="Bottles"
+              title="Bottles"
+              className="absolute left-1/2 top-0 -translate-x-1/2 -translate-y-[55%]"
             >
               {({ isActive }) => (
-                <>
-                  <span
-                    aria-hidden
-                    className={`flex h-9 w-full max-w-[3.5rem] items-center justify-center rounded-full transition ${
-                      isActive ? 'bg-brand-50 dark:bg-brand-900/30' : ''
-                    }`}
-                  >
-                    {t.icon}
-                  </span>
-                  <span className="text-[11px] font-medium leading-none tracking-tight">
-                    {t.label}
-                  </span>
-                </>
+                <span
+                  className={`flex h-14 w-14 items-center justify-center rounded-full text-white shadow-lg shadow-brand-900/25 ring-4 ring-slate-50 transition dark:ring-slate-950 ${
+                    isActive
+                      ? 'scale-105 bg-brand-700'
+                      : 'bg-brand-600 hover:bg-brand-700'
+                  }`}
+                >
+                  <BottleIcon big />
+                </span>
               )}
             </NavLink>
-          ))}
+          </div>
+
+          <TabLink
+            to="/transactions"
+            label="Log"
+            aria="Refrigerant log"
+            icon={<LogIcon />}
+          />
+          <TabLink
+            to="/history"
+            label="History"
+            aria="Change log"
+            icon={<HistoryIcon />}
+          />
+          <TabLink to="/settings" label="Settings" icon={<SettingsIcon />} />
         </div>
       </nav>
     </div>
   )
 }
 
-// --- Icons -------------------------------------------------------------
-// Simple stroked glyphs (currentColor) matching the chevrons used
-// elsewhere in the app. 22px viewBox, rendered at ~20px.
-function Icon({ children }: { children: ReactNode }) {
+// --- Outline icons -----------------------------------------------------
+// Thin stroked glyphs (currentColor), 24px viewBox, rendered ~20px.
+function Icon({ children, big }: { children: ReactNode; big?: boolean }) {
   return (
     <svg
       viewBox="0 0 24 24"
-      className="h-[22px] w-[22px]"
+      className={big ? 'h-7 w-7' : 'h-[22px] w-[22px]'}
       fill="none"
       stroke="currentColor"
-      strokeWidth="1.9"
+      strokeWidth={big ? 1.8 : 1.9}
       strokeLinecap="round"
       strokeLinejoin="round"
     >
@@ -127,9 +153,9 @@ function HomeIcon() {
   )
 }
 
-function BottleIcon() {
+function BottleIcon({ big }: { big?: boolean }) {
   return (
-    <Icon>
+    <Icon big={big}>
       <path d="M10 3h4v2.2h-4z" />
       <path d="M8 7.5a3 3 0 0 1 3-3h2a3 3 0 0 1 3 3V19a2 2 0 0 1-2 2h-4a2 2 0 0 1-2-2z" />
       <path d="M8 12h8" />
@@ -141,9 +167,9 @@ function SitesIcon() {
   return (
     <Icon>
       <path d="M3 21h18" />
-      <path d="M6 21V6l6-3v18" />
-      <path d="M12 21V10l6 3v8" />
-      <path d="M9 9h0M9 13h0M9 17h0" />
+      <path d="M6 21V4h9v17" />
+      <path d="M15 21V9h3v12" />
+      <path d="M9 7.5h3M9 11h3M9 14.5h3" />
     </Icon>
   )
 }
@@ -171,12 +197,8 @@ function HistoryIcon() {
 function SettingsIcon() {
   return (
     <Icon>
-      <path d="M3.5 7h9" />
-      <path d="M16.5 7H20.5" />
-      <circle cx="14.5" cy="7" r="2.1" />
-      <path d="M3.5 17h3" />
-      <path d="M10.5 17h10" />
-      <circle cx="8.5" cy="17" r="2.1" />
+      <path d="M19.4 13a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V20a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 18.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+      <circle cx="12" cy="12" r="3" />
     </Icon>
   )
 }
