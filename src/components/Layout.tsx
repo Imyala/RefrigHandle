@@ -90,7 +90,7 @@ export function Layout() {
               to="/bottles"
               aria-label="Bottles"
               title="Bottles"
-              className="absolute left-1/2 top-0 -translate-x-1/2 -translate-y-[55%]"
+              className="absolute left-1/2 top-0 -translate-x-1/2 -translate-y-1/4"
             >
               {({ isActive }) => (
                 <span
