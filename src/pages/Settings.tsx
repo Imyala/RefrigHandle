@@ -887,6 +887,12 @@ export default function Settings() {
           Privacy Policy
         </Link>
         <Link
+          to="/acceptable-use"
+          className="text-xs text-slate-400 underline-offset-2 hover:text-slate-600 hover:underline dark:hover:text-slate-300"
+        >
+          Acceptable Use Policy
+        </Link>
+        <Link
           to="/account-deletion"
           onClick={() => {
             // Hand the user their records the moment they start the closure
