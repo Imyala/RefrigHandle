@@ -39,6 +39,7 @@ import {
   tzAbbrev,
 } from '../lib/datetime'
 import { PasswordPromptModal } from '../components/PasswordPromptModal'
+import { ShareTxButton } from '../components/ShareSheet'
 import { Alerts } from '../components/Alerts'
 import { ScanButton } from '../components/ScanButton'
 import { profileFor } from '../lib/compliance'
@@ -474,6 +475,7 @@ export default function Transactions() {
                     )}
                   </div>
                   <div className="flex shrink-0 flex-col items-end gap-1">
+                    <ShareTxButton t={t} />
                     {(() => {
                       const n = attachCounts.get(t.id) ?? 0
                       return (

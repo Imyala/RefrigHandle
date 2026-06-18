@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Button, Card } from '../components/ui'
 import { CollapsibleSection } from '../components/CollapsibleSection'
+import { ShareTxButton } from '../components/ShareSheet'
 import { Alerts } from '../components/Alerts'
 import { useStore } from '../lib/store'
 import {
@@ -310,6 +311,13 @@ function RecentActivityItem({ t }: { t: Transaction }) {
             />
           )}
           {t.notes && <DetailLine label="Notes" value={t.notes} italic />}
+          <div className="pt-1">
+            <ShareTxButton
+              t={t}
+              label="Share / copy / email"
+              className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs font-medium text-brand-600 hover:bg-brand-50 dark:border-slate-700 dark:hover:bg-brand-900/20"
+            />
+          </div>
         </dl>
       )}
     </Card>
