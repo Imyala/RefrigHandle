@@ -77,7 +77,8 @@ store/supplier, **intake** of a new cylinder, and manual **adjustments**.
 
 * Per-technician profiles, each with their own RHL and expiry, stamped
   (frozen) onto every transaction they log
-* Roles — owner, supervisor, technician, apprentice
+* Roles — owner, supervisor, lead technician, technician, apprentice — each
+  managing only people below their own tier
 * A password lock guards switching profiles on a shared device
   (PBKDF2-hashed, stored locally). New passwords favour length over
   complexity and are screened against common and known-breached

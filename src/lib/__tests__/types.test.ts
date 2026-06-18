@@ -9,6 +9,7 @@ import {
   netWeight,
   overfillKg,
   canAssignRole,
+  canManageTech,
   canManageTechnicians,
   composeName,
   daysUntilPurge,
@@ -26,15 +27,30 @@ import {
 } from '../types'
 import { makeBottle, makeTx } from './fixtures'
 
-describe('role assignment guard (canAssignRole)', () => {
+describe('role assignment guard (canAssignRole / canManageTech)', () => {
   it('a supervisor cannot grant owner while an owner exists', () => {
     expect(canAssignRole('supervisor', 'owner', true)).toBe(false)
-    // ...not even to themselves (same call — actor is a supervisor).
-    expect(canAssignRole('supervisor', 'supervisor', true)).toBe(true)
   })
 
   it('a supervisor can appoint an owner only when none exists', () => {
     expect(canAssignRole('supervisor', 'owner', false)).toBe(true)
+  })
+
+  it('no one but an owner can assign at or above their own tier', () => {
+    // A supervisor can't mint another supervisor (lateral), only roles
+    // strictly below them.
+    expect(canAssignRole('supervisor', 'supervisor', true)).toBe(false)
+    expect(canAssignRole('supervisor', 'lead_tech', true)).toBe(true)
+    expect(canAssignRole('supervisor', 'technician', true)).toBe(true)
+  })
+
+  it('a lead tech assigns only technician and apprentice', () => {
+    expect(canAssignRole('lead_tech', 'technician', true)).toBe(true)
+    expect(canAssignRole('lead_tech', 'apprentice', true)).toBe(true)
+    // Nothing at or above their own tier — including appointing an owner.
+    expect(canAssignRole('lead_tech', 'lead_tech', true)).toBe(false)
+    expect(canAssignRole('lead_tech', 'supervisor', true)).toBe(false)
+    expect(canAssignRole('lead_tech', 'owner', false)).toBe(false)
   })
 
   it('an owner can assign any role', () => {
@@ -49,11 +65,13 @@ describe('role assignment guard (canAssignRole)', () => {
     expect(canAssignRole(undefined, 'technician', false)).toBe(false)
   })
 
-  it('a supervisor cannot assign a role above their own tier', () => {
-    // owner is above supervisor and gated separately; supervisor can
-    // assign supervisor and below.
-    expect(canAssignRole('supervisor', 'technician', true)).toBe(true)
-    expect(canAssignRole('supervisor', 'apprentice', true)).toBe(true)
+  it('canManageTech only acts on strictly lower tiers (owner manages all)', () => {
+    expect(canManageTech('lead_tech', 'technician')).toBe(true)
+    expect(canManageTech('lead_tech', 'lead_tech')).toBe(false)
+    expect(canManageTech('lead_tech', 'supervisor')).toBe(false)
+    expect(canManageTech('supervisor', 'owner')).toBe(false)
+    expect(canManageTech('owner', 'supervisor')).toBe(true)
+    expect(canManageTech('technician', 'apprentice')).toBe(false)
   })
 })
 
@@ -213,7 +231,7 @@ describe('technician roles', () => {
 
   it('roles are ordered highest access first by level', () => {
     const levels = TECHNICIAN_ROLES.map((r) => r.level)
-    expect(levels).toEqual([4, 3, 2, 1])
+    expect(levels).toEqual([5, 4, 3, 2, 1])
     expect(TECHNICIAN_ROLES[0].value).toBe('owner')
   })
 
@@ -227,9 +245,10 @@ describe('technician roles', () => {
 })
 
 describe('technician deactivation lifecycle', () => {
-  it('canManageTechnicians is supervisor and above', () => {
+  it('canManageTechnicians is lead tech and above', () => {
     expect(canManageTechnicians('owner')).toBe(true)
     expect(canManageTechnicians('supervisor')).toBe(true)
+    expect(canManageTechnicians('lead_tech')).toBe(true)
     expect(canManageTechnicians('technician')).toBe(false)
     expect(canManageTechnicians('apprentice')).toBe(false)
     // Unset reads as the default (technician) tier — no management.

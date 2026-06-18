@@ -30,9 +30,11 @@ import {
   roleInfo,
   roleAtLeast,
   canAssignRole,
+  canManageTech,
   daysUntilPurge,
   isTechnicianActive,
   canManageTechnicians,
+  canEditCompanyIdentity,
   composeName,
   splitName,
 } from '../lib/types'
@@ -137,7 +139,11 @@ export default function Settings() {
   const activeTech = state.technicians.find(
     (t) => t.id === state.activeTechnicianId,
   )
+  // Whether the seated profile can manage people at all (lead tech and
+  // above) — per-person scope is decided by canManageTech below. Editing
+  // the business's regulatory identity is a higher bar (supervisor+).
   const canManage = canManageTechnicians(activeTech?.role)
+  const canEditCompany = canEditCompanyIdentity(activeTech?.role)
 
   // Company identity (business name, ABN, ARC RTA number) is stamped onto
   // every record, so it's locked read-only once entered and only an
@@ -558,16 +564,16 @@ export default function Settings() {
           {profile.techLicenceLabel}. Pick the active tech here — every
           transaction logged is stamped with that profile's name, licence and
           role, frozen so the historical record is preserved if a tech later
-          changes their licence or role. Roles (owner, supervisor, technician,
-          apprentice) set each person's access level — only supervisors and
-          owners can add or manage accounts. Access takes effect once per-tech
-          sign-in is added.
+          changes their licence or role. Roles (owner, supervisor, lead
+          technician, technician, apprentice) set each person's access level —
+          a profile can only manage people below its own tier. Access takes
+          effect once per-tech sign-in is added.
         </p>
         {!canManage && (
           <p className="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:bg-amber-900/30 dark:text-amber-200">
-            This profile ({roleInfo(activeTech?.role).label}) is below
-            supervisor, so account management is read-only. Switch to a
-            supervisor or owner profile to add or deactivate technicians.
+            This profile ({roleInfo(activeTech?.role).label}) can't manage
+            accounts. Switch to a lead technician, supervisor or owner profile
+            to add or manage technicians.
           </p>
         )}
         {state.technicians.length === 0 ? (
@@ -581,6 +587,12 @@ export default function Settings() {
               const isActive = state.activeTechnicianId === t.id
               const active = isTechnicianActive(t)
               const untilPurge = active ? null : daysUntilPurge(t, new Date())
+              // You can manage people strictly below your own tier, and you
+              // can always edit your own profile (the role picker still
+              // blocks self-promotion).
+              const canManageThis =
+                canManageTech(activeTech?.role, t.role) ||
+                (isActive && canManage)
               return (
                 <div
                   key={t.id}
@@ -660,14 +672,14 @@ export default function Settings() {
                             Use
                           </Button>
                         )}
-                        {canManage && (
+                        {canManageThis && (
                           <Button variant="ghost" onClick={() => openEditTech(t)}>
                             Edit
                           </Button>
                         )}
                       </>
                     ) : (
-                      canManage && (
+                      canManageThis && (
                         <>
                           <Button
                             variant="secondary"
@@ -709,7 +721,7 @@ export default function Settings() {
           <div className="flex items-center gap-2">
             <SavedFlash show={compSaved} />
             {companyLocked &&
-              (canManage ? (
+              (canEditCompany ? (
                 <Button variant="ghost" onClick={unlockCompany}>
                   Edit
                 </Button>

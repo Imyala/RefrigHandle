@@ -488,7 +488,12 @@ export interface LocationSettings {
 // parked, see project roadmap). Once each tech signs in, `level` is the
 // hook the backend gates features on: who can edit business details,
 // manage other techs, or delete/correct records.
-export type TechnicianRole = 'owner' | 'supervisor' | 'technician' | 'apprentice'
+export type TechnicianRole =
+  | 'owner'
+  | 'supervisor'
+  | 'lead_tech'
+  | 'technician'
+  | 'apprentice'
 
 export interface TechnicianRoleInfo {
   value: TechnicianRole
@@ -505,16 +510,23 @@ export const TECHNICIAN_ROLES: readonly TechnicianRoleInfo[] = [
   {
     value: 'owner',
     label: 'Business owner',
-    level: 4,
+    level: 5,
     blurb:
       'Full access — business and compliance details, all technicians, and every record.',
   },
   {
     value: 'supervisor',
     label: 'Supervisor',
+    level: 4,
+    blurb:
+      'Manage technicians and review all work; can correct and delete records, and edit company details.',
+  },
+  {
+    value: 'lead_tech',
+    label: 'Lead technician',
     level: 3,
     blurb:
-      'Manage technicians and review all work; can correct and delete records.',
+      'Senior hands-on tech — corrects others’ entries (audit-safe re-statements), manages equipment, and onboards technicians and apprentices. Cannot delete records or change company details.',
   },
   {
     value: 'technician',
@@ -563,23 +575,57 @@ export const SETUP_ROLE_CHOICES: readonly TechnicianRole[] = [
 // exists. Until then the UI uses them as soft guidance (the active
 // profile on a shared device can still be switched freely).
 
-// Create / deactivate / re-role other technicians. Supervisor and above.
+// Manage (add / deactivate / re-role) other technicians. Lead tech and
+// above — but only ever people BELOW their own tier (see canManageTech /
+// canAssignRole). A lead tech can onboard technicians and apprentices; a
+// supervisor adds lead techs too; only an owner manages everyone.
 export function canManageTechnicians(role: TechnicianRole | undefined): boolean {
+  return roleAtLeast(role, 'lead_tech')
+}
+
+// Edit company / compliance identity (business name, ABN, RTA). Supervisor
+// and above — a lead tech runs the crew but doesn't touch the business's
+// regulatory identity.
+export function canEditCompanyIdentity(
+  role: TechnicianRole | undefined,
+): boolean {
   return roleAtLeast(role, 'supervisor')
 }
 
-// Correct or delete logged records. Supervisor and above — an apprentice
-// can record work but never remove it.
+// Correct / re-state logged entries (append-only — the original stays on
+// record). Lead tech and above, so a senior can fix a crew member's
+// mistake without it being a management action.
+export function canCorrectRecords(role: TechnicianRole | undefined): boolean {
+  return roleAtLeast(role, 'lead_tech')
+}
+
+// Delete (soft-delete) logged records. Supervisor and above — a lead tech
+// can correct but never remove, and an apprentice can do neither.
 export function canDeleteRecords(role: TechnicianRole | undefined): boolean {
   return roleAtLeast(role, 'supervisor')
 }
 
+// Whether `actor` may manage a SPECIFIC technician (edit / deactivate /
+// re-role them). Owners manage everyone; every other tier manages only
+// people strictly below their own — so no one can act on a peer or a
+// senior, which also stops sideways or upward privilege changes.
+export function canManageTech(
+  actor: TechnicianRole | undefined,
+  target: TechnicianRole | undefined,
+): boolean {
+  if (!canManageTechnicians(actor)) return false
+  if (roleAtLeast(actor, 'owner')) return true
+  return roleInfo(target).level < roleInfo(actor).level
+}
+
 // Which role an actor is allowed to ASSIGN when adding or editing a tech.
-// Only an owner can hand out the owner role; a supervisor may assign up to
-// their own tier, and may grant 'owner' ONLY when no owner account exists
-// (so a sole-supervisor business can still appoint one). This stops a
-// supervisor promoting themselves — or anyone — to owner while an owner is
-// already in charge.
+// Owners can assign anything. Everyone else can assign only roles strictly
+// below their own tier — so a lead tech can set technician/apprentice but
+// not lead tech, supervisor or owner. The one exception: a supervisor (the
+// top non-owner tier) may appoint an owner ONLY when no owner account
+// exists yet, so a sole-supervisor business can still create one. This
+// stops a supervisor — or anyone — promoting themselves to owner while an
+// owner is already in charge.
 export function canAssignRole(
   actor: TechnicianRole | undefined,
   target: TechnicianRole,
@@ -587,9 +633,8 @@ export function canAssignRole(
 ): boolean {
   if (!canManageTechnicians(actor)) return false
   if (roleAtLeast(actor, 'owner')) return true
-  if (target === 'owner') return !ownerExists
-  // Never assign a role above your own tier.
-  return roleInfo(target).level <= roleInfo(actor).level
+  if (target === 'owner') return roleAtLeast(actor, 'supervisor') && !ownerExists
+  return roleInfo(target).level < roleInfo(actor).level
 }
 
 // --- Deactivation lifecycle ------------------------------------------
