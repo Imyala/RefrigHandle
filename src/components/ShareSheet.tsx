@@ -2,7 +2,8 @@ import { useState } from 'react'
 import { Button, Modal } from './ui'
 import { useStore } from '../lib/store'
 import { useToast } from '../lib/toast'
-import { dayShareText, transactionShareText } from '../lib/share'
+import { periodShareText, transactionShareText } from '../lib/share'
+import type { SharePeriod } from '../lib/share'
 import type { Transaction } from '../lib/types'
 
 // Opens a sheet that lets a tech send a logged transaction straight into a
@@ -62,10 +63,18 @@ export function ShareTxModal({
   return <ShareModal open onClose={onClose} subject={subject} body={body} />
 }
 
-// Bundles every job logged today into one shareable document. Toasts when
-// there's nothing logged yet rather than opening an empty sheet.
-export function ShareDayButton({
-  label = "Share today's jobs",
+// Bundles the jobs logged today / this week / this month into one
+// shareable document. Opens a small chooser first, then the share sheet —
+// toasting when a period has nothing logged rather than opening an empty
+// sheet.
+const PERIOD_OPTIONS: { value: SharePeriod; label: string; empty: string }[] = [
+  { value: 'today', label: 'Today', empty: 'No jobs logged today yet.' },
+  { value: 'week', label: 'This week', empty: 'No jobs logged this week yet.' },
+  { value: 'month', label: 'This month', empty: 'No jobs logged this month yet.' },
+]
+
+export function SharePeriodButton({
+  label = 'Share jobs…',
   className,
 }: {
   label?: string
@@ -73,14 +82,16 @@ export function ShareDayButton({
 }) {
   const { state } = useStore()
   const toast = useToast()
+  const [choosing, setChoosing] = useState(false)
   const [text, setText] = useState<{ subject: string; body: string } | null>(
     null,
   )
 
-  function openSheet() {
-    const built = dayShareText(state.transactions, state)
+  function pick(period: SharePeriod, emptyMsg: string) {
+    const built = periodShareText(state.transactions, state, period)
+    setChoosing(false)
     if (!built) {
-      toast.show('No jobs logged today yet.')
+      toast.show(emptyMsg)
       return
     }
     setText(built)
@@ -88,9 +99,33 @@ export function ShareDayButton({
 
   return (
     <>
-      <button type="button" onClick={openSheet} className={className}>
+      <button type="button" onClick={() => setChoosing(true)} className={className}>
         {label}
       </button>
+
+      <Modal
+        open={choosing}
+        onClose={() => setChoosing(false)}
+        title="Share jobs"
+      >
+        <p className="mb-3 text-sm text-slate-500">
+          Bundle every job from a period into one record to share, copy, or
+          email.
+        </p>
+        <div className="grid gap-2">
+          {PERIOD_OPTIONS.map((o) => (
+            <Button
+              key={o.value}
+              variant="secondary"
+              full
+              onClick={() => pick(o.value, o.empty)}
+            >
+              {o.label}
+            </Button>
+          ))}
+        </div>
+      </Modal>
+
       {text && (
         <ShareModal
           open

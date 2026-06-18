@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { dayShareText, transactionShareText } from '../share'
+import { periodShareText, rangeShareText, transactionShareText } from '../share'
 import { makeBottle, makeState, makeTx } from './fixtures'
 
 describe('transactionShareText', () => {
@@ -54,7 +54,7 @@ describe('transactionShareText', () => {
   })
 })
 
-describe('dayShareText', () => {
+describe('rangeShareText / periodShareText', () => {
   const bottle = makeBottle({ id: 'b1', bottleNumber: 'B-1', refrigerantType: 'R32' })
   // Brisbane (UTC+10, no DST) so the local day is deterministic.
   const state = makeState({
@@ -63,14 +63,14 @@ describe('dayShareText', () => {
     location: { country: 'Australia', region: 'QLD', city: 'Brisbane', timezone: 'Australia/Brisbane' },
   })
 
-  it('bundles every job logged on the given day, in order', () => {
+  it('bundles jobs within a single-day range, in order', () => {
     const txs = [
       makeTx({ id: 'a', kind: 'charge', bottleId: 'b1', amount: 1, date: '2026-06-18T03:00:00.000Z' }),
       makeTx({ id: 'b', kind: 'recover', bottleId: 'b1', amount: 2, date: '2026-06-18T06:00:00.000Z' }),
       // Different day — must be excluded.
       makeTx({ id: 'c', kind: 'charge', bottleId: 'b1', amount: 3, date: '2026-06-19T03:00:00.000Z' }),
     ]
-    const out = dayShareText(txs, state, '2026-06-18')
+    const out = rangeShareText(txs, state, '2026-06-18', '2026-06-18')
     expect(out).not.toBeNull()
     expect(out!.body).toContain('2 jobs')
     expect(out!.body).toContain('— Job 1 —')
@@ -79,11 +79,30 @@ describe('dayShareText', () => {
     expect(out!.subject).toContain('2026-06-18')
   })
 
-  it('returns null when nothing was logged that day', () => {
-    expect(dayShareText([], state, '2026-06-18')).toBeNull()
+  it('a multi-day range spans both ends inclusively', () => {
+    const txs = [
+      makeTx({ id: 'a', bottleId: 'b1', amount: 1, date: '2026-06-15T03:00:00.000Z' }),
+      makeTx({ id: 'b', bottleId: 'b1', amount: 1, date: '2026-06-21T03:00:00.000Z' }),
+      makeTx({ id: 'c', bottleId: 'b1', amount: 1, date: '2026-06-22T03:00:00.000Z' }), // outside
+    ]
+    const out = rangeShareText(txs, state, '2026-06-15', '2026-06-21')
+    expect(out!.body).toContain('2 jobs')
+    expect(out!.body).toContain('2026-06-15 to 2026-06-21')
+  })
+
+  it('returns null when nothing was logged in the range', () => {
+    expect(rangeShareText([], state, '2026-06-18', '2026-06-18')).toBeNull()
     const deleted = [
       makeTx({ id: 'd', bottleId: 'b1', date: '2026-06-18T03:00:00.000Z', deletedAt: 'x' }),
     ]
-    expect(dayShareText(deleted, state, '2026-06-18')).toBeNull()
+    expect(rangeShareText(deleted, state, '2026-06-18', '2026-06-18')).toBeNull()
+  })
+
+  it('periodShareText("today") only includes today', () => {
+    const todayTx = makeTx({ id: 'now', bottleId: 'b1', amount: 1, date: new Date().toISOString() })
+    const oldTx = makeTx({ id: 'old', bottleId: 'b1', amount: 1, date: '2020-01-01T03:00:00.000Z' })
+    const out = periodShareText([todayTx, oldTx], state, 'today')
+    expect(out).not.toBeNull()
+    expect(out!.body).toContain('1 job')
   })
 })

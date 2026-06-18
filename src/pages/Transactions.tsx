@@ -39,7 +39,7 @@ import {
   tzAbbrev,
 } from '../lib/datetime'
 import { PasswordPromptModal } from '../components/PasswordPromptModal'
-import { ShareTxButton, ShareTxModal, ShareDayButton } from '../components/ShareSheet'
+import { ShareTxButton, ShareTxModal, SharePeriodButton } from '../components/ShareSheet'
 import { Alerts } from '../components/Alerts'
 import { ScanButton } from '../components/ScanButton'
 import { profileFor } from '../lib/compliance'
@@ -208,8 +208,8 @@ export default function Transactions() {
         </h2>
         <div className="flex items-center gap-2">
           {transactions.some((t) => !t.deletedAt) && (
-            <ShareDayButton
-              label="Share today"
+            <SharePeriodButton
+              label="Share…"
               className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-medium text-brand-600 hover:bg-brand-50 dark:border-slate-700 dark:hover:bg-brand-900/20"
             />
           )}
