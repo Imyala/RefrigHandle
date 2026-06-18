@@ -121,7 +121,7 @@ function OnboardingScreen() {
   // Per-field red markers, shown only after a blocked finish attempt.
   const err = (show: boolean, msg: string) =>
     attempted && show ? msg : undefined
-  const termsErr = err(!agreeTerms, 'Please agree to the Terms & disclaimer.')
+  const termsErr = err(!agreeTerms, 'Please agree to the Terms of Use.')
   const businessNameErr = err(!businessOk, 'Enter your trading / business name.')
   const abnErr = err(
     !abnOk,
@@ -423,7 +423,7 @@ function OnboardingScreen() {
 
           <Card>
             <div className="mb-2 text-sm font-semibold text-slate-700 dark:text-slate-200">
-              Terms &amp; disclaimer
+              Terms of Use
             </div>
             <div className="max-h-56 overflow-y-auto rounded-xl border border-slate-200 p-3 dark:border-slate-800">
               <TermsContent />
@@ -436,7 +436,7 @@ function OnboardingScreen() {
                 onChange={(e) => setAgreeTerms(e.target.checked)}
               />
               <span className={termsErr ? 'text-red-600 dark:text-red-400' : ''}>
-                I have read and agree to the Terms &amp; disclaimer above. *
+                I have read and agree to the Terms of Use above. *
               </span>
             </label>
             {termsErr && (

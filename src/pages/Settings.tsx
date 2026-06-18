@@ -880,7 +880,7 @@ export default function Settings() {
         <div className="flex flex-col">
           {(
             [
-              ['/terms', 'Terms & disclaimer'],
+              ['/terms', 'Terms of Use'],
               ['/privacy', 'Privacy Policy'],
               ['/acceptable-use', 'Acceptable Use Policy'],
               ['/billing', 'Billing & Refund Policy'],

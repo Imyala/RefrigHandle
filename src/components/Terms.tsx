@@ -4,13 +4,18 @@ import { Button, Card } from './ui'
 import { useStore } from '../lib/store'
 import { isSetupComplete, TERMS_VERSION } from '../lib/types'
 
-// One place for the Terms & disclaimer text, shown at first-run setup (with
-// the acceptance tick) and on the standalone /terms page from Settings.
+// Effective date shown at the top of the Terms. Update this whenever the
+// text materially changes so the published date stays accurate.
+const EFFECTIVE_DATE = '18 June 2026'
+
+// One place for the Terms of Use text, shown at first-run setup (with the
+// acceptance tick) and on the standalone /terms page from Settings.
 // Plain-English and deliberately conservative — it is NOT legal advice and
 // should be reviewed by a solicitor before relying on it commercially.
 export function TermsContent() {
   return (
     <div className="space-y-3 text-sm text-slate-700 dark:text-slate-300">
+      <p className="text-xs text-slate-500">Effective date: {EFFECTIVE_DATE}</p>
       <Section title="What RefrigHandle is">
         RefrigHandle is designed to assist with recording and tracking
         refrigerant activities. It is{' '}
@@ -19,6 +24,27 @@ export function TermsContent() {
         RefrigHandle for statutory record retention. Data loss can occur despite
         reasonable safeguards, and users are responsible for maintaining their
         own backups.
+      </Section>
+      <Section title="Definitions">
+        <p>
+          <strong>Services</strong> means the RefrigHandle platform,
+          applications, website and related services.
+        </p>
+        <p>
+          <strong>Account Owner</strong> means the business, company, sole
+          trader, partnership, trust, government entity or other organisation
+          that has registered for RefrigHandle.
+        </p>
+        <p>
+          <strong>Authorised User</strong> means an employee, contractor or
+          other person granted access to an Account by the Account Owner.
+        </p>
+        <p>
+          <strong>Business Data</strong> means information entered into
+          RefrigHandle, including customer records, site records, refrigerant
+          records, cylinder records, audit logs, technician information, notes
+          and attachments.
+        </p>
       </Section>
       <Section title="Your responsibilities">
         You are responsible for the accuracy of what you enter, for keeping your
@@ -60,6 +86,21 @@ export function TermsContent() {
         accordance with RefrigHandle’s Privacy Policy and internal data
         retention practices.
       </Section>
+      <Section title="Related policies">
+        <p>
+          The following policies form part of these Terms of Use and apply to
+          your use of the Services. Each can be read from Settings:
+        </p>
+        <ul className="list-disc space-y-1 pl-5">
+          <li>Privacy Policy</li>
+          <li>Acceptable Use Policy</li>
+          <li>Billing and Refund Policy</li>
+          <li>Data Retention and Deletion Policy</li>
+          <li>Security and Responsible Disclosure Policy</li>
+          <li>Website and General Information Disclaimer</li>
+          <li>Copyright and Trademark Policy</li>
+        </ul>
+      </Section>
     </div>
   )
 }
@@ -70,7 +111,7 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
       <div className="font-semibold text-slate-900 dark:text-slate-100">
         {title}
       </div>
-      <p className="mt-0.5">{children}</p>
+      <div className="mt-0.5 space-y-2">{children}</div>
     </div>
   )
 }
@@ -111,8 +152,8 @@ function TermsAcceptScreen() {
       </header>
       <main className="mx-auto w-full max-w-2xl flex-1 space-y-4 px-4 py-5">
         <p className="px-1 text-sm text-slate-600 dark:text-slate-400">
-          Our Terms &amp; disclaimer have been updated. Please read and accept
-          them to keep using the app.
+          Our Terms of Use have been updated. Please read and accept them to
+          keep using the app.
         </p>
         <Card>
           <TermsContent />
@@ -125,7 +166,7 @@ function TermsAcceptScreen() {
               checked={agree}
               onChange={(e) => setAgree(e.target.checked)}
             />
-            <span>I have read and agree to the updated Terms &amp; disclaimer.</span>
+            <span>I have read and agree to the updated Terms of Use.</span>
           </label>
           <div className="mt-3">
             <Button full disabled={!agree} onClick={acceptTerms}>
@@ -149,7 +190,7 @@ export default function TermsPage() {
         ← Back to Settings
       </Link>
       <h2 className="text-xl font-semibold text-slate-900 dark:text-slate-100">
-        Terms &amp; disclaimer
+        Terms of Use
       </h2>
       <Card>
         <TermsContent />
