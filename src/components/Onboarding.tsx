@@ -1,9 +1,16 @@
-import { useState, type ReactNode } from 'react'
-import { Button, Card, Field, TextInput } from './ui'
+import { useState, type ComponentType, type ReactNode } from 'react'
+import { Button, Card, Field, Modal, TextInput } from './ui'
 import { Picker } from './Picker'
 import { DateInput } from './DateInput'
 import { LocationFields, type LocationErrors } from './LocationFields'
 import { TermsContent } from './Terms'
+import { PrivacyContent } from './Privacy'
+import { AcceptableUseContent } from './AcceptableUse'
+import { BillingRefundContent } from './BillingRefund'
+import { DataRetentionContent } from './DataRetention'
+import { SecurityContent } from './Security'
+import { DisclaimerContent } from './Disclaimer'
+import { CopyrightContent } from './Copyright'
 import { useStore } from '../lib/store'
 import { useToast } from '../lib/toast'
 import { hashPassword, MIN_PASSWORD_LENGTH } from '../lib/auth'
@@ -18,6 +25,61 @@ import {
   type TechnicianRole,
 } from '../lib/types'
 import { profileFor } from '../lib/compliance'
+
+// Every policy a new account can read during setup. The router isn't
+// mounted yet at onboarding, so each is shown in a modal (reusing the same
+// content rendered on its standalone /… page) rather than via a link.
+// `require: true` policies must be explicitly accepted before registration
+// can complete; declining any of them blocks setup.
+type PolicyEntry = {
+  key: string
+  label: string
+  Content: ComponentType
+  require: boolean
+}
+const ONBOARDING_POLICIES: readonly PolicyEntry[] = [
+  { key: 'terms', label: 'Terms of Use', Content: TermsContent, require: true },
+  { key: 'privacy', label: 'Privacy Policy', Content: PrivacyContent, require: true },
+  {
+    key: 'aup',
+    label: 'Acceptable Use Policy',
+    Content: AcceptableUseContent,
+    require: true,
+  },
+  {
+    key: 'billing',
+    label: 'Billing and Refund Policy',
+    Content: BillingRefundContent,
+    require: false,
+  },
+  {
+    key: 'data',
+    label: 'Data Retention and Deletion Policy',
+    Content: DataRetentionContent,
+    require: false,
+  },
+  {
+    key: 'security',
+    label: 'Security and Responsible Disclosure Policy',
+    Content: SecurityContent,
+    require: false,
+  },
+  {
+    key: 'disclaimer',
+    label: 'Website and General Information Disclaimer',
+    Content: DisclaimerContent,
+    require: false,
+  },
+  {
+    key: 'copyright',
+    label: 'Copyright and Trademark Policy',
+    Content: CopyrightContent,
+    require: false,
+  },
+]
+const REQUIRED_POLICY_KEYS = ONBOARDING_POLICIES.filter((p) => p.require).map(
+  (p) => p.key,
+)
 
 // Gate the whole app behind a one-time setup. Until the business
 // identity, ARC RTA, first technician and location are entered, the
@@ -64,7 +126,17 @@ function OnboardingScreen() {
     city: '',
     timezone: '',
   })
-  const [agreeTerms, setAgreeTerms] = useState(false)
+  // Accept / decline decision per required policy. A policy with no entry
+  // is undecided; only 'accept' lets setup finish, so an explicit 'decline'
+  // (or leaving one undecided) blocks registration.
+  const [policyDecisions, setPolicyDecisions] = useState<
+    Record<string, 'accept' | 'decline'>
+  >({})
+  // Which policy is open in the read-only viewer modal (null = none).
+  const [viewingPolicy, setViewingPolicy] = useState<string | null>(null)
+  const allRequiredAccepted = REQUIRED_POLICY_KEYS.every(
+    (k) => policyDecisions[k] === 'accept',
+  )
   // Flips true the first time "Finish setup" is pressed while something
   // is still missing. Until then the form stays clean (no red on fields
   // the tech hasn't reached yet); after a blocked attempt every
@@ -89,7 +161,13 @@ function OnboardingScreen() {
   const techOk = nameOk && techRhl.trim() !== '' && expiryOk && passwordOk
   const locOk = isLocationComplete(loc)
   const canFinish =
-    businessOk && abnOk && arcOk && arcExpiryOk && techOk && locOk && agreeTerms
+    businessOk &&
+    abnOk &&
+    arcOk &&
+    arcExpiryOk &&
+    techOk &&
+    locOk &&
+    allRequiredAccepted
 
   // Exactly what's still outstanding, in field order — so a dead
   // "Finish setup" button can't leave the tech guessing which field is
@@ -116,12 +194,16 @@ function OnboardingScreen() {
   }
   if (!loc.city.trim()) missing.push('city / town')
   if (!loc.timezone.trim()) missing.push('timezone')
-  if (!agreeTerms) missing.push('agreement to the terms')
+  if (!allRequiredAccepted) missing.push('acceptance of the required policies')
+  // A declined required policy is a hard stop, called out with a stronger
+  // banner in the legal card below.
+  const anyRequiredDeclined = REQUIRED_POLICY_KEYS.some(
+    (k) => policyDecisions[k] === 'decline',
+  )
 
   // Per-field red markers, shown only after a blocked finish attempt.
   const err = (show: boolean, msg: string) =>
     attempted && show ? msg : undefined
-  const termsErr = err(!agreeTerms, 'Please agree to the Terms of Use.')
   const businessNameErr = err(!businessOk, 'Enter your trading / business name.')
   const abnErr = err(
     !abnOk,
@@ -422,31 +504,107 @@ function OnboardingScreen() {
           </Card>
 
           <Card>
-            <div className="mb-2 text-sm font-semibold text-slate-700 dark:text-slate-200">
-              Terms of Use
+            <div className="mb-1 text-sm font-semibold text-slate-700 dark:text-slate-200">
+              Legal agreements
             </div>
-            <div className="max-h-56 overflow-y-auto rounded-xl border border-slate-200 p-3 dark:border-slate-800">
-              <TermsContent />
+            <p className="mb-3 text-xs text-slate-500">
+              Tap any policy to read it. You must accept the Terms of Use,
+              Privacy Policy and Acceptable Use Policy to create an account —
+              declining any of them will stop registration.
+            </p>
+            <div className="divide-y divide-slate-200 dark:divide-slate-800">
+              {ONBOARDING_POLICIES.map((p) => {
+                const decision = policyDecisions[p.key]
+                const needsDecision =
+                  p.require && attempted && decision !== 'accept'
+                return (
+                  <div key={p.key} className="py-3 first:pt-0 last:pb-0">
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-sm font-medium text-slate-800 dark:text-slate-100">
+                        {p.label}
+                        {p.require && (
+                          <span className="text-red-500"> *</span>
+                        )}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setViewingPolicy(p.key)}
+                        className="shrink-0 text-xs font-medium text-brand-600 hover:underline dark:text-brand-400"
+                      >
+                        Read
+                      </button>
+                    </div>
+                    {p.require && (
+                      <div className="mt-2 flex gap-5">
+                        <label className="flex items-center gap-1.5 text-sm text-slate-700 dark:text-slate-200">
+                          <input
+                            type="radio"
+                            name={`policy-${p.key}`}
+                            className="h-4 w-4 accent-brand-600"
+                            checked={decision === 'accept'}
+                            onChange={() =>
+                              setPolicyDecisions((d) => ({
+                                ...d,
+                                [p.key]: 'accept',
+                              }))
+                            }
+                          />
+                          I accept
+                        </label>
+                        <label className="flex items-center gap-1.5 text-sm text-slate-700 dark:text-slate-200">
+                          <input
+                            type="radio"
+                            name={`policy-${p.key}`}
+                            className="h-4 w-4 accent-red-600"
+                            checked={decision === 'decline'}
+                            onChange={() =>
+                              setPolicyDecisions((d) => ({
+                                ...d,
+                                [p.key]: 'decline',
+                              }))
+                            }
+                          />
+                          I decline
+                        </label>
+                      </div>
+                    )}
+                    {needsDecision && (
+                      <p className="mt-1 text-xs font-medium text-red-600 dark:text-red-400">
+                        {decision === 'decline'
+                          ? `You must accept the ${p.label} to create an account.`
+                          : `Please accept or decline the ${p.label}.`}
+                      </p>
+                    )}
+                  </div>
+                )
+              })}
             </div>
-            <label className="mt-3 flex items-start gap-2 text-sm text-slate-700 dark:text-slate-200">
-              <input
-                type="checkbox"
-                className="mt-0.5 h-4 w-4 accent-brand-600"
-                checked={agreeTerms}
-                onChange={(e) => setAgreeTerms(e.target.checked)}
-              />
-              <span className={termsErr ? 'text-red-600 dark:text-red-400' : ''}>
-                I have read and agree to the Terms of Use above. *
-              </span>
-            </label>
-            {termsErr && (
-              <p className="mt-1 text-xs font-medium text-red-600 dark:text-red-400">
-                {termsErr}
+            {anyRequiredDeclined && (
+              <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-xs font-medium text-red-700 dark:bg-red-900/20 dark:text-red-300">
+                Registration can’t be completed while a required policy is
+                declined. Accept all three required policies to continue.
               </p>
             )}
           </Card>
         </div>
       </main>
+
+      <Modal
+        open={viewingPolicy !== null}
+        size="lg"
+        title={
+          ONBOARDING_POLICIES.find((p) => p.key === viewingPolicy)?.label ??
+          'Policy'
+        }
+        onClose={() => setViewingPolicy(null)}
+      >
+        {(() => {
+          const entry = ONBOARDING_POLICIES.find((p) => p.key === viewingPolicy)
+          if (!entry) return null
+          const Body = entry.Content
+          return <Body />
+        })()}
+      </Modal>
 
       <div
         className="fixed bottom-0 left-0 right-0 z-30 border-t border-slate-200 bg-white/95 px-4 py-3 backdrop-blur dark:border-slate-800 dark:bg-slate-950/95"
