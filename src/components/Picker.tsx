@@ -22,9 +22,17 @@ interface PickerProps {
   // validation (e.g. first-run setup) the same way TextInput does.
   invalid?: boolean
   disabled?: boolean
+  // Show a type-to-filter search box at the top of the list. Defaults to
+  // automatic: shown once the list is long enough to be worth filtering
+  // (see SEARCH_THRESHOLD), hidden on short pickers. Pass an explicit
+  // boolean to force it on or off.
+  searchable?: boolean
   className?: string
   trailing?: ReactNode
 }
+
+// Lists at or above this many options get a search box by default.
+const SEARCH_THRESHOLD = 8
 
 // Border/focus colours are split from the structural classes so the
 // invalid (red) variant cleanly replaces the normal one — see the same
@@ -47,27 +55,42 @@ export function Picker({
   required = false,
   invalid = false,
   disabled = false,
+  searchable,
   className = '',
   trailing,
 }: PickerProps) {
   const [open, setOpen] = useState(false)
+  const [query, setQuery] = useState('')
 
   const allowEmpty = emptyLabel !== undefined
+  const showSearch = searchable ?? options.length >= SEARCH_THRESHOLD
 
   const selected = useMemo(
     () => options.find((o) => o.value === value),
     [options, value],
   )
 
+  // Type-to-filter: case-insensitive substring match on the label (and
+  // hint, so e.g. a refrigerant's note is searchable too).
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    if (!q) return options
+    return options.filter(
+      (o) =>
+        o.label.toLowerCase().includes(q) ||
+        (o.hint ? o.hint.toLowerCase().includes(q) : false),
+    )
+  }, [options, query])
+
   const groups = useMemo(() => {
     const map = new Map<string, PickerOption[]>()
-    for (const o of options) {
+    for (const o of filtered) {
       const key = o.group ?? ''
       if (!map.has(key)) map.set(key, [])
       map.get(key)!.push(o)
     }
     return Array.from(map.entries())
-  }, [options])
+  }, [filtered])
 
   const display =
     selected?.label ??
@@ -76,11 +99,25 @@ export function Picker({
 
   const isPlaceholder = !selected && !(value === '' && allowEmpty)
 
+  function openPicker() {
+    if (disabled) return
+    setQuery('')
+    setOpen(true)
+  }
+  function close() {
+    setOpen(false)
+    setQuery('')
+  }
+  function pick(v: string) {
+    onChange(v)
+    close()
+  }
+
   return (
     <>
       <button
         type="button"
-        onClick={() => !disabled && setOpen(true)}
+        onClick={openPicker}
         className={`${triggerBase} ${invalid ? triggerInvalid : triggerNormal} ${className}`}
         disabled={disabled}
         aria-haspopup="dialog"
@@ -104,16 +141,39 @@ export function Picker({
         />
       )}
 
-      <Modal open={open} title={title} onClose={() => setOpen(false)}>
-        <div className="-mx-1 max-h-[65svh] overflow-y-auto">
+      <Modal open={open} title={title} onClose={close}>
+        {showSearch && (
+          <div className="mb-2">
+            <div className="relative">
+              <SearchIcon />
+              <input
+                type="text"
+                autoFocus
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    // Enter picks the first match — fast keyboard entry,
+                    // and stops the keystroke submitting an outer form.
+                    e.preventDefault()
+                    if (filtered.length > 0) pick(filtered[0].value)
+                  }
+                }}
+                placeholder={`Search ${title.toLowerCase()}`}
+                aria-label={`Search ${title.toLowerCase()}`}
+                className="w-full rounded-xl border border-slate-300 bg-white py-2.5 pl-9 pr-3 text-base text-slate-900 outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-500/30 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+              />
+            </div>
+          </div>
+        )}
+
+        <div className="-mx-1 max-h-[60svh] overflow-y-auto">
           <div className="flex flex-col gap-1">
-            {allowEmpty && (
+            {/* The "none" row only makes sense when not actively searching. */}
+            {allowEmpty && query.trim() === '' && (
               <PickerRow
                 selected={value === emptyValue}
-                onClick={() => {
-                  onChange(emptyValue)
-                  setOpen(false)
-                }}
+                onClick={() => pick(emptyValue)}
                 label={emptyLabel!}
                 muted
               />
@@ -130,23 +190,26 @@ export function Picker({
                   <PickerRow
                     key={o.value}
                     selected={value === o.value}
-                    onClick={() => {
-                      onChange(o.value)
-                      setOpen(false)
-                    }}
+                    onClick={() => pick(o.value)}
                     label={o.label}
                     hint={o.hint}
                   />
                 ))}
               </div>
             ))}
+
+            {filtered.length === 0 && (
+              <div className="px-3 py-6 text-center text-sm text-slate-500 dark:text-slate-400">
+                No matches for “{query.trim()}”.
+              </div>
+            )}
           </div>
         </div>
 
         {trailing && <div className="mt-3">{trailing}</div>}
 
         <div className="mt-4">
-          <Button full variant="secondary" onClick={() => setOpen(false)}>
+          <Button full variant="secondary" onClick={close}>
             Cancel
           </Button>
         </div>
@@ -242,6 +305,24 @@ function ChevronDown() {
       strokeLinejoin="round"
     >
       <path d="M6 9l6 6 6-6" />
+    </svg>
+  )
+}
+
+function SearchIcon() {
+  return (
+    <svg
+      aria-hidden
+      viewBox="0 0 24 24"
+      className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <circle cx="11" cy="11" r="7" />
+      <path d="M21 21l-4.3-4.3" />
     </svg>
   )
 }
