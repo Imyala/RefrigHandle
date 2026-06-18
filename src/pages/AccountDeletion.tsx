@@ -44,6 +44,7 @@ export default function AccountDeletion() {
   )
   const retention = retentionSummary(state.businessStructure)
   const retentionYrs = retentionYears(state.businessStructure)
+  const periodText = retentionYrs ? `${retentionYrs} years` : '5–7 years'
 
   const [contactName, setContactName] = useState(activeTech?.name ?? '')
   const [email, setEmail] = useState('')
@@ -51,7 +52,10 @@ export default function AccountDeletion() {
   const [phone, setPhone] = useState('')
   const [reason, setReason] = useState('')
   const [details, setDetails] = useState('')
-  const [ack, setAck] = useState(false)
+  // Two separate confirmations: the legal duty to retain, and that the user
+  // has their own copy and accepts we stop holding their records on closure.
+  const [ackRetention, setAckRetention] = useState(false)
+  const [ackBackup, setAckBackup] = useState(false)
   const [attempted, setAttempted] = useState(false)
   const [busy, setBusy] = useState(false)
 
@@ -64,7 +68,8 @@ export default function AccountDeletion() {
     email.trim() !== '' && email.trim() === confirmEmail.trim()
   const reasonOk =
     reason !== '' && (reason !== 'other' || details.trim() !== '')
-  const canSubmit = contactOk && emailOk && emailsMatch && reasonOk && ack
+  const canSubmit =
+    contactOk && emailOk && emailsMatch && reasonOk && ackRetention && ackBackup
 
   const fieldErr = (show: boolean, msg: string) =>
     attempted && show ? msg : undefined
@@ -314,22 +319,36 @@ export default function AccountDeletion() {
       </Card>
 
       <Card>
-        <label className="flex items-start gap-2 text-sm text-slate-700 dark:text-slate-200">
-          <input
-            type="checkbox"
-            className="mt-0.5 h-4 w-4 accent-brand-600"
-            checked={ack}
-            onChange={(ev) => setAck(ev.target.checked)}
-          />
-          <span>
-            I understand this closes my account, that reopening it means
-            submitting a request for formal review, and that I must keep my
-            records for {retention} before they can be destroyed.
-          </span>
-        </label>
-        {attempted && !ack && (
+        <div className="space-y-3">
+          <label className="flex items-start gap-2 text-sm text-slate-700 dark:text-slate-200">
+            <input
+              type="checkbox"
+              className="mt-0.5 h-4 w-4 accent-brand-600"
+              checked={ackRetention}
+              onChange={(ev) => setAckRetention(ev.target.checked)}
+            />
+            <span>
+              I understand I am required by law to keep my refrigerant and
+              business records for <strong>{periodText}</strong>.
+            </span>
+          </label>
+          <label className="flex items-start gap-2 text-sm text-slate-700 dark:text-slate-200">
+            <input
+              type="checkbox"
+              className="mt-0.5 h-4 w-4 accent-brand-600"
+              checked={ackBackup}
+              onChange={(ev) => setAckBackup(ev.target.checked)}
+            />
+            <span>
+              I confirm I have downloaded or backed up all my records, and
+              understand that once my account is closed RefrigHandle is no
+              longer responsible for keeping or maintaining them.
+            </span>
+          </label>
+        </div>
+        {attempted && (!ackRetention || !ackBackup) && (
           <p className="mt-2 text-xs font-medium text-red-600 dark:text-red-400">
-            Please acknowledge to continue.
+            Please tick both boxes to continue.
           </p>
         )}
       </Card>
