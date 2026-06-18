@@ -1030,6 +1030,15 @@ export default function Settings() {
         Refrigerant Handling · data stored locally on this device
       </p>
 
+      <div className="pt-1 text-center">
+        <Link
+          to="/account-deletion"
+          className="text-xs text-slate-400 underline-offset-2 hover:text-slate-600 hover:underline dark:hover:text-slate-300"
+        >
+          Request deletion of account
+        </Link>
+      </div>
+
       <TechnicianModal
         open={techModalOpen}
         editing={editingTech}
@@ -1263,7 +1272,14 @@ function TechnicianModal({
             placeholder="e.g. Smith"
           />
         </Field>
-        <Field label="Role" hint={roleInfo(role).blurb}>
+        <Field
+          label="Role"
+          hint={
+            editing
+              ? `${roleInfo(role).blurb} Change this when someone's position changes — e.g. promote an apprentice to technician once they qualify.`
+              : roleInfo(role).blurb
+          }
+        >
           <Picker
             title="Role"
             value={role}

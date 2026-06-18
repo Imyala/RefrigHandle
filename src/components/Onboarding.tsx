@@ -40,6 +40,7 @@ function OnboardingScreen() {
   const [businessName, setBusinessName] = useState('')
   const [abn, setAbn] = useState('')
   const [arcAuth, setArcAuth] = useState('')
+  const [arcExpiry, setArcExpiry] = useState('')
   const [techFirst, setTechFirst] = useState('')
   const [techMiddle, setTechMiddle] = useState('')
   const [techLast, setTechLast] = useState('')
@@ -73,6 +74,10 @@ function OnboardingScreen() {
   const businessOk = businessName.trim() !== ''
   const abnOk = abn.trim() !== '' && profile.validateBusinessNumber(abn)
   const arcOk = !profile.hasBusinessAuthorisation || arcAuth.trim() !== ''
+  // The RTA is issued for a fixed term (1, 2 or 3 years) and must be
+  // renewed before it lapses, so an expiry always exists — capture it at
+  // setup so the app can warn before the authorisation runs out.
+  const arcExpiryOk = !profile.hasBusinessAuthorisation || arcExpiry !== ''
   const nameOk = techFirst.trim() !== '' && techLast.trim() !== ''
   const expiryOk = techExpiry !== ''
   // Every account gets a password — it secures profile switching today
@@ -81,7 +86,8 @@ function OnboardingScreen() {
     password.length >= MIN_PASSWORD_LENGTH && password === confirmPw
   const techOk = nameOk && techRhl.trim() !== '' && expiryOk && passwordOk
   const locOk = isLocationComplete(loc)
-  const canFinish = businessOk && abnOk && arcOk && techOk && locOk
+  const canFinish =
+    businessOk && abnOk && arcOk && arcExpiryOk && techOk && locOk
 
   // Exactly what's still outstanding, in field order — so a dead
   // "Finish setup" button can't leave the tech guessing which field is
@@ -97,6 +103,7 @@ function OnboardingScreen() {
     )
   }
   if (!arcOk) missing.push(profile.businessAuthShort)
+  if (!arcExpiryOk) missing.push(`${profile.businessAuthShort} expiry`)
   if (techFirst.trim() === '') missing.push('first name')
   if (techLast.trim() === '') missing.push('surname')
   if (techRhl.trim() === '') missing.push(profile.techLicenceShort)
@@ -119,6 +126,10 @@ function OnboardingScreen() {
       : `Enter a valid ${profile.businessNumberShort}.`,
   )
   const arcErr = err(!arcOk, `Enter your ${profile.businessAuthShort}.`)
+  const arcExpiryErr = err(
+    !arcExpiryOk,
+    `Enter your ${profile.businessAuthShort} expiry date.`,
+  )
   const techFirstErr = err(techFirst.trim() === '', 'Enter your first name.')
   const techLastErr = err(techLast.trim() === '', 'Enter your surname.')
   const techRhlErr = err(
@@ -170,6 +181,7 @@ function OnboardingScreen() {
       businessName,
       businessAbn: abn,
       arcAuthorisationNumber: profile.hasBusinessAuthorisation ? arcAuth : '',
+      arcAuthorisationExpiry: profile.hasBusinessAuthorisation ? arcExpiry : '',
       technician: {
         firstName: techFirst,
         middleName: techMiddle,
@@ -254,18 +266,32 @@ function OnboardingScreen() {
                 />
               </Field>
               {profile.hasBusinessAuthorisation && (
-                <Field
-                  label={`${profile.businessAuthLabel} *`}
-                  error={arcErr}
-                  hint="Required to handle, buy or sell refrigerant."
-                >
-                  <TextInput
-                    value={arcAuth}
-                    invalid={!!arcErr}
-                    onChange={(e) => setArcAuth(e.target.value)}
-                    placeholder="e.g. AU00000"
-                  />
-                </Field>
+                <>
+                  <Field
+                    label={`${profile.businessAuthLabel} *`}
+                    error={arcErr}
+                    hint="Required to handle, buy or sell refrigerant."
+                  >
+                    <TextInput
+                      value={arcAuth}
+                      invalid={!!arcErr}
+                      onChange={(e) => setArcAuth(e.target.value)}
+                      placeholder="e.g. AU00000"
+                    />
+                  </Field>
+                  <Field
+                    label={`${profile.businessAuthShort} expiry *`}
+                    error={arcExpiryErr}
+                    hint="An RTA runs for 1, 2 or 3 years; the app warns before it lapses so you can renew in time."
+                  >
+                    <DateInput
+                      value={arcExpiry}
+                      onChange={setArcExpiry}
+                      invalid={!!arcExpiryErr}
+                      ariaLabel="RTA expiry date"
+                    />
+                  </Field>
+                </>
               )}
             </div>
           </Card>

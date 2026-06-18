@@ -121,6 +121,7 @@ interface StoreApi {
     businessName: string
     businessAbn: string
     arcAuthorisationNumber: string
+    arcAuthorisationExpiry: string
     technician: {
       firstName: string
       middleName?: string
@@ -1143,6 +1144,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         businessName: data.businessName.trim(),
         businessAbn: data.businessAbn.trim(),
         arcAuthorisationNumber: data.arcAuthorisationNumber.trim(),
+        arcAuthorisationExpiry: data.arcAuthorisationExpiry.trim(),
         jurisdiction: data.jurisdiction,
         location: data.location,
         technicians: [...s.technicians, tech],
