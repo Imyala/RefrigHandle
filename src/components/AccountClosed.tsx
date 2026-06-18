@@ -2,7 +2,7 @@ import type { ReactNode } from 'react'
 import { Button, Card } from './ui'
 import { useStore } from '../lib/store'
 import { formatDateTime } from '../lib/datetime'
-import { retentionSummary } from '../lib/types'
+import { RetentionNotice } from './RetentionNotice'
 import type { AccountClosure } from '../lib/types'
 
 // Once account closure has been requested, the app shows the closed screen
@@ -25,7 +25,6 @@ function AccountClosedScreen({ closure }: { closure: AccountClosure }) {
     state.clock,
     true,
   )
-  const retention = retentionSummary(state.businessStructure)
 
   const requestText = [
     'ACCOUNT CLOSURE REQUEST',
@@ -70,11 +69,10 @@ function AccountClosedScreen({ closure }: { closure: AccountClosure }) {
             To reopen it, <strong>submit a request</strong> — we'll formally
             review it before the account is reopened.
           </p>
-          <p className="mt-3 border-t border-slate-200 pt-3 text-xs text-slate-500 dark:border-slate-800">
-            <strong>Records retention:</strong> your refrigerant and business
-            records must be kept for {retention} and are not destroyed before
-            then.
-          </p>
+          <div className="mt-3 space-y-2 border-t border-slate-200 pt-3 text-xs text-slate-500 dark:border-slate-800">
+            <p className="font-semibold">Records retention</p>
+            <RetentionNotice />
+          </div>
         </Card>
 
         <Card>

@@ -7,11 +7,7 @@ import { useToast } from '../lib/toast'
 import { useConfirm } from '../lib/confirm'
 import { profileFor } from '../lib/compliance'
 import { downloadRecordsZip } from '../lib/backup'
-import {
-  businessStructureLabel,
-  retentionSummary,
-  retentionYears,
-} from '../lib/types'
+import { RetentionNotice } from '../components/RetentionNotice'
 
 // Common reasons, offered as a picker so the request is quick to fill and
 // the responses stay consistent. "Other" reveals the free-text box.
@@ -42,9 +38,6 @@ export default function AccountDeletion() {
   const activeTech = state.technicians.find(
     (t) => t.id === state.activeTechnicianId,
   )
-  const retention = retentionSummary(state.businessStructure)
-  const retentionYrs = retentionYears(state.businessStructure)
-  const periodText = retentionYrs ? `${retentionYrs} years` : '5–7 years'
 
   const [contactName, setContactName] = useState(activeTech?.name ?? '')
   const [email, setEmail] = useState('')
@@ -82,7 +75,7 @@ export default function AccountDeletion() {
     }
     const ok = await confirm({
       title: 'Close this account?',
-      message: `This closes your account. You'll be signed out, and it can't be used again until it's reopened — which means submitting a request that we'll formally review. First we'll download a ZIP of all your records (full backup + audit-log CSV) and open a pre-filled email, so you keep everything for the ${retention} you must retain it.`,
+      message: `This closes your account. You'll be signed out, and it can't be used again until it's reopened — which means submitting a request that we'll formally review. First we'll download a ZIP of all your records (full backup + audit-log CSV) and open a pre-filled email, so you keep everything for the period you're legally required to retain it.`,
       confirmLabel: 'Close account',
       danger: true,
     })
@@ -168,35 +161,9 @@ export default function AccountDeletion() {
           you'll need to submit a request, which we'll{' '}
           <strong>formally review</strong>.
         </p>
-        {retentionYrs ? (
-          <p className="mt-2 text-sm text-amber-900/80 dark:text-amber-100/80">
-            You must keep your refrigerant and business records for{' '}
-            <strong>{periodText}</strong> before they can be destroyed
-            {state.businessStructure === 'company'
-              ? ' — financial records under the Corporations Act 2001 (ASIC), and refrigerant records under the Ozone Protection and Synthetic Greenhouse Gas Management Regulations 1995.'
-              : state.businessStructure === 'other'
-                ? '. 7 years is a conservative minimum — some entities (e.g. government bodies or co-operatives) must keep records longer, so confirm what applies to you. Refrigerant records fall under the Ozone Protection and Synthetic Greenhouse Gas Management Regulations 1995.'
-                : ' — business records for the ATO, and refrigerant records under the Ozone Protection and Synthetic Greenhouse Gas Management Regulations 1995.'}
-          </p>
-        ) : (
-          <>
-            <p className="mt-2 text-sm text-amber-900/80 dark:text-amber-100/80">
-              You must keep your refrigerant and business records for{' '}
-              <strong>5–7 years</strong> before they can be destroyed:
-            </p>
-            <ul className="mt-1 list-disc space-y-1 pl-5 text-sm text-amber-900/80 dark:text-amber-100/80">
-              <li>
-                <strong>5 years</strong> for sole traders, partnerships and
-                trusts (ATO, and the Ozone Protection and Synthetic Greenhouse
-                Gas Management Regulations 1995 for refrigerant records).
-              </li>
-              <li>
-                <strong>7 years</strong> for companies (financial records under
-                the Corporations Act 2001, ASIC).
-              </li>
-            </ul>
-          </>
-        )}
+        <div className="mt-2 space-y-2 text-sm text-amber-900/80 dark:text-amber-100/80">
+          <RetentionNotice />
+        </div>
         <p className="mt-2 text-sm text-amber-900/80 dark:text-amber-100/80">
           So you keep them, the app downloads a single{' '}
           <strong>ZIP of everything</strong> (a full backup plus the audit-log
@@ -221,10 +188,6 @@ export default function AccountDeletion() {
               value={state.arcAuthorisationNumber || '—'}
             />
           )}
-          <Row
-            label="Structure"
-            value={businessStructureLabel(state.businessStructure) || '—'}
-          />
         </dl>
       </Card>
 
@@ -330,8 +293,8 @@ export default function AccountDeletion() {
               onChange={(ev) => setAckRetention(ev.target.checked)}
             />
             <span>
-              I understand that keeping my records for <strong>{periodText}</strong>{' '}
-              is my own legal responsibility — my refrigerant-handling records
+              I understand that keeping my records for the legally required
+              period is my own responsibility — my refrigerant-handling records
               under the Ozone Protection and Synthetic Greenhouse Gas Management
               Regulations 1995 (the ARC / ARCtick scheme), and my business and
               financial records under the Australian Taxation Office (ATO) and,

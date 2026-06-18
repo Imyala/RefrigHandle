@@ -14,7 +14,6 @@ import {
   type AuditEntry,
   type Bottle,
   type BottlePreset,
-  type BusinessStructure,
   type ClockFormat,
   type Jurisdiction,
   type LocationSettings,
@@ -123,7 +122,6 @@ interface StoreApi {
   completeSetup: (data: {
     businessName: string
     businessAbn: string
-    businessStructure: BusinessStructure
     arcAuthorisationNumber: string
     arcAuthorisationExpiry: string
     technician: {
@@ -146,7 +144,6 @@ interface StoreApi {
   setArcAuthorisationExpiry: (d: string) => void
   setBusinessName: (n: string) => void
   setBusinessAbn: (n: string) => void
-  setBusinessStructure: (s: BusinessStructure) => void
   // Owner requests account closure: snapshots the business identity, locks
   // the app, and logs out. Reversible only by re-importing a pre-closure
   // backup or clearing app data.
@@ -1160,7 +1157,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         ...s,
         businessName: data.businessName.trim(),
         businessAbn: data.businessAbn.trim(),
-        businessStructure: data.businessStructure,
         arcAuthorisationNumber: data.arcAuthorisationNumber.trim(),
         arcAuthorisationExpiry: data.arcAuthorisationExpiry.trim(),
         jurisdiction: data.jurisdiction,
@@ -1290,26 +1286,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
               businessAbn: n.trim(),
               settingsUpdatedAt: new Date().toISOString(),
               auditLog: settingsChange(s, 'Business ABN', s.businessAbn, n.trim()),
-            },
-      ),
-    [],
-  )
-
-  const setBusinessStructure = useCallback(
-    (next: BusinessStructure) =>
-      setState((s) =>
-        s.businessStructure === next
-          ? s
-          : {
-              ...s,
-              businessStructure: next,
-              settingsUpdatedAt: new Date().toISOString(),
-              auditLog: settingsChange(
-                s,
-                'Business structure',
-                s.businessStructure ?? '—',
-                next,
-              ),
             },
       ),
     [],
@@ -1612,7 +1588,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setArcAuthorisationExpiry,
       setBusinessName,
       setBusinessAbn,
-      setBusinessStructure,
       requestAccountClosure,
       acceptTerms,
       setLocation,
@@ -1656,7 +1631,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setArcAuthorisationExpiry,
       setBusinessName,
       setBusinessAbn,
-      setBusinessStructure,
       requestAccountClosure,
       acceptTerms,
       setLocation,

@@ -68,7 +68,6 @@ interface LegacyState
   jurisdiction?: string
   businessName?: string
   businessAbn?: string
-  businessStructure?: AppState['businessStructure']
   termsAcceptedAt?: string
   termsAcceptedVersion?: number
   accountClosure?: AppState['accountClosure']
@@ -221,7 +220,6 @@ function normalize(parsed: LegacyState): AppState {
     jurisdiction: 'AU',
     businessName: parsed.businessName ?? '',
     businessAbn: parsed.businessAbn ?? '',
-    businessStructure: parsed.businessStructure,
     termsAcceptedAt: parsed.termsAcceptedAt,
     termsAcceptedVersion: parsed.termsAcceptedVersion,
     accountClosure: parsed.accountClosure,
