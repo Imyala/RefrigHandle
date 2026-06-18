@@ -873,49 +873,38 @@ export default function Settings() {
         Refrigerant Handling · data stored locally on this device
       </p>
 
-      <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 pt-1 text-center">
-        <Link
-          to="/terms"
-          className="text-xs text-slate-400 underline-offset-2 hover:text-slate-600 hover:underline dark:hover:text-slate-300"
-        >
-          Terms &amp; disclaimer
-        </Link>
-        <Link
-          to="/privacy"
-          className="text-xs text-slate-400 underline-offset-2 hover:text-slate-600 hover:underline dark:hover:text-slate-300"
-        >
-          Privacy Policy
-        </Link>
-        <Link
-          to="/acceptable-use"
-          className="text-xs text-slate-400 underline-offset-2 hover:text-slate-600 hover:underline dark:hover:text-slate-300"
-        >
-          Acceptable Use Policy
-        </Link>
-        <Link
-          to="/billing"
-          className="text-xs text-slate-400 underline-offset-2 hover:text-slate-600 hover:underline dark:hover:text-slate-300"
-        >
-          Billing &amp; Refund Policy
-        </Link>
-        <Link
-          to="/data-retention"
-          className="text-xs text-slate-400 underline-offset-2 hover:text-slate-600 hover:underline dark:hover:text-slate-300"
-        >
-          Data Retention &amp; Deletion Policy
-        </Link>
-        <Link
-          to="/security"
-          className="text-xs text-slate-400 underline-offset-2 hover:text-slate-600 hover:underline dark:hover:text-slate-300"
-        >
-          Security &amp; Disclosure Policy
-        </Link>
-        <Link
-          to="/disclaimer"
-          className="text-xs text-slate-400 underline-offset-2 hover:text-slate-600 hover:underline dark:hover:text-slate-300"
-        >
-          Disclaimer
-        </Link>
+      <Card>
+        <div className="mb-1 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+          Legal &amp; policies
+        </div>
+        <div className="flex flex-col">
+          {(
+            [
+              ['/terms', 'Terms & disclaimer'],
+              ['/privacy', 'Privacy Policy'],
+              ['/acceptable-use', 'Acceptable Use Policy'],
+              ['/billing', 'Billing & Refund Policy'],
+              ['/data-retention', 'Data Retention & Deletion Policy'],
+              ['/security', 'Security & Disclosure Policy'],
+              ['/disclaimer', 'Disclaimer'],
+              ['/copyright', 'Copyright & Trademark Policy'],
+            ] as const
+          ).map(([to, label]) => (
+            <Link
+              key={to}
+              to={to}
+              className="flex items-center justify-between border-t border-slate-100 py-2 text-sm text-slate-600 first:border-t-0 hover:text-brand-600 dark:border-slate-800 dark:text-slate-300 dark:hover:text-brand-400"
+            >
+              <span>{label}</span>
+              <span aria-hidden className="text-slate-300 dark:text-slate-600">
+                ›
+              </span>
+            </Link>
+          ))}
+        </div>
+      </Card>
+
+      <div className="text-center">
         <Link
           to="/account-deletion"
           onClick={() => {

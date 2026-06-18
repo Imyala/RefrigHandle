@@ -182,8 +182,8 @@ export function DisclaimerContent() {
       <Section title="12. Contact information">
         <p>RefrigHandle</p>
         <p>
-          For questions about this Disclaimer, contact us at [insert contact
-          email].
+          For questions about this Disclaimer, contact us at
+          legal@refrighandle.com.
         </p>
       </Section>
     </div>

@@ -155,8 +155,8 @@ export function SecurityContent() {
       <Section title="10. Contact information">
         <p>RefrigHandle</p>
         <p>
-          To report a suspected security vulnerability, contact us at [insert
-          contact email].
+          To report a suspected security vulnerability, contact us at
+          legal@refrighandle.com.
         </p>
       </Section>
     </div>

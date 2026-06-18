@@ -301,7 +301,7 @@ export function PrivacyContent() {
         <p>RefrigHandle</p>
         <p>
           For privacy enquiries, or to request access to or correction of your
-          information, contact us at [insert contact email].
+          information, contact us at legal@refrighandle.com.
         </p>
       </Section>
     </div>

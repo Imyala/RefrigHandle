@@ -235,7 +235,7 @@ export function BillingRefundContent() {
       <Section title="16. Contact information">
         <p>RefrigHandle</p>
         <p>
-          For billing enquiries, contact us at [insert contact email].
+          For billing enquiries, contact us at legal@refrighandle.com.
         </p>
       </Section>
     </div>

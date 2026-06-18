@@ -20,6 +20,7 @@ import BillingRefundPage from './components/BillingRefund'
 import DataRetentionPage from './components/DataRetention'
 import SecurityPage from './components/Security'
 import DisclaimerPage from './components/Disclaimer'
+import CopyrightPage from './components/Copyright'
 
 export default function App() {
   // ToastProvider sits ABOVE StoreProvider so the store can surface
@@ -52,6 +53,7 @@ export default function App() {
                 <Route path="/data-retention" element={<DataRetentionPage />} />
                 <Route path="/security" element={<SecurityPage />} />
                 <Route path="/disclaimer" element={<DisclaimerPage />} />
+                <Route path="/copyright" element={<CopyrightPage />} />
                   <Route path="*" element={<Navigate to="/" replace />} />
                 </Route>
               </Routes>

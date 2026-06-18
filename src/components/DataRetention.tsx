@@ -204,7 +204,7 @@ export function DataRetentionContent() {
       <Section title="14. Contact information">
         <p>RefrigHandle</p>
         <p>
-          For questions about this Policy, contact us at [insert contact email].
+          For questions about this Policy, contact us at legal@refrighandle.com.
         </p>
       </Section>
     </div>
