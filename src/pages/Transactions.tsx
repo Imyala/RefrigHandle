@@ -39,7 +39,7 @@ import {
   tzAbbrev,
 } from '../lib/datetime'
 import { PasswordPromptModal } from '../components/PasswordPromptModal'
-import { ShareTxButton } from '../components/ShareSheet'
+import { ShareTxButton, ShareTxModal, ShareDayButton } from '../components/ShareSheet'
 import { Alerts } from '../components/Alerts'
 import { ScanButton } from '../components/ScanButton'
 import { profileFor } from '../lib/compliance'
@@ -98,6 +98,8 @@ export default function Transactions() {
   // correction mode), or null. Kept separate from `adding` so the form
   // can pre-fill + stamp the correction link.
   const [correcting, setCorrecting] = useState<Transaction | null>(null)
+  // Set after a "Save & share" so the share sheet pops for the new record.
+  const [shareTx, setShareTx] = useState<Transaction | null>(null)
   const [filterKind, setFilterKind] = useState<'all' | TransactionKind>('all')
   const [query, setQuery] = useState('')
   // Date-range filter (ISO YYYY-MM-DD, inclusive on both ends). Empty
@@ -204,9 +206,17 @@ export default function Transactions() {
         <h2 className="text-xl font-semibold text-slate-900 dark:text-slate-100">
           Refrigerant log
         </h2>
-        <Button onClick={() => setAdding(true)} disabled={bottles.length === 0}>
-          + Log
-        </Button>
+        <div className="flex items-center gap-2">
+          {transactions.some((t) => !t.deletedAt) && (
+            <ShareDayButton
+              label="Share today"
+              className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-medium text-brand-600 hover:bg-brand-50 dark:border-slate-700 dark:hover:bg-brand-900/20"
+            />
+          )}
+          <Button onClick={() => setAdding(true)} disabled={bottles.length === 0}>
+            + Log
+          </Button>
+        </div>
       </div>
 
       <Alerts />
@@ -533,7 +543,7 @@ export default function Transactions() {
           setAdding(false)
           setCorrecting(null)
         }}
-        onSave={(data) => {
+        onSave={(data, share) => {
           // Staged photos are NOT part of the transaction record — they
           // go to the attachment store, keyed to the new row's id.
           const { photos, ...txData } = data
@@ -552,9 +562,14 @@ export default function Transactions() {
             setAdding(false)
             setCorrecting(null)
             toast.show(correcting ? 'Correction logged' : `${transactionLabel(data.kind)} logged`)
+            if (share) setShareTx(result)
           }
         }}
       />
+
+      {shareTx && (
+        <ShareTxModal t={shareTx} onClose={() => setShareTx(null)} />
+      )}
 
       {/* Photos + customer sign-off for a logged row. Counts refresh on
           close so the row badge stays current. */}
@@ -671,7 +686,7 @@ function TransactionForm({
     // Staged camera shots, bound to the row's id after the save (they
     // live in the attachment store, never in the transaction itself).
     photos?: File[]
-  }) => void
+  }, share?: boolean) => void
 }) {
   const { state, addSite, addUnit, addTechnician, setActiveTechnicianId } =
     useStore()
@@ -947,8 +962,7 @@ function TransactionForm({
     : techOther.trim() || undefined
   const stampedRhl = pickedTech?.arcLicenceNumber || undefined
 
-  function submit(e: React.FormEvent) {
-    e.preventDefault()
+  function doSave(share: boolean) {
     if (!bottleId) return
     if (submitBlocked) return
     const signedAmountKg = kind === 'adjust' ? amountKg : Math.abs(amountKg)
@@ -992,7 +1006,7 @@ function TransactionForm({
               unitType: selectedUnit.refrigerantType,
             }
           : undefined,
-    })
+    }, share)
   }
 
   function commitNewTech() {
@@ -1015,7 +1029,13 @@ function TransactionForm({
       title={correcting ? 'Log correction' : 'Log transaction'}
       onClose={onClose}
     >
-      <form onSubmit={submit} className="space-y-3">
+      <form
+        onSubmit={(e) => {
+          e.preventDefault()
+          doSave(false)
+        }}
+        className="space-y-3"
+      >
         {correcting && (
           <div className="rounded-xl border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900 dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-100">
             <div className="font-semibold">Correcting an earlier entry</div>
@@ -1576,6 +1596,17 @@ function TransactionForm({
                         : correcting
                           ? 'Log correction'
                           : 'Save'}
+        </Button>
+        {/* Save, then open the share sheet for the new record so it can go
+            straight into a job card / email. */}
+        <Button
+          type="button"
+          variant="secondary"
+          full
+          disabled={submitBlocked}
+          onClick={() => doSave(true)}
+        >
+          {correcting ? 'Log correction & share' : 'Save & share'}
         </Button>
       </form>
 

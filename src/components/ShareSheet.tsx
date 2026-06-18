@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Button, Modal } from './ui'
 import { useStore } from '../lib/store'
 import { useToast } from '../lib/toast'
-import { transactionShareText } from '../lib/share'
+import { dayShareText, transactionShareText } from '../lib/share'
 import type { Transaction } from '../lib/types'
 
 // Opens a sheet that lets a tech send a logged transaction straight into a
@@ -40,6 +40,61 @@ export function ShareTxButton({
         <ShareModal
           open={open}
           onClose={() => setOpen(false)}
+          subject={text.subject}
+          body={text.body}
+        />
+      )}
+    </>
+  )
+}
+
+// Imperatively-opened share sheet for a single transaction — used by the
+// "Save & share" buttons, which need to pop the sheet right after a save.
+export function ShareTxModal({
+  t,
+  onClose,
+}: {
+  t: Transaction
+  onClose: () => void
+}) {
+  const { state } = useStore()
+  const { subject, body } = transactionShareText(t, state)
+  return <ShareModal open onClose={onClose} subject={subject} body={body} />
+}
+
+// Bundles every job logged today into one shareable document. Toasts when
+// there's nothing logged yet rather than opening an empty sheet.
+export function ShareDayButton({
+  label = "Share today's jobs",
+  className,
+}: {
+  label?: string
+  className?: string
+}) {
+  const { state } = useStore()
+  const toast = useToast()
+  const [text, setText] = useState<{ subject: string; body: string } | null>(
+    null,
+  )
+
+  function openSheet() {
+    const built = dayShareText(state.transactions, state)
+    if (!built) {
+      toast.show('No jobs logged today yet.')
+      return
+    }
+    setText(built)
+  }
+
+  return (
+    <>
+      <button type="button" onClick={openSheet} className={className}>
+        {label}
+      </button>
+      {text && (
+        <ShareModal
+          open
+          onClose={() => setText(null)}
           subject={text.subject}
           body={text.body}
         />

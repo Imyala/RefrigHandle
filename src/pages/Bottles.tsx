@@ -48,6 +48,7 @@ import {
   type EntryMode,
 } from '../components/ScaleEntry'
 import { SiteForm } from './Sites'
+import { ShareTxModal } from '../components/ShareSheet'
 import { useToast } from '../lib/toast'
 import { useConfirm } from '../lib/confirm'
 import { displayToKg, formatWeight, kgToDisplay } from '../lib/units'
@@ -79,6 +80,8 @@ export default function Bottles() {
 
   const [editing, setEditing] = useState<Bottle | null>(null)
   const [adding, setAdding] = useState(false)
+  // Set after a "Save & share" so the share sheet pops for the new record.
+  const [shareTx, setShareTx] = useState<Transaction | null>(null)
   // Persist the active status filter across tab navigation. The page
   // unmounts when the tech jumps to Sites/Log/Settings, so plain
   // useState would reset the filter every time they came back.
@@ -493,7 +496,7 @@ export default function Bottles() {
         bottle={sheetBottle}
         kind={logKind}
         onClose={() => setLogKind(null)}
-        onSave={(data) => {
+        onSave={(data, share) => {
           const result = addTransaction(data)
           if (result) {
             toast.show(
@@ -501,9 +504,14 @@ export default function Bottles() {
             )
             setLogKind(null)
             setSheetBottleId(null)
+            if (share) setShareTx(result)
           }
         }}
       />
+
+      {shareTx && (
+        <ShareTxModal t={shareTx} onClose={() => setShareTx(null)} />
+      )}
 
       <BottleForm
         open={adding}
@@ -918,7 +926,7 @@ function QuickLogModal({
     returnDestination?: string
     docketNumber?: string
     refrigerantMismatch?: { bottleType: string; unitType: string }
-  }) => void
+  }, share?: boolean) => void
 }) {
   const { state, addBottle, addSite, addUnit, addCustomRefrigerant } =
     useStore()
@@ -1130,50 +1138,52 @@ function QuickLogModal({
     setUnitId(value)
   }
 
-  function submit(e: React.FormEvent) {
-    e.preventDefault()
+  function doSave(share: boolean) {
     if (!kind || !bottle) return
     if (submitBlocked) return
-    onSave({
-      bottleId: bottle.id,
-      sourceBottleId: isBottleToBottleRecover && sourceBottleId ? sourceBottleId : undefined,
-      siteId: showSite && siteId ? siteId : undefined,
-      unitId: showSite && unitId ? unitId : undefined,
-      kind,
-      amount: showAmount ? Math.abs(amountKg) : 0,
-      bottleAmount: scaleMode
-        ? Math.abs(bottleAmountKg)
-        : showAmount && showLoss && enteredBottleDisplay > 0
+    onSave(
+      {
+        bottleId: bottle.id,
+        sourceBottleId: isBottleToBottleRecover && sourceBottleId ? sourceBottleId : undefined,
+        siteId: showSite && siteId ? siteId : undefined,
+        unitId: showSite && unitId ? unitId : undefined,
+        kind,
+        amount: showAmount ? Math.abs(amountKg) : 0,
+        bottleAmount: scaleMode
           ? Math.abs(bottleAmountKg)
-          : undefined,
-      // Interpret the typed wall-clock time in the configured timezone
-      // (matches the main Refrigerant Log form).
-      date: dateTimeInputToIso(date, tz),
-      tz,
-      // Tech name + RHL come from the active profile via the store's
-      // stamping fallback. The bottle quick-log form doesn't expose a
-      // tech picker — for crews that need to switch techs per job, log
-      // from the Activity tab where the picker lives.
-      equipment: equipment.trim() || undefined,
-      reason: reason || undefined,
-      leakTestPerformed: showCompliance && leakTest !== null ? leakTest : undefined,
-      notes: notes.trim() || undefined,
-      returnDestination:
-        kind === 'return' && returnDestination.trim()
-          ? returnDestination.trim()
-          : undefined,
-      docketNumber:
-        kind === 'return' && docketNumber.trim()
-          ? docketNumber.trim()
-          : undefined,
-      refrigerantMismatch:
-        unitRefrigerantMismatch && selectedUnit?.refrigerantType
-          ? {
-              bottleType: bottle.refrigerantType,
-              unitType: selectedUnit.refrigerantType,
-            }
-          : undefined,
-    })
+          : showAmount && showLoss && enteredBottleDisplay > 0
+            ? Math.abs(bottleAmountKg)
+            : undefined,
+        // Interpret the typed wall-clock time in the configured timezone
+        // (matches the main Refrigerant Log form).
+        date: dateTimeInputToIso(date, tz),
+        tz,
+        // Tech name + RHL come from the active profile via the store's
+        // stamping fallback. The bottle quick-log form doesn't expose a
+        // tech picker — for crews that need to switch techs per job, log
+        // from the Activity tab where the picker lives.
+        equipment: equipment.trim() || undefined,
+        reason: reason || undefined,
+        leakTestPerformed: showCompliance && leakTest !== null ? leakTest : undefined,
+        notes: notes.trim() || undefined,
+        returnDestination:
+          kind === 'return' && returnDestination.trim()
+            ? returnDestination.trim()
+            : undefined,
+        docketNumber:
+          kind === 'return' && docketNumber.trim()
+            ? docketNumber.trim()
+            : undefined,
+        refrigerantMismatch:
+          unitRefrigerantMismatch && selectedUnit?.refrigerantType
+            ? {
+                bottleType: bottle.refrigerantType,
+                unitType: selectedUnit.refrigerantType,
+              }
+            : undefined,
+      },
+      share,
+    )
   }
 
   const titleMap: Record<TransactionKind, string> = {
@@ -1188,7 +1198,13 @@ function QuickLogModal({
   return (
     <>
       <Modal open={open} title={titleMap[kind]} onClose={onClose}>
-        <form onSubmit={submit} className="space-y-3">
+        <form
+          onSubmit={(e) => {
+            e.preventDefault()
+            doSave(false)
+          }}
+          className="space-y-3"
+        >
           <div className="rounded-xl bg-slate-100 p-3 text-sm dark:bg-slate-800">
             <div className="font-semibold text-slate-900 dark:text-slate-100">
               {bottle.bottleNumber} · {bottle.refrigerantType}
@@ -1630,6 +1646,17 @@ function QuickLogModal({
                       : missingLeakTest
                         ? 'Answer leak test'
                         : 'Save'}
+          </Button>
+          {/* Save, then immediately open the share sheet for the new
+              record so the tech can drop it into a job card / email. */}
+          <Button
+            type="button"
+            variant="secondary"
+            full
+            disabled={submitBlocked}
+            onClick={() => doSave(true)}
+          >
+            Save &amp; share
           </Button>
         </form>
       </Modal>
