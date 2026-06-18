@@ -37,6 +37,7 @@ import {
   composeName,
   splitName,
   APP_VERSION,
+  APP_COMMIT,
 } from '../lib/types'
 import { profileFor } from '../lib/compliance'
 import { formatDateTime, formatPlainDate } from '../lib/datetime'
@@ -887,10 +888,12 @@ export default function Settings() {
         </Link>
       </div>
 
-      {/* App version, bumped on every release (see APP_VERSION). Kept tiny
-          and last so it's available for support without drawing the eye. */}
+      {/* App version, injected at build time and bumped on every deploy
+          (see APP_VERSION). Kept tiny and last so it's available for
+          support without drawing the eye. */}
       <p className="px-1 pt-1 text-center text-[10px] text-slate-300 dark:text-slate-600">
         App version {APP_VERSION}
+        {APP_COMMIT ? ` · ${APP_COMMIT}` : ''}
       </p>
 
       <TechnicianModal

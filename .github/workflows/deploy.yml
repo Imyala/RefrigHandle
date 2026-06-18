@@ -32,6 +32,14 @@ jobs:
         env:
           # GitHub Pages serves at https://<owner>.github.io/<repo>/
           BASE_PATH: /${{ github.event.repository.name }}/
+          # Auto-bumped app version: github.run_number increments on every
+          # run of this deploy workflow (each push to main / manual
+          # dispatch), so the version climbs by one per deployment with no
+          # manual edit. Shown at the bottom of Settings. If you want the
+          # number to line up with an existing deployment count, add a
+          # fixed offset here, e.g. v1.$(( ${{ github.run_number }} + 100 )).
+          VITE_APP_VERSION: v1.${{ github.run_number }}
+          VITE_APP_COMMIT: ${{ github.sha }}
           # Optional Supabase sync — set these as repo secrets to enable.
           # Without them the app stays fully offline.
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}

@@ -446,16 +446,24 @@ export interface Tombstone {
 // string literal scattered through the code.
 export type Jurisdiction = 'AU'
 
-// Released app version, shown small at the bottom of Settings. Bump on
-// every push / change. Same lettered scheme as TERMS_VERSION so the two
-// read consistently (e.g. 'v1.1a' → 'v1.1b' → 'v1.2a').
-export const APP_VERSION = 'v1.1a'
+// Released app version, shown small at the bottom of Settings. Injected at
+// build time by the deploy workflow as `v1.<github run number>`, so it
+// bumps automatically on every push to main / deploy — no manual edit.
+// Falls back to 'dev' for local builds that don't set the env var.
+export const APP_VERSION =
+  (import.meta.env.VITE_APP_VERSION as string | undefined) ?? 'dev'
+
+// Short commit the build was cut from, shown alongside APP_VERSION for
+// support / traceability. Undefined on local builds.
+export const APP_COMMIT = (
+  import.meta.env.VITE_APP_COMMIT as string | undefined
+)?.slice(0, 7)
 
 // Bump when the Terms & disclaimer wording materially changes, so users are
 // asked to re-accept (see TermsGate). Stored as termsAcceptedVersion. A
-// lettered string rather than a counter — we expect many small revisions
-// (e.g. 'v1.1a' → 'v1.1b'), and re-acceptance triggers on any change, not
-// on numeric ordering.
+// lettered string, bumped by hand — unlike APP_VERSION this MUST NOT move
+// every deploy, or users would be forced to re-accept the terms on each
+// release. Re-acceptance triggers on any change, not on numeric ordering.
 export const TERMS_VERSION = 'v1.1b'
 
 // Recorded when an owner requests account closure. Its presence locks the
