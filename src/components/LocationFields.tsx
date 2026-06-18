@@ -7,6 +7,7 @@ import {
   AU_REGIONS,
   CITY_OTHER_VALUE,
   TIMEZONE_OPTIONS,
+  regionForCity,
   type LocationSettings,
 } from '../lib/types'
 
@@ -158,7 +159,27 @@ export function CityField({
             )
             return
           }
-          setLoc((l) => ({ ...l, country: 'Australia', city: v }))
+          setLoc((l) => {
+            const next: LocationSettings = {
+              ...l,
+              country: 'Australia',
+              city: v,
+            }
+            // Infer the state from the chosen town (only when the town
+            // belongs to exactly one state) so the tech doesn't have to
+            // pick both — then fill the timezone from that state. Neither
+            // overrides a value the tech has already set.
+            if (!l.region.trim()) {
+              const r = regionForCity(v)
+              if (r) {
+                next.region = r
+                if (!l.timezone.trim()) {
+                  next.timezone = AU_REGION_TIMEZONE[r] ?? l.timezone
+                }
+              }
+            }
+            return next
+          })
         }}
         emptyLabel="—"
         options={cityOptions}
