@@ -893,6 +893,12 @@ export default function Settings() {
           Acceptable Use Policy
         </Link>
         <Link
+          to="/billing"
+          className="text-xs text-slate-400 underline-offset-2 hover:text-slate-600 hover:underline dark:hover:text-slate-300"
+        >
+          Billing &amp; Refund Policy
+        </Link>
+        <Link
           to="/account-deletion"
           onClick={() => {
             // Hand the user their records the moment they start the closure
