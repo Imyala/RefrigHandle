@@ -17,6 +17,7 @@ import TermsPage, { TermsGate } from './components/Terms'
 import PrivacyPage from './components/Privacy'
 import AcceptableUsePage from './components/AcceptableUse'
 import BillingRefundPage from './components/BillingRefund'
+import DataRetentionPage from './components/DataRetention'
 
 export default function App() {
   // ToastProvider sits ABOVE StoreProvider so the store can surface
@@ -46,6 +47,7 @@ export default function App() {
                 <Route path="/privacy" element={<PrivacyPage />} />
                 <Route path="/acceptable-use" element={<AcceptableUsePage />} />
                 <Route path="/billing" element={<BillingRefundPage />} />
+                <Route path="/data-retention" element={<DataRetentionPage />} />
                   <Route path="*" element={<Navigate to="/" replace />} />
                 </Route>
               </Routes>
