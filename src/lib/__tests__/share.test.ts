@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { periodShareText, rangeShareText, transactionShareText } from '../share'
+import {
+  listShareText,
+  periodShareText,
+  rangeShareText,
+  transactionShareText,
+} from '../share'
 import { makeBottle, makeState, makeTx } from './fixtures'
 
 describe('transactionShareText', () => {
@@ -104,5 +109,26 @@ describe('rangeShareText / periodShareText', () => {
     const out = periodShareText([todayTx, oldTx], state, 'today')
     expect(out).not.toBeNull()
     expect(out!.body).toContain('1 job')
+  })
+
+  it('adds a totals line summing amounts by kind', () => {
+    const txs = [
+      makeTx({ id: 'a', kind: 'charge', bottleId: 'b1', amount: 2.5, date: '2026-06-18T03:00:00.000Z' }),
+      makeTx({ id: 'b', kind: 'charge', bottleId: 'b1', amount: 1.5, date: '2026-06-18T04:00:00.000Z' }),
+      makeTx({ id: 'c', kind: 'recover', bottleId: 'b1', amount: 1, date: '2026-06-18T05:00:00.000Z' }),
+    ]
+    const out = rangeShareText(txs, state, '2026-06-18', '2026-06-18')
+    expect(out!.body).toContain('Totals: Charge 4.00 kg · Recover 1.00 kg')
+  })
+
+  it('listShareText bundles an arbitrary filtered list', () => {
+    const txs = [
+      makeTx({ id: 'a', kind: 'charge', bottleId: 'b1', amount: 1 }),
+      makeTx({ id: 'b', kind: 'recover', bottleId: 'b1', amount: 1 }),
+    ]
+    const out = listShareText(txs, state, 'Filtered: R32')
+    expect(out).not.toBeNull()
+    expect(out!.body).toContain('Filtered: R32 · 2 jobs')
+    expect(listShareText([], state, 'x')).toBeNull()
   })
 })

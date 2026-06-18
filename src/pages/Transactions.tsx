@@ -200,6 +200,19 @@ export default function Transactions() {
   }
   const visible = sorted.length > limit ? sorted.slice(0, limit) : sorted
 
+  // When a filter/search is active, offer a "current results" share bundle
+  // alongside the today/week/month options. The label describes the filter
+  // so the shared document says what it covers.
+  const hasFilter =
+    filterKind !== 'all' || query.trim() !== '' || !!fromDate || !!toDate
+  const filterLabel = (() => {
+    const parts: string[] = []
+    if (fromDate || toDate) parts.push(`${fromDate || 'start'} to ${toDate || 'now'}`)
+    if (filterKind !== 'all') parts.push(transactionLabel(filterKind))
+    if (query.trim()) parts.push(`“${query.trim()}”`)
+    return parts.length ? `Filtered: ${parts.join(' · ')}` : 'Filtered results'
+  })()
+
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between gap-2">
@@ -211,6 +224,9 @@ export default function Transactions() {
             <SharePeriodButton
               label="Share…"
               className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-medium text-brand-600 hover:bg-brand-50 dark:border-slate-700 dark:hover:bg-brand-900/20"
+              filtered={
+                hasFilter ? { transactions: sorted, label: filterLabel } : undefined
+              }
             />
           )}
           <Button onClick={() => setAdding(true)} disabled={bottles.length === 0}>

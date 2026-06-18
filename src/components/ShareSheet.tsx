@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Button, Modal } from './ui'
 import { useStore } from '../lib/store'
 import { useToast } from '../lib/toast'
-import { periodShareText, transactionShareText } from '../lib/share'
+import { listShareText, periodShareText, transactionShareText } from '../lib/share'
 import type { SharePeriod } from '../lib/share'
 import type { Transaction } from '../lib/types'
 
@@ -76,9 +76,13 @@ const PERIOD_OPTIONS: { value: SharePeriod; label: string; empty: string }[] = [
 export function SharePeriodButton({
   label = 'Share jobs…',
   className,
+  filtered,
 }: {
   label?: string
   className?: string
+  // When the log page has an active filter/search, pass the matching rows
+  // (and a human label for them) to offer a "current results" bundle.
+  filtered?: { transactions: Transaction[]; label: string }
 }) {
   const { state } = useStore()
   const toast = useToast()
@@ -92,6 +96,17 @@ export function SharePeriodButton({
     setChoosing(false)
     if (!built) {
       toast.show(emptyMsg)
+      return
+    }
+    setText(built)
+  }
+
+  function pickFiltered() {
+    if (!filtered) return
+    const built = listShareText(filtered.transactions, state, filtered.label)
+    setChoosing(false)
+    if (!built) {
+      toast.show('No jobs match the current filters.')
       return
     }
     setText(built)
@@ -123,6 +138,14 @@ export function SharePeriodButton({
               {o.label}
             </Button>
           ))}
+          {filtered && filtered.transactions.length > 0 && (
+            <>
+              <div className="my-1 border-t border-slate-200 dark:border-slate-800" />
+              <Button variant="secondary" full onClick={pickFiltered}>
+                Current results ({filtered.transactions.length})
+              </Button>
+            </>
+          )}
         </div>
       </Modal>
 
