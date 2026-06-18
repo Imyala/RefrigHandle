@@ -1,12 +1,12 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Button, Card, Field, TextArea, TextInput } from '../components/ui'
 import { Picker } from '../components/Picker'
-import { DateInput } from '../components/DateInput'
 import { useStore } from '../lib/store'
 import { useToast } from '../lib/toast'
+import { useConfirm } from '../lib/confirm'
 import { profileFor } from '../lib/compliance'
-import { formatDateTime } from '../lib/datetime'
+import { businessStructureLabel, retentionSummary } from '../lib/types'
 
 // Common reasons, offered as a picker so the request is quick to fill and
 // the responses stay consistent. "Other" reveals the free-text box.
@@ -19,182 +19,126 @@ const REASONS: { value: string; label: string }[] = [
   { value: 'other', label: 'Other (describe below)' },
 ]
 
-// Account-deletion request. This is a local-first app with no central
-// account server today, so "submitting" produces a dated, printable
-// request the business keeps and sends to whoever administers their
-// account. The retention notice is the important part: refrigerant and
-// business records are legally held for 5 years before anything is
-// destroyed.
+// Account-closure request. Business identity is pulled from the account
+// (read-only) and the requester is pre-filled from the active profile. On
+// submit the account is closed and the app locks (AccountClosedGate).
 export default function AccountDeletion() {
-  const { state } = useStore()
+  const { state, requestAccountClosure } = useStore()
   const toast = useToast()
+  const confirm = useConfirm()
   const profile = profileFor(state.jurisdiction)
+
+  // This page is reached from the bottom of a long Settings page — make
+  // sure we land at the top, not wherever Settings was scrolled to.
+  useEffect(() => {
+    window.scrollTo(0, 0)
+  }, [])
 
   const activeTech = state.technicians.find(
     (t) => t.id === state.activeTechnicianId,
   )
+  const retention = retentionSummary(state.businessStructure)
 
-  const [business, setBusiness] = useState(state.businessName)
-  const [abn, setAbn] = useState(state.businessAbn)
-  const [rta, setRta] = useState(state.arcAuthorisationNumber)
   const [contactName, setContactName] = useState(activeTech?.name ?? '')
   const [email, setEmail] = useState('')
   const [phone, setPhone] = useState('')
   const [reason, setReason] = useState('')
   const [details, setDetails] = useState('')
-  const [preferredDate, setPreferredDate] = useState('')
   const [ack, setAck] = useState(false)
   const [attempted, setAttempted] = useState(false)
-  const [submittedAt, setSubmittedAt] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
 
   const reasonLabel = REASONS.find((r) => r.value === reason)?.label ?? ''
-  const businessOk = business.trim() !== ''
   const contactOk = contactName.trim() !== ''
-  const emailOk = /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email.trim())
   const reasonOk =
     reason !== '' && (reason !== 'other' || details.trim() !== '')
-  const canSubmit = businessOk && contactOk && emailOk && reasonOk && ack
+  const canSubmit = contactOk && reasonOk && ack
 
-  const e = (show: boolean, msg: string) =>
+  const fieldErr = (show: boolean, msg: string) =>
     attempted && show ? msg : undefined
 
-  function submit() {
+  async function submit() {
+    if (busy) return
     if (!canSubmit) {
       setAttempted(true)
       return
     }
-    setSubmittedAt(new Date().toISOString())
-    toast.show('Deletion request prepared', 'success')
-    // Scroll to top so the confirmation/printable summary is in view.
-    window.scrollTo({ top: 0, behavior: 'smooth' })
+    const ok = await confirm({
+      title: 'Close this account?',
+      message: `This closes the account and locks the app on this device. You'll be logged out and won't be able to get back in — reactivation means contacting us directly. Your records are retained for ${retention}. Export a full backup first (Settings → Backup & export) if you want your own copy.`,
+      confirmLabel: 'Close account',
+      danger: true,
+    })
+    if (!ok) return
+    setBusy(true)
+    requestAccountClosure({
+      reason: reasonLabel,
+      details,
+      contactName,
+      contactEmail: email,
+      contactPhone: phone,
+    })
+    toast.show('Account closed', 'info')
+    // The AccountClosedGate takes over on the next render and replaces the
+    // whole app, so there's nothing more to do here.
   }
 
-  // --- Confirmation / printable request --------------------------------
-  if (submittedAt) {
-    const tz = state.location.timezone
-    const stamp = formatDateTime(submittedAt, tz, state.clock, true)
-    return (
-      <div className="space-y-4">
-        <BackLink />
-        <Card className="!border-emerald-300 !bg-emerald-50 dark:!border-emerald-900/50 dark:!bg-emerald-900/20">
-          <div className="text-sm font-semibold text-emerald-900 dark:text-emerald-200">
-            Request prepared
-          </div>
-          <p className="mt-1 text-sm text-emerald-900/80 dark:text-emerald-100/80">
-            Print or save this page as a PDF for your records, then send it to
-            whoever administers your account. Keep a copy — it's part of your
-            paper trail.
-          </p>
-        </Card>
-
-        <Card>
-          <div className="mb-2 text-base font-bold text-slate-900 dark:text-slate-100">
-            Account deletion request
-          </div>
-          <dl className="space-y-1.5 text-sm">
-            <Row label="Requested" value={stamp} />
-            <Row label="Business" value={business} />
-            {abn.trim() && <Row label={profile.businessNumberShort} value={abn} />}
-            {rta.trim() && (
-              <Row label={profile.businessAuthShort} value={rta} />
-            )}
-            <Row label="Contact" value={contactName} />
-            <Row label="Email" value={email} />
-            {phone.trim() && <Row label="Phone" value={phone} />}
-            <Row label="Reason" value={reasonLabel} />
-            {details.trim() && <Row label="Details" value={details} />}
-            {preferredDate && (
-              <Row label="Preferred closure" value={preferredDate} />
-            )}
-          </dl>
-          <p className="mt-3 border-t border-slate-200 pt-3 text-xs text-slate-500 dark:border-slate-800">
-            <strong>Retention notice:</strong> refrigerant handling and business
-            records are retained for the legally required minimum —{' '}
-            <strong>5 years</strong> (Australian Taxation Office; Ozone
-            Protection and Synthetic Greenhouse Gas Management Regulations 1995),
-            or <strong>7 years</strong> for companies (ASIC; Corporations Act
-            2001 s&nbsp;286). The account is closed on request, but these records
-            are only destroyed after the applicable period.
-          </p>
-        </Card>
-
-        <div className="flex flex-wrap gap-2">
-          <Button onClick={() => window.print()}>Print / Save PDF</Button>
-          <Button variant="secondary" onClick={() => setSubmittedAt(null)}>
-            Edit request
-          </Button>
-        </div>
-      </div>
-    )
-  }
-
-  // --- The form ---------------------------------------------------------
   return (
     <div className="space-y-4">
-      <BackLink />
+      <Link
+        to="/settings"
+        className="inline-flex items-center gap-1 text-sm font-medium text-brand-600 hover:underline"
+      >
+        ← Back to Settings
+      </Link>
 
       <div>
         <h2 className="text-xl font-semibold text-slate-900 dark:text-slate-100">
           Request account deletion
         </h2>
         <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
-          Use this to request closure of your account. Fill in the details
-          below and we'll prepare a dated request you can keep and send on.
+          Confirm your details below to request closure of your account.
         </p>
       </div>
 
       <Card className="!border-amber-300 !bg-amber-50 dark:!border-amber-900/50 dark:!bg-amber-900/20">
         <div className="text-sm font-semibold text-amber-900 dark:text-amber-200">
-          Before you request deletion
+          Before you request closure
         </div>
         <p className="mt-1 text-sm text-amber-900/80 dark:text-amber-100/80">
-          By law your refrigerant and business records must be kept for a
-          minimum period before anything can be destroyed:
+          Submitting <strong>closes the account and locks this device</strong> —
+          you'll be logged out and won't be able to get back in. To reactivate
+          you'll need to contact us directly.
         </p>
-        <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-amber-900/80 dark:text-amber-100/80">
-          <li>
-            <strong>5 years</strong> for all businesses — the ATO and the Ozone
-            Protection and Synthetic Greenhouse Gas Management Regulations 1995.
-          </li>
-          <li>
-            <strong>7 years</strong> if you trade as a company (Pty Ltd) — ASIC
-            under the Corporations Act 2001 (s&nbsp;286).
-          </li>
-        </ul>
         <p className="mt-2 text-sm text-amber-900/80 dark:text-amber-100/80">
-          Closing the account does not delete those records before the period
-          that applies to you. Export a full backup (Settings → Backup &amp;
-          export) first if you want your own copy.
+          By law your refrigerant and business records are retained for{' '}
+          <strong>{retention}</strong> and are not destroyed before then.
+          Export a full backup (Settings → Backup &amp; export) first if you
+          want your own copy.
         </p>
       </Card>
 
       <Card>
         <div className="mb-3 text-sm font-semibold text-slate-700 dark:text-slate-200">
-          Business
+          Business (from your account)
         </div>
-        <div className="space-y-3">
-          <Field label="Business name *" error={e(!businessOk, 'Enter your business name.')}>
-            <TextInput
-              value={business}
-              invalid={!!e(!businessOk, 'x')}
-              onChange={(ev) => setBusiness(ev.target.value)}
+        <dl className="space-y-1.5 text-sm">
+          <Row label="Business" value={state.businessName || '—'} />
+          <Row
+            label={profile.businessNumberShort}
+            value={state.businessAbn || '—'}
+          />
+          {profile.hasBusinessAuthorisation && (
+            <Row
+              label={profile.businessAuthShort}
+              value={state.arcAuthorisationNumber || '—'}
             />
-          </Field>
-          <div className="grid grid-cols-2 gap-3">
-            <Field label={profile.businessNumberShort}>
-              <TextInput
-                value={abn}
-                inputMode="numeric"
-                onChange={(ev) => setAbn(ev.target.value)}
-              />
-            </Field>
-            {profile.hasBusinessAuthorisation && (
-              <Field label={profile.businessAuthShort}>
-                <TextInput value={rta} onChange={(ev) => setRta(ev.target.value)} />
-              </Field>
-            )}
-          </div>
-        </div>
+          )}
+          <Row
+            label="Structure"
+            value={businessStructureLabel(state.businessStructure) || '—'}
+          />
+        </dl>
       </Card>
 
       <Card>
@@ -202,35 +146,37 @@ export default function AccountDeletion() {
           Contact
         </div>
         <div className="space-y-3">
-          <Field label="Contact name *" error={e(!contactOk, 'Enter a contact name.')}>
+          <Field
+            label="Contact name *"
+            error={fieldErr(!contactOk, 'Enter a contact name.')}
+            hint="Pre-filled from the profile you're signed in as."
+          >
             <TextInput
               value={contactName}
-              invalid={!!e(!contactOk, 'x')}
+              invalid={!!fieldErr(!contactOk, 'x')}
               onChange={(ev) => setContactName(ev.target.value)}
             />
           </Field>
-          <Field
-            label="Email *"
-            error={e(!emailOk, 'Enter a valid email address.')}
-          >
-            <TextInput
-              type="email"
-              inputMode="email"
-              value={email}
-              invalid={!!e(!emailOk, 'x')}
-              onChange={(ev) => setEmail(ev.target.value)}
-              placeholder="e.g. you@business.com.au"
-            />
-          </Field>
-          <Field label="Phone">
-            <TextInput
-              type="tel"
-              inputMode="tel"
-              value={phone}
-              onChange={(ev) => setPhone(ev.target.value)}
-              placeholder="e.g. 0400 000 000"
-            />
-          </Field>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <Field label="Email" hint="So we can confirm the closure.">
+              <TextInput
+                type="email"
+                inputMode="email"
+                value={email}
+                onChange={(ev) => setEmail(ev.target.value)}
+                placeholder="e.g. you@business.com.au"
+              />
+            </Field>
+            <Field label="Phone">
+              <TextInput
+                type="tel"
+                inputMode="tel"
+                value={phone}
+                onChange={(ev) => setPhone(ev.target.value)}
+                placeholder="e.g. 0400 000 000"
+              />
+            </Field>
+          </div>
         </div>
       </Card>
 
@@ -240,13 +186,13 @@ export default function AccountDeletion() {
         </div>
         <div className="space-y-3">
           <Field
-            label="Reason for deletion *"
-            error={e(reason === '', 'Pick a reason.')}
+            label="Reason for closure *"
+            error={fieldErr(reason === '', 'Pick a reason.')}
           >
             <Picker
-              title="Reason for deletion"
+              title="Reason for closure"
               value={reason}
-              invalid={!!e(reason === '', 'x')}
+              invalid={!!fieldErr(reason === '', 'x')}
               onChange={setReason}
               placeholder="— pick a reason —"
               options={REASONS}
@@ -254,7 +200,7 @@ export default function AccountDeletion() {
           </Field>
           <Field
             label={reason === 'other' ? 'Details *' : 'Details'}
-            error={e(
+            error={fieldErr(
               reason === 'other' && details.trim() === '',
               'Add a short description.',
             )}
@@ -262,15 +208,8 @@ export default function AccountDeletion() {
           >
             <TextArea
               value={details}
-              invalid={!!e(reason === 'other' && details.trim() === '', 'x')}
+              invalid={!!fieldErr(reason === 'other' && details.trim() === '', 'x')}
               onChange={(ev) => setDetails(ev.target.value)}
-            />
-          </Field>
-          <Field label="Preferred closure date" hint="Optional.">
-            <DateInput
-              value={preferredDate}
-              onChange={setPreferredDate}
-              ariaLabel="Preferred closure date"
             />
           </Field>
         </div>
@@ -285,36 +224,22 @@ export default function AccountDeletion() {
             onChange={(ev) => setAck(ev.target.checked)}
           />
           <span>
-            I understand my refrigerant and business records will be retained
-            for the legally required minimum — <strong>5 years</strong> (ATO and
-            the Ozone Protection and Synthetic Greenhouse Gas Management
-            Regulations 1995), or <strong>7 years</strong> if I trade as a
-            company (ASIC, Corporations Act 2001 s&nbsp;286) — and will only be
-            destroyed after the period that applies to me.
+            I understand this closes and locks the account, that I'll need to
+            contact us to reactivate it, and that my records are retained for{' '}
+            {retention} before they can be destroyed.
           </span>
         </label>
         {attempted && !ack && (
           <p className="mt-2 text-xs font-medium text-red-600 dark:text-red-400">
-            Please acknowledge the retention requirement to continue.
+            Please acknowledge to continue.
           </p>
         )}
       </Card>
 
-      <Button full onClick={submit}>
-        Prepare deletion request
+      <Button full variant="danger" disabled={busy} onClick={submit}>
+        {busy ? 'Closing…' : 'Submit & close account'}
       </Button>
     </div>
-  )
-}
-
-function BackLink() {
-  return (
-    <Link
-      to="/settings"
-      className="inline-flex items-center gap-1 text-sm font-medium text-brand-600 hover:underline"
-    >
-      ← Back to Settings
-    </Link>
   )
 }
 

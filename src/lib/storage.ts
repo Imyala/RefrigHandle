@@ -68,6 +68,8 @@ interface LegacyState
   jurisdiction?: string
   businessName?: string
   businessAbn?: string
+  businessStructure?: AppState['businessStructure']
+  accountClosure?: AppState['accountClosure']
   location?: Partial<AppState['location']>
   clock?: string
   technicians?: Technician[]
@@ -217,6 +219,8 @@ function normalize(parsed: LegacyState): AppState {
     jurisdiction: 'AU',
     businessName: parsed.businessName ?? '',
     businessAbn: parsed.businessAbn ?? '',
+    businessStructure: parsed.businessStructure,
+    accountClosure: parsed.accountClosure,
     location: {
       country: parsed.location?.country ?? '',
       region: parsed.location?.region ?? '',

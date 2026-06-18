@@ -1,6 +1,7 @@
 import { HashRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { Layout } from './components/Layout'
 import { OnboardingGate } from './components/Onboarding'
+import { AccountClosedGate } from './components/AccountClosed'
 import { StoreProvider } from './lib/store'
 import { ToastProvider } from './lib/toast'
 import { ConfirmProvider } from './lib/confirm'
@@ -22,7 +23,8 @@ export default function App() {
       <ConfirmProvider>
         <StoreProvider>
           <ThemeApplier />
-          <OnboardingGate>
+          <AccountClosedGate>
+            <OnboardingGate>
             <HashRouter>
               <Routes>
                 <Route element={<Layout />}>
@@ -39,7 +41,8 @@ export default function App() {
                 </Route>
               </Routes>
             </HashRouter>
-          </OnboardingGate>
+            </OnboardingGate>
+          </AccountClosedGate>
         </StoreProvider>
       </ConfirmProvider>
     </ToastProvider>

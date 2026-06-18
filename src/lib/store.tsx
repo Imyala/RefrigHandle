@@ -9,10 +9,12 @@ import {
   type ReactNode,
 } from 'react'
 import {
+  type AccountClosure,
   type AppState,
   type AuditEntry,
   type Bottle,
   type BottlePreset,
+  type BusinessStructure,
   type ClockFormat,
   type Jurisdiction,
   type LocationSettings,
@@ -120,6 +122,7 @@ interface StoreApi {
   completeSetup: (data: {
     businessName: string
     businessAbn: string
+    businessStructure: BusinessStructure
     arcAuthorisationNumber: string
     arcAuthorisationExpiry: string
     technician: {
@@ -142,6 +145,17 @@ interface StoreApi {
   setArcAuthorisationExpiry: (d: string) => void
   setBusinessName: (n: string) => void
   setBusinessAbn: (n: string) => void
+  setBusinessStructure: (s: BusinessStructure) => void
+  // Owner requests account closure: snapshots the business identity, locks
+  // the app, and logs out. Reversible only by re-importing a pre-closure
+  // backup or clearing app data.
+  requestAccountClosure: (req: {
+    reason: string
+    details?: string
+    contactName: string
+    contactEmail?: string
+    contactPhone?: string
+  }) => void
   setLocation: (l: LocationSettings) => void
   setUnit: (u: WeightUnit) => void
   setTheme: (t: Theme) => void
@@ -1143,6 +1157,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         ...s,
         businessName: data.businessName.trim(),
         businessAbn: data.businessAbn.trim(),
+        businessStructure: data.businessStructure,
         arcAuthorisationNumber: data.arcAuthorisationNumber.trim(),
         arcAuthorisationExpiry: data.arcAuthorisationExpiry.trim(),
         jurisdiction: data.jurisdiction,
@@ -1272,6 +1287,60 @@ export function StoreProvider({ children }: { children: ReactNode }) {
               auditLog: settingsChange(s, 'Business ABN', s.businessAbn, n.trim()),
             },
       ),
+    [],
+  )
+
+  const setBusinessStructure = useCallback(
+    (next: BusinessStructure) =>
+      setState((s) =>
+        s.businessStructure === next
+          ? s
+          : {
+              ...s,
+              businessStructure: next,
+              settingsUpdatedAt: new Date().toISOString(),
+              auditLog: settingsChange(
+                s,
+                'Business structure',
+                s.businessStructure ?? '—',
+                next,
+              ),
+            },
+      ),
+    [],
+  )
+
+  const requestAccountClosure: StoreApi['requestAccountClosure'] = useCallback(
+    (req) => {
+      setState((s) => {
+        if (s.accountClosure) return s // already closed
+        const now = new Date().toISOString()
+        const closure: AccountClosure = {
+          requestedAt: now,
+          reason: req.reason,
+          details: req.details?.trim() || undefined,
+          contactName: req.contactName.trim(),
+          contactEmail: req.contactEmail?.trim() || undefined,
+          contactPhone: req.contactPhone?.trim() || undefined,
+          businessName: s.businessName,
+          businessAbn: s.businessAbn,
+          arcAuthorisationNumber: s.arcAuthorisationNumber,
+        }
+        return {
+          ...s,
+          accountClosure: closure,
+          // Log out — no active seat while the account is closed.
+          activeTechnicianId: undefined,
+          settingsUpdatedAt: now,
+          auditLog: withAudit(s, {
+            action: 'settings',
+            entity: 'settings',
+            target: 'Account closure',
+            summary: `Account closure requested — ${req.reason}`,
+          }),
+        }
+      })
+    },
     [],
   )
 
@@ -1528,6 +1597,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setArcAuthorisationExpiry,
       setBusinessName,
       setBusinessAbn,
+      setBusinessStructure,
+      requestAccountClosure,
       setLocation,
       setUnit,
       setTheme,
@@ -1569,6 +1640,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setArcAuthorisationExpiry,
       setBusinessName,
       setBusinessAbn,
+      setBusinessStructure,
+      requestAccountClosure,
       setLocation,
       setUnit,
       setTheme,

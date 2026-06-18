@@ -446,6 +446,64 @@ export interface Tombstone {
 // string literal scattered through the code.
 export type Jurisdiction = 'AU'
 
+// Legal business structure. Drives the records-retention period: companies
+// (Pty Ltd) must keep financial records 7 years under the Corporations Act
+// 2001 (s286, ASIC); sole traders, partnerships and trusts keep them 5
+// years (ATO + the Ozone Protection regulations for refrigerant records).
+export type BusinessStructure =
+  | 'sole_trader'
+  | 'partnership'
+  | 'company'
+  | 'trust'
+
+export const BUSINESS_STRUCTURES: {
+  value: BusinessStructure
+  label: string
+}[] = [
+  { value: 'sole_trader', label: 'Sole trader' },
+  { value: 'partnership', label: 'Partnership' },
+  { value: 'company', label: 'Company (Pty Ltd)' },
+  { value: 'trust', label: 'Trust' },
+]
+
+export function businessStructureLabel(s?: BusinessStructure): string {
+  return BUSINESS_STRUCTURES.find((b) => b.value === s)?.label ?? ''
+}
+
+// Years that business / refrigerant records must be retained for this
+// structure. Null when the structure isn't known yet (legacy installs that
+// predate the setting) — callers then show the conservative 5–7 range.
+export function retentionYears(s?: BusinessStructure): number | null {
+  if (!s) return null
+  return s === 'company' ? 7 : 5
+}
+
+// Plain-English retention period for messaging — the exact figure when the
+// structure is known, or the conservative 5–7 range when it isn't.
+export function retentionSummary(s?: BusinessStructure): string {
+  const y = retentionYears(s)
+  if (y === 7) return '7 years (ASIC — Corporations Act 2001 s286)'
+  if (y === 5)
+    return '5 years (ATO; Ozone Protection and Synthetic Greenhouse Gas Management Regulations 1995)'
+  return '5–7 years (5 for sole traders, partnerships and trusts; 7 for companies under ASIC)'
+}
+
+// Recorded when an owner requests account closure. Its presence locks the
+// app (see AccountClosedGate) — the device can't be used again until the
+// closure is lifted by re-importing a pre-closure backup or clearing data.
+export interface AccountClosure {
+  requestedAt: string // ISO
+  reason: string // label
+  details?: string
+  contactName: string
+  contactEmail?: string
+  contactPhone?: string
+  // Snapshot of who the request was for, frozen at request time.
+  businessName: string
+  businessAbn: string
+  arcAuthorisationNumber: string
+}
+
 export type WeightUnit = 'kg' | 'lb'
 
 export type Theme = 'system' | 'light' | 'dark'
@@ -772,6 +830,11 @@ export interface AppState {
   // free-form VAT / registration number. Field name kept for backward
   // compatibility with stored data and exports.
   businessAbn: string
+  // Legal structure of the business — set once at first-run setup and
+  // locked in Settings with the rest of the company identity. Drives the
+  // records-retention period (5 vs 7 years). Optional only so legacy
+  // installs load; the onboarding gate makes it mandatory for new ones.
+  businessStructure?: BusinessStructure
   // Regulatory regime — see Jurisdiction / lib/compliance.ts.
   jurisdiction: Jurisdiction
   location: LocationSettings
@@ -785,6 +848,9 @@ export interface AppState {
   // blocks everything else. Existing installs are grandfathered in
   // `normalize()` so an upgrade never locks a returning user out.
   setupCompletedAt?: string
+  // Set when the owner has requested account closure. While present the
+  // app is locked (AccountClosedGate) and nothing else is reachable.
+  accountClosure?: AccountClosure
   // Deletion markers consumed by the sync merge — see Tombstone.
   tombstones: Tombstone[]
   // When the scalar settings block (business identity, location, units,

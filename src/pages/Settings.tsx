@@ -16,8 +16,10 @@ import { QuarterlyReportCard } from '../components/QuarterlyReport'
 import { useStore } from '../lib/store'
 import {
   expiryStatus,
+  BUSINESS_STRUCTURES,
   REFRIGERANT_TYPES,
   transactionLoss,
+  type BusinessStructure,
   type ClockFormat,
   type LocationSettings,
   type Technician,
@@ -90,6 +92,7 @@ export default function Settings() {
     setArcAuthorisationExpiry,
     setBusinessName,
     setBusinessAbn,
+    setBusinessStructure,
     setLocation,
     setUnit,
     setTheme,
@@ -772,6 +775,22 @@ export default function Settings() {
               onBlur={commitAbn}
               inputMode="numeric"
               placeholder="e.g. 51 824 753 556"
+            />
+          </Field>
+          <Field
+            label="Business structure"
+            hint="Determines the records-retention period — companies keep records 7 years, others 5."
+          >
+            <Picker
+              title="Business structure"
+              value={state.businessStructure ?? ''}
+              disabled={companyLocked}
+              onChange={(v) => {
+                setBusinessStructure(v as BusinessStructure)
+                flashComp()
+              }}
+              placeholder="— choose —"
+              options={BUSINESS_STRUCTURES}
             />
           </Field>
           {profile.hasBusinessAuthorisation && (

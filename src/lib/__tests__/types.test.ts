@@ -11,6 +11,8 @@ import {
   canAssignRole,
   canManageTech,
   canManageTechnicians,
+  retentionSummary,
+  retentionYears,
   composeName,
   daysUntilPurge,
   isTechnicianActive,
@@ -26,6 +28,27 @@ import {
   transactionLoss,
 } from '../types'
 import { makeBottle, makeTx } from './fixtures'
+
+describe('records retention by business structure', () => {
+  it('companies keep records 7 years, everyone else 5', () => {
+    expect(retentionYears('company')).toBe(7)
+    expect(retentionYears('sole_trader')).toBe(5)
+    expect(retentionYears('partnership')).toBe(5)
+    expect(retentionYears('trust')).toBe(5)
+  })
+
+  it('is unknown until the structure is set', () => {
+    expect(retentionYears(undefined)).toBeNull()
+    expect(retentionSummary(undefined)).toContain('5–7 years')
+  })
+
+  it('summary names the right period and regulator', () => {
+    expect(retentionSummary('company')).toContain('7 years')
+    expect(retentionSummary('company')).toContain('ASIC')
+    expect(retentionSummary('sole_trader')).toContain('5 years')
+    expect(retentionSummary('sole_trader')).toContain('ATO')
+  })
+})
 
 describe('role assignment guard (canAssignRole / canManageTech)', () => {
   it('a supervisor cannot grant owner while an owner exists', () => {

@@ -11,7 +11,9 @@ import {
   isLocationComplete,
   isSetupComplete,
   roleInfo,
+  BUSINESS_STRUCTURES,
   SETUP_ROLE_CHOICES,
+  type BusinessStructure,
   type Jurisdiction,
   type LocationSettings,
   type TechnicianRole,
@@ -39,6 +41,7 @@ function OnboardingScreen() {
   const jurisdiction: Jurisdiction = 'AU'
   const [businessName, setBusinessName] = useState('')
   const [abn, setAbn] = useState('')
+  const [structure, setStructure] = useState<BusinessStructure | ''>('')
   const [arcAuth, setArcAuth] = useState('')
   const [arcExpiry, setArcExpiry] = useState('')
   const [techFirst, setTechFirst] = useState('')
@@ -73,6 +76,7 @@ function OnboardingScreen() {
 
   const businessOk = businessName.trim() !== ''
   const abnOk = abn.trim() !== '' && profile.validateBusinessNumber(abn)
+  const structureOk = structure !== ''
   const arcOk = !profile.hasBusinessAuthorisation || arcAuth.trim() !== ''
   // The RTA is issued for a fixed term (1, 2 or 3 years) and must be
   // renewed before it lapses, so an expiry always exists — capture it at
@@ -87,7 +91,7 @@ function OnboardingScreen() {
   const techOk = nameOk && techRhl.trim() !== '' && expiryOk && passwordOk
   const locOk = isLocationComplete(loc)
   const canFinish =
-    businessOk && abnOk && arcOk && arcExpiryOk && techOk && locOk
+    businessOk && abnOk && structureOk && arcOk && arcExpiryOk && techOk && locOk
 
   // Exactly what's still outstanding, in field order — so a dead
   // "Finish setup" button can't leave the tech guessing which field is
@@ -102,6 +106,7 @@ function OnboardingScreen() {
         : `a valid ${profile.businessNumberShort}`,
     )
   }
+  if (!structureOk) missing.push('business structure')
   if (!arcOk) missing.push(profile.businessAuthShort)
   if (!arcExpiryOk) missing.push(`${profile.businessAuthShort} expiry`)
   if (techFirst.trim() === '') missing.push('first name')
@@ -125,6 +130,7 @@ function OnboardingScreen() {
       ? `Enter your ${profile.businessNumberShort}.`
       : `Enter a valid ${profile.businessNumberShort}.`,
   )
+  const structureErr = err(!structureOk, 'Choose your business structure.')
   const arcErr = err(!arcOk, `Enter your ${profile.businessAuthShort}.`)
   const arcExpiryErr = err(
     !arcExpiryOk,
@@ -180,6 +186,7 @@ function OnboardingScreen() {
     completeSetup({
       businessName,
       businessAbn: abn,
+      businessStructure: structure as BusinessStructure,
       arcAuthorisationNumber: profile.hasBusinessAuthorisation ? arcAuth : '',
       arcAuthorisationExpiry: profile.hasBusinessAuthorisation ? arcExpiry : '',
       technician: {
@@ -263,6 +270,20 @@ function OnboardingScreen() {
                   onChange={(e) => setAbn(e.target.value)}
                   inputMode="numeric"
                   placeholder="e.g. 51 824 753 556"
+                />
+              </Field>
+              <Field
+                label="Business structure *"
+                error={structureErr}
+                hint="Sets how long records must be kept — companies keep them 7 years, others 5. Locked once setup is complete."
+              >
+                <Picker
+                  title="Business structure"
+                  value={structure}
+                  invalid={!!structureErr}
+                  onChange={(v) => setStructure(v as BusinessStructure)}
+                  placeholder="— choose —"
+                  options={BUSINESS_STRUCTURES}
                 />
               </Field>
               {profile.hasBusinessAuthorisation && (
