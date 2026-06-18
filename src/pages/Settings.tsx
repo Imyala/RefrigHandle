@@ -881,6 +881,12 @@ export default function Settings() {
           Terms &amp; disclaimer
         </Link>
         <Link
+          to="/privacy"
+          className="text-xs text-slate-400 underline-offset-2 hover:text-slate-600 hover:underline dark:hover:text-slate-300"
+        >
+          Privacy Policy
+        </Link>
+        <Link
           to="/account-deletion"
           onClick={() => {
             // Hand the user their records the moment they start the closure

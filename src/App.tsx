@@ -14,6 +14,7 @@ import AuditLog from './pages/AuditLog'
 import Settings from './pages/Settings'
 import AccountDeletion from './pages/AccountDeletion'
 import TermsPage, { TermsGate } from './components/Terms'
+import PrivacyPage from './components/Privacy'
 
 export default function App() {
   // ToastProvider sits ABOVE StoreProvider so the store can surface
@@ -40,6 +41,7 @@ export default function App() {
                   <Route path="/settings" element={<Settings />} />
                 <Route path="/account-deletion" element={<AccountDeletion />} />
                 <Route path="/terms" element={<TermsPage />} />
+                <Route path="/privacy" element={<PrivacyPage />} />
                   <Route path="*" element={<Navigate to="/" replace />} />
                 </Route>
               </Routes>
