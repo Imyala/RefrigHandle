@@ -1734,7 +1734,7 @@ function LogbookRow({
       <td className="py-1 pr-2 whitespace-nowrap">
         {/* Business timezone, not browser — printed audit dates must
             match the on-screen log. */}
-        {formatDate(t.date, state.location.timezone)}
+        {formatDate(t.date, t.tz || state.location.timezone)}
       </td>
       <td className="py-1 pr-2">
         {transactionLabel(t.kind)}
@@ -2143,7 +2143,7 @@ function AuditTxRow({
       }`}
     >
       <td className="py-1 pr-2 whitespace-nowrap">
-        {formatDate(t.date, state.location.timezone)}
+        {formatDate(t.date, t.tz || state.location.timezone)}
       </td>
       <td className="py-1 pr-2">
         {transactionLabel(t.kind)}

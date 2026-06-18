@@ -51,8 +51,11 @@ import { useConfirm } from '../lib/confirm'
 import { displayToKg, formatWeight, kgToDisplay } from '../lib/units'
 import {
   dateTimeInputToIso,
+  deviceTimeZone,
   formatDateTime,
+  formatStampedTime,
   localDateTimeInput,
+  tzAbbrev,
 } from '../lib/datetime'
 
 const statusTone: Record<
@@ -861,7 +864,7 @@ function BottleActionSheet({
                         {t.amount > 0 && ` · ${formatWeight(t.amount, unit)}`}
                       </div>
                       <div className="truncate text-xs text-slate-500">
-                        {formatDateTime(t.date, state.location.timezone, state.clock)}
+                        {formatStampedTime(t.date, t.tz, state.location.timezone, state.clock)}
                         {(j?.name ?? t.siteName) ? ` · ${j?.name ?? t.siteName}` : ''}
                       </div>
                     </div>
@@ -896,6 +899,7 @@ function QuickLogModal({
     amount: number
     bottleAmount?: number
     date: string
+    tz?: string
     technician?: string
     equipment?: string
     reason?: TransactionReason
@@ -909,8 +913,11 @@ function QuickLogModal({
   const { state, addBottle, addSite, addUnit, addCustomRefrigerant } =
     useStore()
   const unit = state.unit
-  const tz = state.location.timezone
+  // Enter / default the time in this device's own timezone so each tech
+  // logs in their local time; the zone is stamped on the row (Transaction.tz).
+  const tz = deviceTimeZone() || state.location.timezone
   const clock = state.clock
+  const tzLabel = tzAbbrev(new Date().toISOString(), tz)
   const allRefrigerantTypes = useMemo(
     () =>
       sortRefrigerants(
@@ -1132,6 +1139,7 @@ function QuickLogModal({
       // Interpret the typed wall-clock time in the configured timezone
       // (matches the main Refrigerant Log form).
       date: dateTimeInputToIso(date, tz),
+      tz,
       // Tech name + RHL come from the active profile via the store's
       // stamping fallback. The bottle quick-log form doesn't expose a
       // tech picker — for crews that need to switch techs per job, log
@@ -1577,7 +1585,14 @@ function QuickLogModal({
             </>
           )}
 
-          <Field label="Date / time">
+          <Field
+            label="Date / time"
+            hint={
+              tzLabel
+                ? `Recorded in ${tzLabel} — this device's timezone`
+                : undefined
+            }
+          >
             <DateTimeInput
               value={date}
               onChange={setDate}

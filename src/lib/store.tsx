@@ -53,6 +53,7 @@ import {
 import { mergeStates } from './merge'
 import { sealAuditLog } from './auditChain'
 import { profileFor } from './compliance'
+import { deviceTimeZone } from './datetime'
 import { useToast } from './toast'
 
 // Build the next auditLog array with a fresh entry prepended (newest
@@ -72,6 +73,9 @@ function withAudit(
     at: new Date().toISOString(),
     by: tech?.name || s.technician || undefined,
     byLicence: tech?.arcLicenceNumber || s.arcLicenceNumber || undefined,
+    // Local zone of the device that made the change, for unambiguous
+    // display on the change log. Not part of the sealed hash.
+    tz: deviceTimeZone() || s.location.timezone || undefined,
   }
   return [entry, ...s.auditLog]
 }
@@ -393,6 +397,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         businessName: s.businessName || undefined,
         businessAbn: s.businessAbn || undefined,
         arcAuthorisationNumber: s.arcAuthorisationNumber || undefined,
+        // Local zone of the device that entered the bottle (see Transaction.tz).
+        tz: deviceTimeZone() || s.location.timezone || undefined,
       }
       return {
         ...s,
@@ -811,6 +817,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         businessAbn: t.businessAbn ?? (s.businessAbn || undefined),
         arcAuthorisationNumber:
           t.arcAuthorisationNumber ?? (s.arcAuthorisationNumber || undefined),
+        // Local zone the work was logged in — the form passes the device
+        // zone it interpreted the entered time in; fall back to the
+        // device zone here, then the business zone (see Transaction.tz).
+        tz: t.tz ?? (deviceTimeZone() || s.location.timezone || undefined),
       }
       result = tx
 
@@ -1136,7 +1146,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const byLicence = tech.arcLicenceNumber || undefined
       const mk = (
         e: Omit<AuditEntry, 'id' | 'at' | 'by' | 'byLicence'>,
-      ): AuditEntry => ({ ...e, id: uid(), at: now, by, byLicence })
+      ): AuditEntry => ({
+        ...e,
+        id: uid(),
+        at: now,
+        by,
+        byLicence,
+        tz: deviceTimeZone() || s.location.timezone || undefined,
+      })
       const entries: AuditEntry[] = [
         mk({
           action: 'settings',

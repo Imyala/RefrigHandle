@@ -318,6 +318,12 @@ export interface Transaction {
   // while the record still shows when the fix was logged. Unset on
   // rows created before this field existed.
   loggedAt?: string
+  // IANA timezone the time was recorded in — the local zone of the device
+  // that logged it. A Perth tech's row reads in Perth time and a Brisbane
+  // tech's in Brisbane time, frozen so the entry is unambiguous wherever
+  // the audit is later read. Optional: rows logged before this existed
+  // fall back to the business location timezone for display.
+  tz?: string
   // Soft-delete fields. A row with deletedAt set is hidden from the
   // normal activity log, dashboard, and equipment logbook, and is
   // excluded from cumulative calcs (leak top-ups, totals). It stays
@@ -386,6 +392,10 @@ export interface AuditEntry {
   // falling back to legacy single-tech identity). Frozen at the time.
   by?: string
   byLicence?: string
+  // IANA timezone the change was made in (the device's local zone), shown
+  // on the change log so times are unambiguous across a multi-state crew.
+  // Display only — deliberately NOT part of the sealed hash (auditChain).
+  tz?: string
   // --- Tamper-evidence (see lib/auditChain.ts) -------------------------
   // Entries are sealed into a per-device hash chain shortly after they
   // are written: each carries the device's chain id, its sequence number

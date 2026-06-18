@@ -2,8 +2,10 @@ import { describe, expect, it } from 'vitest'
 import {
   dateTimeInputToIso,
   formatPlainDate,
+  formatStampedTime,
   isoToDateTimeInput,
   localDateTimeInput,
+  tzAbbrev,
 } from '../datetime'
 
 // The timezone bugs these guard against were real: the quick-log form
@@ -68,5 +70,44 @@ describe('formatPlainDate', () => {
   })
   it('passes through values it cannot parse', () => {
     expect(formatPlainDate('May 2026')).toBe('May 2026')
+  })
+})
+
+// Multi-state crews: a Brisbane tech and a Perth tech on the same synced
+// account each log in their own timezone. The stored instant must reflect
+// the zone the entry was made in, and the audit must render each entry in
+// that zone with a label so it's never ambiguous.
+describe('multi-timezone logging', () => {
+  it('the same wall-clock in different zones is a different instant', () => {
+    // 14:00 on 2026-06-15 — winter, neither zone observes DST.
+    const brisbane = dateTimeInputToIso('2026-06-15T14:00', 'Australia/Brisbane')
+    const perth = dateTimeInputToIso('2026-06-15T14:00', 'Australia/Perth')
+    expect(brisbane).toBe('2026-06-15T04:00:00.000Z') // AEST = UTC+10
+    expect(perth).toBe('2026-06-15T06:00:00.000Z') // AWST = UTC+8
+  })
+
+  it('renders a stamped time in its own zone, not the business zone', () => {
+    const iso = '2026-06-15T06:00:00.000Z' // 14:00 Perth / 16:00 Brisbane
+    expect(
+      formatStampedTime(iso, 'Australia/Perth', 'Australia/Brisbane', '24h'),
+    ).toMatch(/14:00/)
+    expect(
+      formatStampedTime(iso, 'Australia/Brisbane', 'Australia/Brisbane', '24h'),
+    ).toMatch(/16:00/)
+  })
+
+  it('falls back to the business zone when a row has no stamped tz', () => {
+    const iso = '2026-06-15T04:00:00.000Z' // 14:00 Brisbane
+    expect(
+      formatStampedTime(iso, undefined, 'Australia/Brisbane', '24h'),
+    ).toMatch(/14:00/)
+  })
+
+  it('tzAbbrev distinguishes DST (Sydney summer vs winter)', () => {
+    const summer = tzAbbrev('2026-01-15T00:00:00.000Z', 'Australia/Sydney')
+    const winter = tzAbbrev('2026-06-15T00:00:00.000Z', 'Australia/Sydney')
+    expect(summer).not.toBe('')
+    expect(winter).not.toBe('')
+    expect(summer).not.toBe(winter)
   })
 })

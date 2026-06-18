@@ -32,8 +32,10 @@ import { SiteForm, UnitForm } from './Sites'
 import { DateTimeInput } from '../components/DateTimeInput'
 import {
   dateTimeInputToIso,
-  formatDateTime,
+  deviceTimeZone,
+  formatStampedTime,
   localDateTimeInput,
+  tzAbbrev,
 } from '../lib/datetime'
 import { PasswordPromptModal } from '../components/PasswordPromptModal'
 import { Alerts } from '../components/Alerts'
@@ -349,7 +351,7 @@ export default function Transactions() {
                         {isRestatement(t) ? 'Re-states' : 'Corrects'} a{' '}
                         {transactionLabel(corrects.kind).toLowerCase()} of{' '}
                         {formatWeight(corrects.amount, unit)} from{' '}
-                        {formatDateTime(corrects.date, state.location.timezone, state.clock)}
+                        {formatStampedTime(corrects.date, corrects.tz, state.location.timezone, state.clock)}
                         {t.correctionReason && <> — “{t.correctionReason}”</>}
                         {isRestatement(t) && (
                           <> · Equipment records and totals count this entry.</>
@@ -359,8 +361,9 @@ export default function Transactions() {
                     {supersededBy && (
                       <div className="mt-1 rounded-lg border border-amber-200 bg-amber-50 px-2 py-1 text-xs text-amber-900 dark:border-amber-700 dark:bg-amber-900/20 dark:text-amber-100">
                         Superseded by a correction logged{' '}
-                        {formatDateTime(
+                        {formatStampedTime(
                           supersededBy.loggedAt ?? supersededBy.date,
+                          supersededBy.tz,
                           state.location.timezone,
                           state.clock,
                         )}
@@ -423,7 +426,7 @@ export default function Transactions() {
                       </div>
                     )}
                     <div className="text-xs text-slate-500">
-                      {formatDateTime(t.date, state.location.timezone, state.clock)}
+                      {formatStampedTime(t.date, t.tz, state.location.timezone, state.clock)}
                       {t.amount > 0 && (
                         <>
                           {' · '}gross {kgToDisplay(t.weightBefore, unit).toFixed(2)} to{' '}
@@ -650,6 +653,7 @@ function TransactionForm({
     amount: number
     bottleAmount?: number
     date: string
+    tz?: string
     technician?: string
     technicianLicence?: string
     equipment?: string
@@ -669,8 +673,13 @@ function TransactionForm({
   const { state, addSite, addUnit, addTechnician, setActiveTechnicianId } =
     useStore()
   const { bottles, sites, unit } = state
-  const tz = state.location.timezone
+  // Interpret and default the entered time in THIS device's timezone, so a
+  // tech in Perth logs in Perth time and a tech in Brisbane in Brisbane
+  // time even on the same synced account. The zone is stamped onto the
+  // saved row (see Transaction.tz) so the audit reads unambiguously.
+  const tz = deviceTimeZone() || state.location.timezone
   const clock = state.clock
+  const tzLabel = tzAbbrev(new Date().toISOString(), tz)
   const toast = useToast()
 
   // One pass over the live log for the two "repeat yourself less"
@@ -953,6 +962,7 @@ function TransactionForm({
             ? Math.abs(bottleAmountKg)
             : undefined,
       date: dateTimeInputToIso(date, tz),
+      tz,
       technician: stampedTechName,
       technicianLicence: stampedRhl,
       equipment: equipment.trim() || undefined,
@@ -1417,7 +1427,14 @@ function TransactionForm({
           </>
         )}
 
-        <Field label="Date / time">
+        <Field
+          label="Date / time"
+          hint={
+            tzLabel
+              ? `Recorded in ${tzLabel} — this device's timezone. The audit shows each entry in the zone it was logged.`
+              : undefined
+          }
+        >
           <DateTimeInput
             value={date}
             onChange={setDate}

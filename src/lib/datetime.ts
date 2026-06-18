@@ -76,11 +76,14 @@ export function dateTimeInputToIso(input: string, tz?: string): string {
 // `clock` honours Settings → Time format ('12h' / '24h'); when omitted
 // the locale default decides — which on en-AU is 12h with am/pm, on
 // en-GB is 24h, etc. Pass it through wherever you want the user's
-// preference to win regardless of locale.
+// preference to win regardless of locale. When `withZone` is true the
+// timezone abbreviation (AEST / AWST / AEDT …) is appended so an audit
+// reader can tell which zone the time is in regardless of where they are.
 export function formatDateTime(
   iso: string,
   tz?: string,
   clock?: '12h' | '24h',
+  withZone = false,
 ): string {
   if (!iso) return ''
   const d = new Date(iso)
@@ -91,7 +94,51 @@ export function formatDateTime(
   if (tz && isTzSupported(tz)) opts.timeZone = tz
   if (clock === '12h') opts.hour12 = true
   else if (clock === '24h') opts.hour12 = false
-  return d.toLocaleString(undefined, opts)
+  let out = d.toLocaleString(undefined, opts)
+  if (withZone) {
+    const ab = tzAbbrev(iso, tz)
+    if (ab) out += ` ${ab}`
+  }
+  return out
+}
+
+// The device's current IANA timezone — where this person physically is.
+// Each device resolves its own, so a Brisbane tech and a Perth tech on
+// the same synced account each log work in their own local time.
+export function deviceTimeZone(): string {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || ''
+  } catch {
+    return ''
+  }
+}
+
+// Short timezone label (AEST / AEDT / AWST / ACST …) for an instant in a
+// given zone — used to stamp timestamps so a time is never ambiguous on
+// an audit. Falls back to the browser zone when `tz` is unset.
+export function tzAbbrev(iso: string, tz?: string): string {
+  if (!iso) return ''
+  try {
+    const parts = new Intl.DateTimeFormat('en-AU', {
+      timeZone: tz && isTzSupported(tz) ? tz : undefined,
+      timeZoneName: 'short',
+    }).formatToParts(new Date(iso))
+    return parts.find((p) => p.type === 'timeZoneName')?.value ?? ''
+  } catch {
+    return ''
+  }
+}
+
+// Format a transaction / audit timestamp in the zone it was recorded in
+// (the frozen `stampedTz`), falling back to the business location zone
+// for older records that predate the stamp. Always shows the zone label.
+export function formatStampedTime(
+  iso: string,
+  stampedTz: string | undefined,
+  fallbackTz: string | undefined,
+  clock?: '12h' | '24h',
+): string {
+  return formatDateTime(iso, stampedTz || fallbackTz, clock, true)
 }
 
 // Date-only rendering of a stored ISO timestamp, in the configured

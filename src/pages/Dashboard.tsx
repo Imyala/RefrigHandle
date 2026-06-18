@@ -13,7 +13,7 @@ import {
   transactionLoss,
   type Transaction,
 } from '../lib/types'
-import { formatDate, formatDateTime } from '../lib/datetime'
+import { formatDate, formatStampedTime } from '../lib/datetime'
 import { profileFor } from '../lib/compliance'
 import { formatWeight, kgToDisplay } from '../lib/units'
 
@@ -242,7 +242,7 @@ function RecentActivityItem({ t }: { t: Transaction }) {
         </div>
         <div className="flex shrink-0 items-center gap-2">
           <span className="text-xs text-slate-500">
-            {formatDate(t.date, state.location.timezone)}
+            {formatDate(t.date, t.tz || state.location.timezone)}
           </span>
           <svg
             aria-hidden
@@ -296,7 +296,7 @@ function RecentActivityItem({ t }: { t: Transaction }) {
           )}
           <DetailLine
             label="When"
-            value={formatDateTime(t.date, state.location.timezone, state.clock)}
+            value={formatStampedTime(t.date, t.tz, state.location.timezone, state.clock)}
           />
           {(t.technician || t.technicianLicence) && (
             <DetailLine

@@ -39,6 +39,7 @@ import { profileFor } from '../lib/compliance'
 import {
   formatDateTime,
   formatPlainDate,
+  formatStampedTime,
   localDateTimeInput,
 } from '../lib/datetime'
 import { formatWeight } from '../lib/units'
@@ -329,6 +330,8 @@ export default function Settings() {
     const liveHeader = [
       'id',
       'date',
+      'local_datetime',
+      'timezone',
       'kind',
       'bottleNumber',
       'sourceBottleNumber',
@@ -378,6 +381,11 @@ export default function Settings() {
       return [
         t.id,
         t.date,
+        // Human-readable local time in the zone the work was logged in,
+        // plus that zone — so an auditor reading the CSV sees an
+        // unambiguous time without converting the UTC ISO column.
+        formatDateTime(t.date, t.tz || state.location.timezone, state.clock, true),
+        t.tz || state.location.timezone || '',
         t.kind,
         b?.bottleNumber ?? '',
         sb?.bottleNumber ?? '',
@@ -1778,7 +1786,7 @@ function DeletedTransactionsCard({
                         </div>
                         <div className="mt-0.5 text-xs text-slate-500">
                           Logged{' '}
-                          {formatDateTime(t.date, tz, clock)}
+                          {formatStampedTime(t.date, t.tz, tz, clock)}
                           {t.technician && ` by ${t.technician}`}
                         </div>
                         <div className="mt-1 text-xs text-red-700 dark:text-red-300">

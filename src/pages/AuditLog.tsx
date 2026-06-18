@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { Button, Card, EmptyState, Field, Pill, TextInput } from '../components/ui'
 import { DateInput } from '../components/DateInput'
 import { useStore } from '../lib/store'
-import { formatDateTime, localDateTimeInput } from '../lib/datetime'
+import { formatStampedTime, localDateTimeInput } from '../lib/datetime'
 import {
   AUDIT_ACTION_LABELS,
   AUDIT_ACTION_TONE,
@@ -241,7 +241,7 @@ export default function AuditLog() {
               )}
 
               <div className="mt-1 text-xs text-slate-500">
-                {formatDateTime(e.at, tz, state.clock)}
+                {formatStampedTime(e.at, e.tz, tz, state.clock)}
                 {e.by && (
                   <>
                     {' · '}
