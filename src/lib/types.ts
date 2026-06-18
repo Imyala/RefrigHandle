@@ -103,7 +103,9 @@ export interface Bottle {
 export interface Site {
   id: string
   // The site's identifier — its functional location (e.g. an FLOC code
-  // like "BN-ASAC-ATSC"). Shown everywhere a site is referenced.
+  // like "BN-ASAC-ATSC"). Optional: many businesses don't use FLOC codes,
+  // so this may be blank — use siteLabel() to display a site, which falls
+  // back to the address / town when there's no functional location.
   name: string
   client?: string
   address?: string
@@ -122,6 +124,22 @@ export interface Site {
   // Stamped on every edit — drives last-write-wins per record when two
   // devices sync (see lib/merge.ts). Optional: pre-sync records lack it.
   updatedAt?: string
+}
+
+// Display label for a site. The functional location (name) is optional, so
+// fall back to the address, then the town/city, then a clear placeholder —
+// a site is never shown blank in a list, picker, or audit.
+export function siteLabel(site: {
+  name?: string
+  address?: string
+  city?: string
+}): string {
+  return (
+    site.name?.trim() ||
+    site.address?.trim() ||
+    site.city?.trim() ||
+    'Unnamed site'
+  )
 }
 
 export type UnitKind =
@@ -812,14 +830,15 @@ export function isOverfilled(b: Bottle): boolean {
   return overfillKg(netWeight(b), b.initialNetWeight) > 0.01
 }
 
-// Common HVAC/R recovery cylinder presets. Tare is the nominal stamped
-// tare from the manufacturer's spec sheet — techs should still confirm
-// against the actual cylinder. Safe fill is calculated as 80 % of the
-// water capacity, per DOT/CFR-49 rules for refrigerant cylinders.
-export const SAFE_FILL_FRACTION = 0.8
-
-export function safeFillFromWaterCapacity(wcKg: number): number {
-  return Math.round(wcKg * SAFE_FILL_FRACTION * 100) / 100
+// Total safe weight — the gross figure a tech reads on the scale when a
+// cylinder is filled to its maximum safe level. It's the tare plus the safe
+// fill capacity (safe fill = water capacity × the refrigerant's filling
+// ratio, stored as the bottle's initialNetWeight). Returns undefined until
+// both tare and capacity are known, so callers can show it only once a
+// cylinder is fully specified.
+export function totalSafeWeight(b: Bottle): number | undefined {
+  if (!(b.tareWeight > 0) || !(b.initialNetWeight > 0)) return undefined
+  return Math.round((b.tareWeight + b.initialNetWeight) * 100) / 100
 }
 
 export interface BottlePreset {
@@ -1539,6 +1558,24 @@ export const AU_CITIES_BY_REGION: Record<string, readonly string[]> =
 
 // The marker the City picker uses to mean "let me type my own".
 export const CITY_OTHER_VALUE = '__other__'
+
+// Reverse lookup: which state/territory a curated town belongs to. Built
+// once from AU_CITIES_BY_REGION. A town name that appears in more than one
+// state maps to undefined — ambiguous, so we don't guess the state for the
+// user. Lets a site form auto-fill the state once a town is picked.
+const AU_REGION_BY_CITY: Record<string, string | undefined> = (() => {
+  const seen: Record<string, string | undefined> = {}
+  for (const region of AU_REGIONS) {
+    for (const city of AU_CITIES_BY_REGION[region] ?? []) {
+      seen[city] = city in seen ? undefined : region
+    }
+  }
+  return seen
+})()
+
+export function regionForCity(city: string): string | undefined {
+  return AU_REGION_BY_CITY[city.trim()]
+}
 
 // --- Licence / authorisation expiry ------------------------------------
 //

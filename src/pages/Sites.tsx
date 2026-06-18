@@ -22,9 +22,12 @@ import {
   isRestatement,
   leakStatusFor,
   netWeight,
+  regionForCity,
+  siteLabel,
   statusLabel,
   supersededIds,
   tonnesCO2eFor,
+  totalSafeWeight,
   transactionLabel,
   transactionLoss,
   type Bottle,
@@ -324,7 +327,7 @@ function SiteCard({ site, onOpen }: { site: Site; onOpen: () => void }) {
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
             <div className="font-semibold text-slate-900 dark:text-slate-100">
-              {site.name}
+              {siteLabel(site)}
             </div>
             {site.client && (
               <div className="mt-0.5 text-sm text-slate-500">{site.client}</div>
@@ -456,7 +459,7 @@ function SiteDetail({
     <>
       <Modal
         open={!!site && !editing}
-        title={site.name}
+        title={siteLabel(site)}
         onClose={onClose}
         size="lg"
       >
@@ -813,8 +816,10 @@ function AssignBottleModal({
     [state.bottles, site.id],
   )
 
-  const siteName = (id?: string) =>
-    state.sites.find((s) => s.id === id)?.name ?? null
+  const siteName = (id?: string) => {
+    const s = state.sites.find((s) => s.id === id)
+    return s ? siteLabel(s) : null
+  }
 
   // A bottle lives at exactly one site (currentSiteId). When the chosen
   // cylinder is already at another site, adding it here is really a
@@ -829,12 +834,12 @@ function AssignBottleModal({
           <>
             This cylinder is currently on site at{' '}
             <strong>{fromSite}</strong>. Adding it here will move it from{' '}
-            <strong>{fromSite}</strong> to <strong>{site.name}</strong> — it
+            <strong>{fromSite}</strong> to <strong>{siteLabel(site)}</strong> — it
             can only be on one site at a time. A transfer is recorded in the
             log.
           </>
         ),
-        confirmLabel: `Transfer to ${site.name}`,
+        confirmLabel: `Transfer to ${siteLabel(site)}`,
       })
       if (!ok) return
     }
@@ -856,7 +861,7 @@ function AssignBottleModal({
       ) : (
         <div className="space-y-3">
           <p className="text-sm text-slate-500">
-            Pick a cylinder to place at {site.name}. It will be marked “On
+            Pick a cylinder to place at {siteLabel(site)}. It will be marked “On
             site” and a move is recorded in the log.
           </p>
           <div className="-mx-1 max-h-[60svh] space-y-2 overflow-y-auto px-1">
@@ -1035,6 +1040,7 @@ export function SiteForm({
   onSave: (data: Omit<Site, 'id' | 'createdAt'>) => void
 }) {
   const { state } = useStore()
+  const confirm = useConfirm()
 
   // Company names available from Settings to auto-fill Client / owner
   // when the site is the user's own facility. Only the business name is a
@@ -1093,8 +1099,28 @@ export function SiteForm({
       : companyOptions[0]
     : client.trim() || undefined
 
-  function submit(e: React.FormEvent) {
+  async function submit(e: React.FormEvent) {
     e.preventDefault()
+    // Address and town are both optional, but missing either weakens the
+    // record (techs can't find the site; audits look thin). Confirm once
+    // before saving so it's a deliberate choice, not an oversight.
+    const missing: string[] = []
+    if (!address.trim()) missing.push('address')
+    if (!city.trim()) missing.push('town / city')
+    if (missing.length > 0) {
+      const ok = await confirm({
+        title: `Save without ${missing.join(' and ')}?`,
+        message: `This site has no ${missing.join(
+          ' or ',
+        )}. You can still save it, but ${
+          missing.length > 1 ? 'these help' : 'it helps'
+        } techs find the site and ${
+          missing.length > 1 ? 'show' : 'shows'
+        } on audits.`,
+        confirmLabel: 'Save anyway',
+      })
+      if (!ok) return
+    }
     onSave({
       name: name.trim(),
       client: resolvedClient || undefined,
@@ -1125,12 +1151,23 @@ export function SiteForm({
             key={resetKey}
             stateCode={stateVal}
             value={city}
-            onChange={setCity}
+            onChange={(c) => {
+              setCity(c)
+              // If no state is set yet, infer it from the chosen town so
+              // the tech doesn't have to pick both. Only fills when the
+              // town belongs to exactly one state (unambiguous).
+              if (!stateVal.trim()) {
+                const r = regionForCity(c)
+                if (r) setStateVal(r)
+              }
+            }}
           />
         </Field>
-        <Field label="Functional location">
+        <Field
+          label="Functional location"
+          hint="Optional — a FLOC / asset code, if your business uses one."
+        >
           <TextInput
-            required
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="e.g. BN-ASAC-ATSC"
@@ -1552,7 +1589,7 @@ function UnitLogbook({
             Equipment
           </div>
           <div className="mt-1 grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
-            <Kv label="Site" v={site.name} />
+            <Kv label="Site" v={siteLabel(site)} />
             {site.client && <Kv label="Client" v={site.client} />}
             {site.address && <Kv label="Address" v={site.address} />}
             <Kv label="Unit" v={unit.name} />
@@ -1934,7 +1971,7 @@ function SiteAuditModal({
             Site
           </div>
           <div className="mt-1 grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
-            <Kv label="Site" v={site.name} />
+            <Kv label="Site" v={siteLabel(site)} />
             {site.group && <Kv label="Region" v={site.group} />}
             {site.client && <Kv label="Client" v={site.client} />}
             {site.address && <Kv label="Address" v={site.address} />}
@@ -1967,6 +2004,8 @@ function SiteAuditModal({
                     <th className="py-1 pr-2 text-right">Tare kg</th>
                     <th className="py-1 pr-2 text-right">Gross kg</th>
                     <th className="py-1 pr-2 text-right">Net kg</th>
+                    <th className="py-1 pr-2 text-right">Safe fill kg</th>
+                    <th className="py-1 pr-2 text-right">Full kg</th>
                     <th className="py-1 pr-2">Status</th>
                     <th className="py-1">Next test</th>
                   </tr>
@@ -1987,6 +2026,14 @@ function SiteAuditModal({
                       </td>
                       <td className="py-1 pr-2 text-right tabular-nums">
                         {netWeight(b).toFixed(3)}
+                      </td>
+                      <td className="py-1 pr-2 text-right tabular-nums">
+                        {b.initialNetWeight > 0
+                          ? b.initialNetWeight.toFixed(3)
+                          : '—'}
+                      </td>
+                      <td className="py-1 pr-2 text-right tabular-nums">
+                        {totalSafeWeight(b)?.toFixed(3) ?? '—'}
                       </td>
                       <td className="py-1 pr-2">{statusLabel(b.status)}</td>
                       <td className="py-1 whitespace-nowrap">

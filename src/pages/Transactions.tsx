@@ -23,6 +23,7 @@ import {
   netWeight,
   overfillKg,
   scaleDeltaKg,
+  siteLabel,
   transactionLabel,
   transactionLoss,
 } from '../lib/types'
@@ -1117,7 +1118,7 @@ function TransactionForm({
                     required={kind === 'transfer'}
                     emptyLabel="— none —"
                     placeholder="— none —"
-                    options={sites.map((j) => ({ value: j.id, label: j.name }))}
+                    options={sites.map((j) => ({ value: j.id, label: siteLabel(j) }))}
                   />
                 </div>
                 <Button

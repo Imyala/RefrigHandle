@@ -28,7 +28,3 @@ export function formatWeight(
 ): string {
   return `${kgToDisplay(kg, unit).toFixed(digits)} ${unit}`
 }
-
-export function formatWeightShort(kg: number, unit: WeightUnit): string {
-  return kgToDisplay(kg, unit).toFixed(2)
-}

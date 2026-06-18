@@ -30,8 +30,10 @@ import {
   overfillKg,
   safeFillKgFor,
   scaleDeltaKg,
+  siteLabel,
   sortRefrigerants,
   statusLabel,
+  totalSafeWeight,
   transactionLabel,
 } from '../lib/types'
 import { RefrigerantSelect } from '../components/RefrigerantSelect'
@@ -223,7 +225,7 @@ export default function Bottles() {
         const site = sites.find((s) => s.id === b.currentSiteId)
         if (site) {
           key = `s:${site.id}`
-          label = site.name
+          label = siteLabel(site)
         } else {
           key = 'none'
           label = 'Not on site'
@@ -292,7 +294,7 @@ export default function Bottles() {
               })()}
             </div>
             {site && (
-              <div className="mt-1 text-sm text-slate-500">{site.name}</div>
+              <div className="mt-1 text-sm text-slate-500">{siteLabel(site)}</div>
             )}
             <div className="mt-1 text-xs text-slate-500">
               Added{' '}
@@ -679,8 +681,16 @@ function BottleActionSheet({
             {formatWeight(bottle.tareWeight, unit)} ·{' '}
             {statusLabel(bottle.status)}
           </div>
+          {bottle.initialNetWeight > 0 && (
+            <div className="mt-0.5 text-sm text-brand-100">
+              Safe fill {formatWeight(bottle.initialNetWeight, unit)}
+              {totalSafeWeight(bottle) != null && (
+                <> · Full {formatWeight(totalSafeWeight(bottle)!, unit)}</>
+              )}
+            </div>
+          )}
           {site && (
-            <div className="mt-1 text-sm text-brand-100">{site.name}</div>
+            <div className="mt-1 text-sm text-brand-100">{siteLabel(site)}</div>
           )}
         </div>
 
@@ -865,7 +875,7 @@ function BottleActionSheet({
                       </div>
                       <div className="truncate text-xs text-slate-500">
                         {formatStampedTime(t.date, t.tz, state.location.timezone, state.clock)}
-                        {(j?.name ?? t.siteName) ? ` · ${j?.name ?? t.siteName}` : ''}
+                        {(j ? siteLabel(j) : t.siteName) ? ` · ${j ? siteLabel(j) : t.siteName}` : ''}
                       </div>
                     </div>
                   </li>
@@ -1407,7 +1417,7 @@ function QuickLogModal({
                       placeholder="— none —"
                       options={state.sites.map((j) => ({
                         value: j.id,
-                        label: j.name,
+                        label: siteLabel(j),
                       }))}
                     />
                   </div>
@@ -2132,6 +2142,20 @@ function BottleForm({
           </Field>
         </div>
 
+        <Field
+          label={`W.C — water capacity (${unit})`}
+          hint="Stamped water capacity. Safe fill is calculated automatically from W.C × the selected refrigerant's filling ratio."
+        >
+          <TextInput
+            type="number"
+            inputMode="decimal"
+            step="0.01"
+            value={capacityWeight}
+            onChange={(e) => setCapacityWeight(e.target.value)}
+            placeholder={`e.g. ${unit === 'kg' ? '11.10' : '24.47'}`}
+          />
+        </Field>
+
         {tareExceedsGross && (
           <div className="rounded-xl bg-red-50 p-3 text-sm text-red-900 dark:bg-red-900/20 dark:text-red-100">
             ⛔ Tare ({formatWeight(tareKgEntered, unit)}) is greater than gross
@@ -2165,6 +2189,13 @@ function BottleForm({
                   {' '}(W.C × FR {fillingRatio(refrigerantType).toFixed(2)})
                 </div>
               )}
+              {safeFillKg > 0 && tareKgEntered > 0 && (
+                <div className="mt-0.5 text-xs">
+                  Total safe weight (full):{' '}
+                  <strong>{formatWeight(tareKgEntered + safeFillKg, unit)}</strong>
+                  {' '}— the scale reading at maximum safe fill (tare + safe fill).
+                </div>
+              )}
               {over > 0 && (
                 <div className="mt-1 font-semibold">
                   ⚠ Over safe-fill limit by {formatWeight(over, unit)}
@@ -2193,20 +2224,6 @@ function BottleForm({
             />
           </Field>
         </div>
-
-        <Field
-          label={`W.C (${unit})`}
-          hint="Stamped water capacity. Safe fill is calculated automatically from W.C × the selected refrigerant's filling ratio."
-        >
-          <TextInput
-            type="number"
-            inputMode="decimal"
-            step="0.01"
-            value={capacityWeight}
-            onChange={(e) => setCapacityWeight(e.target.value)}
-            placeholder={`e.g. ${unit === 'kg' ? '11.10' : '24.47'}`}
-          />
-        </Field>
 
         <div className="rounded-xl border border-slate-200 p-3 dark:border-slate-800">
           <div className="mb-1 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
@@ -2301,7 +2318,7 @@ function BottleForm({
                   placeholder="— pick a site —"
                   options={state.sites.map((j) => ({
                     value: j.id,
-                    label: j.name,
+                    label: siteLabel(j),
                   }))}
                 />
               </div>

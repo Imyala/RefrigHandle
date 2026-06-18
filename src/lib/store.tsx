@@ -105,7 +105,6 @@ interface StoreApi {
   // and restore it if the deletion was a mistake. Bottle weight is
   // NOT reverted (matches the previous hard-delete behaviour).
   deleteTransaction: (id: string, reason?: string) => void
-  restoreTransaction: (id: string) => void
   // technician profiles
   addTechnician: (t: Omit<Technician, 'id' | 'createdAt'>) => Technician
   updateTechnician: (id: string, patch: Partial<Technician>) => void
@@ -156,7 +155,6 @@ interface StoreApi {
   removeCustomBottlePreset: (id: string) => void
   toggleFavoriteBottlePreset: (id: string) => void
   // bulk
-  resetAll: () => void
   importState: (s: AppState) => void
 }
 
@@ -918,41 +916,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     [],
   )
 
-  const restoreTransaction: StoreApi['restoreTransaction'] = useCallback(
-    (id) => {
-      setState((s) => {
-        const target = s.transactions.find((t) => t.id === id)
-        const bottleNo =
-          s.bottles.find((b) => b.id === target?.bottleId)?.bottleNumber ??
-          '(deleted bottle)'
-        return {
-          ...s,
-          transactions: s.transactions.map((t) =>
-            t.id === id
-              ? {
-                  ...t,
-                  deletedAt: undefined,
-                  deletedBy: undefined,
-                  deletedByLicence: undefined,
-                  deletedReason: undefined,
-                }
-              : t,
-          ),
-          auditLog: target
-            ? withAudit(s, {
-                action: 'restore',
-                entity: 'transaction',
-                entityId: id,
-                target: bottleNo,
-                summary: `Restored ${transactionLabel(target.kind)} log entry for bottle ${bottleNo}`,
-              })
-            : s.auditLog,
-        }
-      })
-    },
-    [],
-  )
-
   const addTechnician: StoreApi['addTechnician'] = useCallback((t) => {
     const tech: Technician = {
       ...t,
@@ -1508,58 +1471,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     })
   }, [])
 
-  const resetAll = useCallback(() => {
-    // Confirmation lives at the call site (Settings page) so the
-    // dialog matches the rest of the app's themed Modal flow.
-    setState((s) => ({
-      bottles: [],
-      sites: [],
-      units: [],
-      transactions: [],
-      // The audit trail deliberately SURVIVES a reset — the record that
-      // a wipe happened (and everything before it) is exactly what an
-      // owner would want to keep. Prepend the reset itself.
-      auditLog: withAudit(s, {
-        action: 'reset',
-        entity: 'data',
-        target: 'All data',
-        summary:
-          'Wiped all bottles, sites, units and transactions (settings and tech roster kept)',
-      }),
-      customRefrigerants: [],
-      favoriteRefrigerants: [],
-      customBottlePresets: [],
-      favoriteBottlePresets: [],
-      technician: '',
-      // Compliance identity is per-tech / per-business, not per
-      // dataset — keep it across a "wipe data" so the user doesn't
-      // have to re-enter their ARC numbers (or rebuild their tech
-      // roster) after a factory reset.
-      technicians: s.technicians,
-      activeTechnicianId: s.activeTechnicianId,
-      arcLicenceNumber: s.arcLicenceNumber,
-      arcAuthorisationNumber: s.arcAuthorisationNumber,
-      arcAuthorisationExpiry: s.arcAuthorisationExpiry,
-      businessName: s.businessName,
-      businessAbn: s.businessAbn,
-      jurisdiction: s.jurisdiction,
-      location: s.location,
-      unit: s.unit,
-      theme: s.theme,
-      clock: s.clock,
-      sync: s.sync,
-      // A data wipe is not a "never used before" — keep the user past
-      // the onboarding gate so erasing data doesn't restart setup.
-      setupCompletedAt: s.setupCompletedAt,
-      settingsUpdatedAt: s.settingsUpdatedAt,
-      // Existing deletion markers stay; the reset watermark below stops
-      // the sync merge resurrecting the wiped records from another
-      // device (see lib/merge.ts).
-      tombstones: s.tombstones,
-      dataResetAt: new Date().toISOString(),
-    }))
-  }, [])
-
   const importState = useCallback((nextRaw: AppState) => {
     // Importing replaces the whole dataset (a restore-from-backup). We
     // keep the imported file's own history and prepend an 'import' entry
@@ -1602,7 +1513,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       reactivateUnit,
       addTransaction,
       deleteTransaction,
-      restoreTransaction,
       addTechnician,
       updateTechnician,
       deactivateTechnician,
@@ -1627,7 +1537,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       addCustomBottlePreset,
       removeCustomBottlePreset,
       toggleFavoriteBottlePreset,
-      resetAll,
       importState,
     }),
     [
@@ -1645,7 +1554,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       reactivateUnit,
       addTransaction,
       deleteTransaction,
-      restoreTransaction,
       addTechnician,
       updateTechnician,
       deactivateTechnician,
@@ -1670,7 +1578,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       addCustomBottlePreset,
       removeCustomBottlePreset,
       toggleFavoriteBottlePreset,
-      resetAll,
       importState,
     ],
   )
