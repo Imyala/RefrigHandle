@@ -446,12 +446,28 @@ export interface Tombstone {
 // string literal scattered through the code.
 export type Jurisdiction = 'AU'
 
-// Released app version, shown small at the bottom of Settings. Injected at
-// build time by the deploy workflow as `v1.<github run number>`, so it
-// bumps automatically on every push to main / deploy — no manual edit.
+// Turn the monotonic build number (github.run_number — one per deploy)
+// into a tidy lettered version in the same style as TERMS_VERSION: the
+// trailing letter cycles a–z and the minor bumps on each full cycle, so it
+// reads v1.1a → v1.1b → … → v1.1z → v1.2a. It's a 1:1 mapping, so the
+// string still uniquely and accurately identifies the deployment.
+export function formatBuildVersion(build: number): string {
+  const idx = Math.max(0, Math.floor(build) - 1)
+  const letter = String.fromCharCode(97 + (idx % 26))
+  const minor = 1 + Math.floor(idx / 26)
+  return `v1.${minor}${letter}`
+}
+
+// Released app version, shown small at the bottom of Settings. The deploy
+// workflow injects VITE_APP_BUILD = github.run_number (which climbs by one
+// per deployment), and we format it into the lettered string above — so it
+// bumps automatically on every push to main / deploy with no manual edit.
 // Falls back to 'dev' for local builds that don't set the env var.
+const APP_BUILD = Number(import.meta.env.VITE_APP_BUILD as string | undefined)
 export const APP_VERSION =
-  (import.meta.env.VITE_APP_VERSION as string | undefined) ?? 'dev'
+  Number.isFinite(APP_BUILD) && APP_BUILD > 0
+    ? formatBuildVersion(APP_BUILD)
+    : 'dev'
 
 // Short commit the build was cut from, shown alongside APP_VERSION for
 // support / traceability. Undefined on local builds.

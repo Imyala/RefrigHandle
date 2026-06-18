@@ -13,6 +13,7 @@ import {
   canManageTechnicians,
   composeName,
   daysUntilPurge,
+  formatBuildVersion,
   isTechnicianActive,
   splitName,
   quarterKey,
@@ -26,6 +27,31 @@ import {
   transactionLoss,
 } from '../types'
 import { makeBottle, makeTx } from './fixtures'
+
+describe('formatBuildVersion (lettered deploy version)', () => {
+  it('maps the first builds to v1.1a, v1.1b …', () => {
+    expect(formatBuildVersion(1)).toBe('v1.1a')
+    expect(formatBuildVersion(2)).toBe('v1.1b')
+  })
+
+  it('rolls the letter z back to a and bumps the minor each 26 builds', () => {
+    expect(formatBuildVersion(26)).toBe('v1.1z')
+    expect(formatBuildVersion(27)).toBe('v1.2a')
+    expect(formatBuildVersion(52)).toBe('v1.2z')
+    expect(formatBuildVersion(53)).toBe('v1.3a')
+  })
+
+  it('maps deploy 137 to v1.6g', () => {
+    expect(formatBuildVersion(137)).toBe('v1.6g')
+  })
+
+  it('is a 1:1 mapping — every build number yields a distinct string', () => {
+    const seen = new Set(
+      Array.from({ length: 300 }, (_, i) => formatBuildVersion(i + 1)),
+    )
+    expect(seen.size).toBe(300)
+  })
+})
 
 describe('role assignment guard (canAssignRole / canManageTech)', () => {
   it('a supervisor cannot grant owner while an owner exists', () => {
