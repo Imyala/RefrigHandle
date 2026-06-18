@@ -14,10 +14,13 @@ export function TermsContent() {
       <Section title="What RefrigHandle is">
         RefrigHandle is a tool that helps you record and track refrigerant
         handling and keep your own compliance records. It is{' '}
-        <strong>not a record-keeping service</strong>, and it does not store or
-        retain your records on your behalf. Your data lives on your device (and
-        on any devices you connect via optional sync) — if you lose the device
-        or clear its data without a backup, the records are gone.
+        <strong>not a record-keeping service</strong> — you must keep your own
+        copy of your records and must not rely on RefrigHandle to retain them
+        for you. To provide the app we hold and process your data: it is stored
+        on your device, and copies may be held on our servers and on any other
+        devices you connect (for example via sync). Even so, keeping your own
+        backups is your responsibility — if you lose your device or your records
+        without a backup, they may be gone.
       </Section>
       <Section title="Your responsibilities">
         You are responsible for the accuracy of what you enter, for keeping
@@ -44,10 +47,10 @@ export function TermsContent() {
         Australian Consumer Law that cannot lawfully be excluded.
       </Section>
       <Section title="Closing your account">
-        You can request account closure at any time. On closure the app exports
-        a full copy of your records for you to keep; after that, RefrigHandle no
-        longer holds or is responsible for them, and you remain responsible for
-        retaining them for the required period.
+        You can request account closure at any time. Before you close, you must
+        export and keep your own full copy of your records; once your account is
+        closed, RefrigHandle no longer holds or is responsible for them, and you
+        remain responsible for retaining them for the required period.
       </Section>
     </div>
   )

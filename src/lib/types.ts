@@ -448,7 +448,7 @@ export type Jurisdiction = 'AU'
 
 // Bump when the Terms & disclaimer wording materially changes, so users are
 // asked to re-accept (see TermsGate). Stored as termsAcceptedVersion.
-export const TERMS_VERSION = 1
+export const TERMS_VERSION = 2
 
 // Recorded when an owner requests account closure. Its presence locks the
 // app (see AccountClosedGate) — the device can't be used again until the
