@@ -3,6 +3,7 @@ import { Button, Card, Field, TextInput } from './ui'
 import { Picker } from './Picker'
 import { DateInput } from './DateInput'
 import { LocationFields, type LocationErrors } from './LocationFields'
+import { TermsContent } from './Terms'
 import { useStore } from '../lib/store'
 import { useToast } from '../lib/toast'
 import { hashPassword, MIN_PASSWORD_LENGTH } from '../lib/auth'
@@ -66,6 +67,7 @@ function OnboardingScreen() {
     city: '',
     timezone: '',
   })
+  const [agreeTerms, setAgreeTerms] = useState(false)
   // Flips true the first time "Finish setup" is pressed while something
   // is still missing. Until then the form stays clean (no red on fields
   // the tech hasn't reached yet); after a blocked attempt every
@@ -91,7 +93,14 @@ function OnboardingScreen() {
   const techOk = nameOk && techRhl.trim() !== '' && expiryOk && passwordOk
   const locOk = isLocationComplete(loc)
   const canFinish =
-    businessOk && abnOk && structureOk && arcOk && arcExpiryOk && techOk && locOk
+    businessOk &&
+    abnOk &&
+    structureOk &&
+    arcOk &&
+    arcExpiryOk &&
+    techOk &&
+    locOk &&
+    agreeTerms
 
   // Exactly what's still outstanding, in field order — so a dead
   // "Finish setup" button can't leave the tech guessing which field is
@@ -119,10 +128,12 @@ function OnboardingScreen() {
   }
   if (!loc.city.trim()) missing.push('city / town')
   if (!loc.timezone.trim()) missing.push('timezone')
+  if (!agreeTerms) missing.push('agreement to the terms')
 
   // Per-field red markers, shown only after a blocked finish attempt.
   const err = (show: boolean, msg: string) =>
     attempted && show ? msg : undefined
+  const termsErr = err(!agreeTerms, 'Please agree to the Terms & disclaimer.')
   const businessNameErr = err(!businessOk, 'Enter your trading / business name.')
   const abnErr = err(
     !abnOk,
@@ -436,6 +447,31 @@ function OnboardingScreen() {
               generated-at line on logbook PDFs.
             </p>
             <LocationFields loc={loc} setLoc={setLoc} errors={locErrors} />
+          </Card>
+
+          <Card>
+            <div className="mb-2 text-sm font-semibold text-slate-700 dark:text-slate-200">
+              Terms &amp; disclaimer
+            </div>
+            <div className="max-h-56 overflow-y-auto rounded-xl border border-slate-200 p-3 dark:border-slate-800">
+              <TermsContent />
+            </div>
+            <label className="mt-3 flex items-start gap-2 text-sm text-slate-700 dark:text-slate-200">
+              <input
+                type="checkbox"
+                className="mt-0.5 h-4 w-4 accent-brand-600"
+                checked={agreeTerms}
+                onChange={(e) => setAgreeTerms(e.target.checked)}
+              />
+              <span className={termsErr ? 'text-red-600 dark:text-red-400' : ''}>
+                I have read and agree to the Terms &amp; disclaimer above. *
+              </span>
+            </label>
+            {termsErr && (
+              <p className="mt-1 text-xs font-medium text-red-600 dark:text-red-400">
+                {termsErr}
+              </p>
+            )}
           </Card>
         </div>
       </main>

@@ -890,7 +890,13 @@ export default function Settings() {
         Refrigerant Handling · data stored locally on this device
       </p>
 
-      <div className="pt-1 text-center">
+      <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 pt-1 text-center">
+        <Link
+          to="/terms"
+          className="text-xs text-slate-400 underline-offset-2 hover:text-slate-600 hover:underline dark:hover:text-slate-300"
+        >
+          Terms &amp; disclaimer
+        </Link>
         <Link
           to="/account-deletion"
           className="text-xs text-slate-400 underline-offset-2 hover:text-slate-600 hover:underline dark:hover:text-slate-300"

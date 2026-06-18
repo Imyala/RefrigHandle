@@ -848,6 +848,9 @@ export interface AppState {
   // blocks everything else. Existing installs are grandfathered in
   // `normalize()` so an upgrade never locks a returning user out.
   setupCompletedAt?: string
+  // ISO timestamp when the Terms & disclaimer were accepted at first-run
+  // setup. Onboarding requires the tick before setup can finish.
+  termsAcceptedAt?: string
   // Set when the owner has requested account closure. While present the
   // app is locked (AccountClosedGate) and nothing else is reachable.
   accountClosure?: AccountClosure

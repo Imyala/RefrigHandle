@@ -69,6 +69,7 @@ interface LegacyState
   businessName?: string
   businessAbn?: string
   businessStructure?: AppState['businessStructure']
+  termsAcceptedAt?: string
   accountClosure?: AppState['accountClosure']
   location?: Partial<AppState['location']>
   clock?: string
@@ -220,6 +221,7 @@ function normalize(parsed: LegacyState): AppState {
     businessName: parsed.businessName ?? '',
     businessAbn: parsed.businessAbn ?? '',
     businessStructure: parsed.businessStructure,
+    termsAcceptedAt: parsed.termsAcceptedAt,
     accountClosure: parsed.accountClosure,
     location: {
       country: parsed.location?.country ?? '',

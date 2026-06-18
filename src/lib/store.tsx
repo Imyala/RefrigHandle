@@ -1165,6 +1165,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         technicians: [...s.technicians, tech],
         activeTechnicianId: s.activeTechnicianId ?? tech.id,
         setupCompletedAt: now,
+        termsAcceptedAt: now,
         settingsUpdatedAt: now,
         auditLog: [...entries, ...s.auditLog],
       }
