@@ -9,8 +9,8 @@ import { profileFor } from '../lib/compliance'
 import { downloadRecordsZip } from '../lib/backup'
 import {
   businessStructureLabel,
-  retentionExplanation,
   retentionSummary,
+  retentionYears,
 } from '../lib/types'
 
 // Common reasons, offered as a picker so the request is quick to fill and
@@ -43,7 +43,7 @@ export default function AccountDeletion() {
     (t) => t.id === state.activeTechnicianId,
   )
   const retention = retentionSummary(state.businessStructure)
-  const retentionWhy = retentionExplanation(state.businessStructure)
+  const retentionYrs = retentionYears(state.businessStructure)
 
   const [contactName, setContactName] = useState(activeTech?.name ?? '')
   const [email, setEmail] = useState('')
@@ -159,20 +159,42 @@ export default function AccountDeletion() {
         </div>
         <p className="mt-1 text-sm text-amber-900/80 dark:text-amber-100/80">
           Submitting will <strong>close your account</strong>. You'll be signed
-          out, and the account can't be used again until it's reopened. To
-          reopen it you'll need to submit a request, which we'll{' '}
+          out, and the account can't be used again. If you wish to reopen it,
+          you'll need to submit a request, which we'll{' '}
           <strong>formally review</strong>.
         </p>
+        {retentionYrs ? (
+          <p className="mt-2 text-sm text-amber-900/80 dark:text-amber-100/80">
+            You must keep your refrigerant and business records for{' '}
+            <strong>{retentionYrs} years</strong> before they can be destroyed
+            {retentionYrs === 7
+              ? ' — financial records under the Corporations Act 2001 (ASIC), and refrigerant records under the Ozone Protection and Synthetic Greenhouse Gas Management Regulations 1995.'
+              : ' — business records for the ATO, and refrigerant records under the Ozone Protection and Synthetic Greenhouse Gas Management Regulations 1995.'}
+          </p>
+        ) : (
+          <>
+            <p className="mt-2 text-sm text-amber-900/80 dark:text-amber-100/80">
+              You must keep your refrigerant and business records for{' '}
+              <strong>5–7 years</strong> before they can be destroyed:
+            </p>
+            <ul className="mt-1 list-disc space-y-1 pl-5 text-sm text-amber-900/80 dark:text-amber-100/80">
+              <li>
+                <strong>5 years</strong> for sole traders, partnerships and
+                trusts (ATO, and the Ozone Protection and Synthetic Greenhouse
+                Gas Management Regulations 1995 for refrigerant records).
+              </li>
+              <li>
+                <strong>7 years</strong> for companies (financial records under
+                the Corporations Act 2001, ASIC).
+              </li>
+            </ul>
+          </>
+        )}
         <p className="mt-2 text-sm text-amber-900/80 dark:text-amber-100/80">
-          You must keep your refrigerant and business records for{' '}
-          <strong>{retention}</strong> before they can be destroyed.{' '}
-          {retentionWhy}
-        </p>
-        <p className="mt-2 text-sm text-amber-900/80 dark:text-amber-100/80">
-          So nothing is lost, the moment you submit the app downloads a single{' '}
-          <strong>ZIP of all your records</strong> — a full backup plus the
-          audit-log CSV — and opens a pre-filled email with your request. Save
-          that ZIP somewhere safe and keep it for the full retention period.
+          So you keep them, the app downloads a single{' '}
+          <strong>ZIP of everything</strong> (a full backup plus the audit-log
+          CSV) and opens a pre-filled email with your request the moment you
+          submit. Save it somewhere safe.
         </p>
       </Card>
 

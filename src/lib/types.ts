@@ -488,17 +488,6 @@ export function retentionSummary(s?: BusinessStructure): string {
   return '5–7 years (5 for sole traders, partnerships and trusts; 7 for companies under ASIC)'
 }
 
-// A sentence explaining WHY the retention period is what it is — which
-// regulators set it and for which records — tailored to the structure.
-export function retentionExplanation(s?: BusinessStructure): string {
-  const y = retentionYears(s)
-  if (y === 7)
-    return 'As a company you must keep these records for 7 years: your financial records under the Corporations Act 2001 (ASIC), and your refrigerant-handling records under the Ozone Protection and Synthetic Greenhouse Gas Management Regulations 1995.'
-  if (y === 5)
-    return 'You must keep these records for 5 years: your business records for the ATO, and your refrigerant-handling records under the Ozone Protection and Synthetic Greenhouse Gas Management Regulations 1995.'
-  return 'You must keep these records for 5 to 7 years — 5 years for sole traders, partnerships and trusts (ATO, and the Ozone Protection and Synthetic Greenhouse Gas Management Regulations 1995 for refrigerant records), or 7 years for companies (financial records under the Corporations Act 2001, ASIC).'
-}
-
 // Recorded when an owner requests account closure. Its presence locks the
 // app (see AccountClosedGate) — the device can't be used again until the
 // closure is lifted by re-importing a pre-closure backup or clearing data.
