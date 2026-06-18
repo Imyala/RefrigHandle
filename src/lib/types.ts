@@ -921,14 +921,17 @@ export function isSetupComplete(s: AppState): boolean {
   return !!s.setupCompletedAt
 }
 
-// Returns the refrigerant list with favourites first (alphabetical),
-// then the rest (in their original order).
+// Returns the refrigerant list with favourites first, then the rest. Both
+// groups keep the order of the input list (REFRIGERANT_TYPES is already in
+// R-number order), so favourites read in the same R-number sequence as the
+// master list — NOT lexicographically (which would put e.g. R134A ahead of
+// R22/R32).
 export function sortRefrigerants(
   types: readonly string[],
   favorites: readonly string[],
 ): string[] {
   const fav = new Set(favorites)
-  const favs = types.filter((t) => fav.has(t)).sort()
+  const favs = types.filter((t) => fav.has(t))
   const rest = types.filter((t) => !fav.has(t))
   return [...favs, ...rest]
 }

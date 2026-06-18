@@ -623,6 +623,7 @@ export default function Settings() {
               >
                 <DateInput
                   value={state.arcAuthorisationExpiry}
+                  disabled={companyLocked}
                   onChange={(v) => {
                     setArcAuthorisationExpiry(v)
                     flashComp()
