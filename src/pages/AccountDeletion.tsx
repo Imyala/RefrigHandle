@@ -153,16 +153,18 @@ export default function AccountDeletion() {
           Before you request closure
         </div>
         <p className="mt-1 text-sm text-amber-900/80 dark:text-amber-100/80">
-          Submitting <strong>closes the account and locks this device</strong> —
-          you'll be logged out and won't be able to get back in. To reactivate
-          you'll need to contact us directly.
+          Submitting will <strong>close your account and lock the app on this
+          device</strong>. You'll be signed out straight away and won't be able
+          to get back in — to reopen the account later, you'll need to contact
+          us directly.
         </p>
         <p className="mt-2 text-sm text-amber-900/80 dark:text-amber-100/80">
-          By law your refrigerant and business records must be kept for{' '}
-          <strong>{retention}</strong>. When you submit, the app{' '}
-          <strong>automatically downloads a ZIP of all your records</strong>{' '}
-          (full backup + audit-log CSV) and opens an email with your request —
-          keep that file safe for the whole retention period.
+          By law you must keep your refrigerant and business records for{' '}
+          <strong>{retention}</strong>. So nothing is lost, the moment you
+          submit the app downloads a single{' '}
+          <strong>ZIP of all your records</strong> (a full backup plus the
+          audit-log CSV) and opens a pre-filled email with your request. Save
+          that ZIP somewhere safe and keep it for the full retention period.
         </p>
       </Card>
 
