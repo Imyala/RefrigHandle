@@ -48,6 +48,7 @@ interface LegacyState
     | 'activeTechnicianId'
     | 'auditLog'
     | 'tombstones'
+    | 'termsAcceptedVersion'
   > {
   bottles?: LegacyBottle[]
   transactions?: LegacyTransaction[]
@@ -69,7 +70,10 @@ interface LegacyState
   businessName?: string
   businessAbn?: string
   termsAcceptedAt?: string
-  termsAcceptedVersion?: number
+  // Was a number in the first release; now a lettered string. An old
+  // numeric value simply fails the string equality check in TermsGate and
+  // re-prompts once, which is the right outcome anyway.
+  termsAcceptedVersion?: string | number
   accountClosure?: AppState['accountClosure']
   location?: Partial<AppState['location']>
   clock?: string
@@ -221,7 +225,12 @@ function normalize(parsed: LegacyState): AppState {
     businessName: parsed.businessName ?? '',
     businessAbn: parsed.businessAbn ?? '',
     termsAcceptedAt: parsed.termsAcceptedAt,
-    termsAcceptedVersion: parsed.termsAcceptedVersion,
+    // Drop a legacy numeric version to undefined — it can't match the new
+    // string TERMS_VERSION, so the user re-accepts once (the right call).
+    termsAcceptedVersion:
+      typeof parsed.termsAcceptedVersion === 'string'
+        ? parsed.termsAcceptedVersion
+        : undefined,
     accountClosure: parsed.accountClosure,
     location: {
       country: parsed.location?.country ?? '',

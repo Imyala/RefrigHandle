@@ -446,9 +446,17 @@ export interface Tombstone {
 // string literal scattered through the code.
 export type Jurisdiction = 'AU'
 
+// Released app version, shown small at the bottom of Settings. Bump on
+// every push / change. Same lettered scheme as TERMS_VERSION so the two
+// read consistently (e.g. 'v1.1a' → 'v1.1b' → 'v1.2a').
+export const APP_VERSION = 'v1.1a'
+
 // Bump when the Terms & disclaimer wording materially changes, so users are
-// asked to re-accept (see TermsGate). Stored as termsAcceptedVersion.
-export const TERMS_VERSION = 2
+// asked to re-accept (see TermsGate). Stored as termsAcceptedVersion. A
+// lettered string rather than a counter — we expect many small revisions
+// (e.g. 'v1.1a' → 'v1.1b'), and re-acceptance triggers on any change, not
+// on numeric ordering.
+export const TERMS_VERSION = 'v1.1b'
 
 // Recorded when an owner requests account closure. Its presence locks the
 // app (see AccountClosedGate) — the device can't be used again until the
@@ -808,7 +816,7 @@ export interface AppState {
   // When the Terms & disclaimer were accepted, and which version. Onboarding
   // requires the tick to finish; a later TERMS_VERSION bump re-prompts.
   termsAcceptedAt?: string
-  termsAcceptedVersion?: number
+  termsAcceptedVersion?: string
   // Set when the owner has requested account closure. While present the
   // app is locked (AccountClosedGate) and nothing else is reachable.
   accountClosure?: AccountClosure

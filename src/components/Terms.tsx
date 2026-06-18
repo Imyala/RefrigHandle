@@ -67,14 +67,16 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
   )
 }
 
-// After setup, if the Terms have been updated past the version the user last
-// accepted (or they predate the Terms entirely), require re-acceptance
-// before the app can be used. First acceptance is handled in onboarding.
+// After setup, if the Terms differ from the version the user last accepted
+// (or they predate the Terms entirely), require re-acceptance before the
+// app can be used. Versions are lettered strings (e.g. 'v1.1b'), so we
+// re-prompt on any change rather than comparing order. First acceptance is
+// handled in onboarding.
 export function TermsGate({ children }: { children: ReactNode }) {
   const { state } = useStore()
   if (
     isSetupComplete(state) &&
-    (state.termsAcceptedVersion ?? 0) < TERMS_VERSION
+    state.termsAcceptedVersion !== TERMS_VERSION
   ) {
     return <TermsAcceptScreen />
   }

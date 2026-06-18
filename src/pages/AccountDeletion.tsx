@@ -73,18 +73,13 @@ export default function AccountDeletion() {
       setAttempted(true)
       return
     }
-    const ok = await confirm({
-      title: 'Close this account?',
-      message: `This closes your account. You'll be signed out, and it can't be used again until it's reopened — which means submitting a request that we'll formally review. First we'll download a ZIP of all your records (full backup + audit-log CSV) and open a pre-filled email, so you keep everything for the period you're legally required to retain it.`,
-      confirmLabel: 'Close account',
-      danger: true,
-    })
-    if (!ok) return
     setBusy(true)
-    // Hand the business its records BEFORE locking: one ZIP holding the
-    // complete JSON backup (every bottle, site, unit, transaction,
-    // technician, the change log, and photos/signatures) and the
-    // auditor-readable CSV log — what must legally be retained for 5–7 years.
+    // Start the records export the moment they select delete — BEFORE the
+    // confirm dialog — so they keep a copy even if they back out. One ZIP
+    // holding the complete JSON backup (every bottle, site, unit,
+    // transaction, technician, the change log, and photos/signatures) and
+    // the auditor-readable CSV log. Saving and retaining it is the user's
+    // responsibility; this just hands them the file to make that easy.
     try {
       await downloadRecordsZip(state)
     } catch {
@@ -92,6 +87,15 @@ export default function AccountDeletion() {
       setBusy(false)
       return
     }
+    setBusy(false)
+    const ok = await confirm({
+      title: 'Close this account?',
+      message: `This closes your account. You'll be signed out, and it can't be used again unless you request that it be reopened — which we'll formally review. A ZIP of your records (full backup + audit-log CSV) has been downloaded; saving and keeping it for the period you're legally required to retain it is your responsibility.`,
+      confirmLabel: 'Close account',
+      danger: true,
+    })
+    if (!ok) return
+    setBusy(true)
     // Open the user's email app with the closure request pre-filled.
     const mailto = `mailto:?subject=${encodeURIComponent(
       `Account closure request — ${state.businessName || 'RefrigHandle'}`,
@@ -165,10 +169,11 @@ export default function AccountDeletion() {
           <RetentionNotice />
         </div>
         <p className="mt-2 text-sm text-amber-900/80 dark:text-amber-100/80">
-          So you keep them, the app downloads a single{' '}
-          <strong>ZIP of everything</strong> (a full backup plus the audit-log
-          CSV) and opens a pre-filled email with your request the moment you
-          submit. Save it somewhere safe.
+          <strong>Exporting and keeping your own copy is your responsibility.</strong>{' '}
+          To help, a <strong>ZIP of everything</strong> (a full backup plus the
+          audit-log CSV) starts downloading the moment you submit, and a
+          pre-filled request email opens. Save the file somewhere safe before
+          you close.
         </p>
       </Card>
 
