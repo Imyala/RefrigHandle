@@ -1,22 +1,22 @@
+// Ordered by R-number (ascending), then by suffix, so the chips and every
+// refrigerant dropdown read in a predictable numeric/alphabetical order.
+// "Unknown" is the one non-numeric entry and always sorts last.
 export const REFRIGERANT_TYPES = [
-  // Legacy CFC / HCFC
   'R12',
   'R22',
   'R23',
-  'R401A',
-  'R402A',
-  'R408A',
-  'R409A',
-  'R502',
-  // Common HVAC HFC
   'R32',
   'R134A',
+  'R290',
+  'R401A',
+  'R402A',
   'R404A',
   'R407A',
   'R407C',
   'R407F',
+  'R408A',
+  'R409A',
   'R410A',
-  // R404A / R134a replacements (lower GWP HFC blends)
   'R448A',
   'R449A',
   'R450A',
@@ -25,21 +25,17 @@ export const REFRIGERANT_TYPES = [
   'R454B',
   'R455A',
   'R466A',
-  // Refrigeration / low-temp
+  'R502',
   'R507A',
   'R508B',
-  // Hydrocarbons
-  'R290',
   'R600',
   'R600A',
-  'R1270',
-  // HFO
-  'R1234YF',
-  'R1234ZE',
-  'R1233ZD',
-  // Naturals
   'R717',
   'R744',
+  'R1233ZD',
+  'R1234YF',
+  'R1234ZE',
+  'R1270',
   // Unknown / unidentified — e.g. a pump-down or recovery bottle holding
   // mixed or unlabelled refrigerant that hasn't been identified yet.
   'Unknown',

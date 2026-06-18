@@ -84,27 +84,36 @@ export function Layout() {
           <TabLink to="/" end label="Home" icon={<HomeIcon />} />
           <TabLink to="/sites" label="Sites" icon={<SitesIcon />} />
 
-          {/* Centre slot: the raised Bottles button floating above the bar. */}
-          <div className="relative">
-            <NavLink
-              to="/bottles"
-              aria-label="Bottles"
-              title="Bottles"
-              className="absolute left-1/2 top-0 -translate-x-1/2 -translate-y-1/4"
-            >
-              {({ isActive }) => (
+          {/* Centre slot: Bottles is the core entity, so its tab carries a
+              filled brand circle to stand out — but it sits flush in the bar
+              at the same height as the other tabs rather than floating above
+              it. */}
+          <NavLink
+            to="/bottles"
+            aria-label="Bottles"
+            title="Bottles"
+            className="flex flex-col items-center justify-center gap-1 px-0.5 py-2.5 text-slate-500 transition dark:text-slate-400"
+          >
+            {({ isActive }) => (
+              <>
                 <span
-                  className={`flex h-14 w-14 items-center justify-center rounded-full text-white shadow-lg shadow-brand-900/25 ring-4 ring-slate-50 transition dark:ring-slate-950 ${
-                    isActive
-                      ? 'scale-105 bg-brand-700'
-                      : 'bg-brand-600 hover:bg-brand-700'
+                  aria-hidden
+                  className={`flex h-9 w-9 items-center justify-center rounded-full text-white shadow-sm shadow-brand-900/20 transition ${
+                    isActive ? 'bg-brand-700' : 'bg-brand-600'
                   }`}
                 >
-                  <BottleIcon big />
+                  <BottleIcon />
                 </span>
-              )}
-            </NavLink>
-          </div>
+                <span
+                  className={`text-[11px] font-medium leading-none tracking-tight transition ${
+                    isActive ? 'text-brand-600 dark:text-brand-400' : ''
+                  }`}
+                >
+                  Bottles
+                </span>
+              </>
+            )}
+          </NavLink>
 
           <TabLink
             to="/transactions"
