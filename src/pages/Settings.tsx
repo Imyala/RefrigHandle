@@ -18,7 +18,6 @@ import {
   expiryStatus,
   BUSINESS_STRUCTURES,
   REFRIGERANT_TYPES,
-  transactionLoss,
   type BusinessStructure,
   type ClockFormat,
   type LocationSettings,
@@ -41,11 +40,7 @@ import {
   splitName,
 } from '../lib/types'
 import { profileFor } from '../lib/compliance'
-import {
-  formatDateTime,
-  formatPlainDate,
-  localDateTimeInput,
-} from '../lib/datetime'
+import { formatDateTime, formatPlainDate } from '../lib/datetime'
 import { useToast } from '../lib/toast'
 import { useConfirm } from '../lib/confirm'
 import { hashPassword, MIN_PASSWORD_LENGTH } from '../lib/auth'
@@ -53,7 +48,7 @@ import { screenNewPassword } from '../lib/passwordStrength'
 import { PasswordPromptModal } from '../components/PasswordPromptModal'
 import { isSyncConfigured } from '../lib/sync'
 import { verifyAuditChains, type ChainReport } from '../lib/auditChain'
-import { downloadBackup, getLastBackupAt } from '../lib/backup'
+import { downloadBackup, downloadLogCsv, getLastBackupAt } from '../lib/backup'
 import { importAttachments } from '../lib/attachments'
 import type { PickerOption } from '../components/Picker'
 
@@ -249,175 +244,7 @@ export default function Settings() {
   const [exportTo, setExportTo] = useState('')
 
   function exportCsv() {
-    const inRange = (iso: string) => {
-      if (!exportFrom && !exportTo) return true
-      const day = localDateTimeInput(new Date(iso), state.location.timezone)
-        .slice(0, 10)
-      if (exportFrom && day < exportFrom) return false
-      if (exportTo && day > exportTo) return false
-      return true
-    }
-    // Two sections in one file: live transactions first, then a
-    // separator row + a "Deleted transactions (audit trail)" header,
-    // then every soft-deleted transaction. Auditors comparing the
-    // live ledger against the deleted-row list don't have to filter
-    // by a deletedAt column. Deleted-only columns (deletedAt etc.)
-    // appear only in the second section's header.
-    const liveHeader = [
-      'id',
-      'date',
-      'local_datetime',
-      'timezone',
-      'kind',
-      'bottleNumber',
-      'sourceBottleNumber',
-      'refrigerantType',
-      'amount_into_equipment_kg',
-      'amount_from_bottle_kg',
-      'loss_kg',
-      'weightBefore_kg',
-      'weightAfter_kg',
-      'sourceWeightBefore_kg',
-      'sourceWeightAfter_kg',
-      'site',
-      'client',
-      'unit',
-      'unitSerial',
-      'equipment',
-      'reason',
-      'leakTestPerformed',
-      'correctsId',
-      'correctionReason',
-      'returnDestination',
-      'docketNumber',
-      'supplier',
-      'invoiceNumber',
-      'technician',
-      'technicianLicence',
-      'businessName',
-      'businessAbn',
-      'arcAuthorisationNumber',
-      'notes',
-    ]
-    const deletedHeader = [
-      ...liveHeader,
-      'deletedAt',
-      'deletedBy',
-      'deletedByLicence',
-      'deletedReason',
-    ]
-    function rowFor(t: (typeof state.transactions)[number]): string[] {
-      const b = state.bottles.find((x) => x.id === t.bottleId)
-      const sb = t.sourceBottleId
-        ? state.bottles.find((x) => x.id === t.sourceBottleId)
-        : null
-      const s = state.sites.find((x) => x.id === t.siteId)
-      const u = state.units.find((x) => x.id === t.unitId)
-      const loss = transactionLoss(t)
-      return [
-        t.id,
-        t.date,
-        // Human-readable local time in the zone the work was logged in,
-        // plus that zone — so an auditor reading the CSV sees an
-        // unambiguous time without converting the UTC ISO column.
-        formatDateTime(t.date, t.tz || state.location.timezone, state.clock, true),
-        t.tz || state.location.timezone || '',
-        t.kind,
-        b?.bottleNumber ?? '',
-        sb?.bottleNumber ?? '',
-        b?.refrigerantType ?? '',
-        t.amount.toFixed(3),
-        (t.bottleAmount ?? t.amount).toFixed(3),
-        loss.toFixed(3),
-        t.weightBefore.toFixed(3),
-        t.weightAfter.toFixed(3),
-        t.sourceWeightBefore?.toFixed(3) ?? '',
-        t.sourceWeightAfter?.toFixed(3) ?? '',
-        // Live record first, then the name frozen on the row when the
-        // site/unit was deleted — exports must keep saying where the
-        // work happened.
-        s?.name ?? t.siteName ?? '',
-        s?.client ?? '',
-        u?.name ?? t.unitName ?? '',
-        u?.serial ?? '',
-        t.equipment ?? '',
-        t.reason ?? '',
-        t.leakTestPerformed === undefined
-          ? ''
-          : t.leakTestPerformed
-            ? 'Yes'
-            : 'No',
-        t.correctsId ?? '',
-        (t.correctionReason ?? '').replace(/[\r\n]+/g, ' '),
-        t.returnDestination ?? '',
-        t.docketNumber ?? '',
-        t.supplier ?? '',
-        t.invoiceNumber ?? '',
-        t.technician ?? '',
-        t.technicianLicence ?? '',
-        t.businessName ?? '',
-        t.businessAbn ?? '',
-        t.arcAuthorisationNumber ?? '',
-        (t.notes ?? '').replace(/[\r\n]+/g, ' '),
-      ]
-    }
-    const liveTxs = state.transactions.filter(
-      (t) => !t.deletedAt && inRange(t.date),
-    )
-    const deletedTxs = state.transactions
-      .filter((t) => !!t.deletedAt && inRange(t.date))
-      .slice()
-      .sort((a, b) =>
-        (b.deletedAt ?? '').localeCompare(a.deletedAt ?? ''),
-      )
-    const rows: (string[] | string)[] = [
-      ['ACTIVE TRANSACTIONS'],
-      liveHeader,
-      ...liveTxs.map((t) => rowFor(t)),
-    ]
-    if (deletedTxs.length > 0) {
-      rows.push([])
-      rows.push([`DELETED TRANSACTIONS (audit trail · ${deletedTxs.length})`])
-      rows.push(deletedHeader)
-      for (const t of deletedTxs) {
-        rows.push([
-          ...rowFor(t),
-          t.deletedAt ?? '',
-          t.deletedBy ?? '',
-          t.deletedByLicence ?? '',
-          (t.deletedReason ?? '').replace(/[\r\n]+/g, ' '),
-        ])
-      }
-    }
-    const csv = rows
-      .map((r) =>
-        (Array.isArray(r) ? r : [r])
-          .map((cell) => {
-            let s = String(cell ?? '')
-            // Spreadsheet formula-injection guard: a free-text field
-            // starting with = @ + or - would execute as a formula when
-            // the auditor opens the CSV in Excel. Prefix with ' to force
-            // text — but leave plain negative numbers (e.g. -2.000 on an
-            // adjust) untouched.
-            if (/^[=@]/.test(s) || (/^[+-]/.test(s) && !/^[+-]?\d+(\.\d+)?$/.test(s))) {
-              s = `'${s}`
-            }
-            return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
-          })
-          .join(','),
-      )
-      .join('\n')
-    const blob = new Blob([csv], { type: 'text/csv' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    const range =
-      exportFrom || exportTo
-        ? `-${exportFrom || 'start'}-to-${exportTo || 'now'}`
-        : ''
-    a.download = `refrighandle-log${range}-${new Date().toISOString().slice(0, 10)}.csv`
-    a.click()
-    URL.revokeObjectURL(url)
+    downloadLogCsv(state, exportFrom || undefined, exportTo || undefined)
   }
 
   async function importJson(file: File) {

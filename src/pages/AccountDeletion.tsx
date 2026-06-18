@@ -6,6 +6,7 @@ import { useStore } from '../lib/store'
 import { useToast } from '../lib/toast'
 import { useConfirm } from '../lib/confirm'
 import { profileFor } from '../lib/compliance'
+import { downloadBackup, downloadLogCsv } from '../lib/backup'
 import { businessStructureLabel, retentionSummary } from '../lib/types'
 
 // Common reasons, offered as a picker so the request is quick to fill and
@@ -65,12 +66,32 @@ export default function AccountDeletion() {
     }
     const ok = await confirm({
       title: 'Close this account?',
-      message: `This closes the account and locks the app on this device. You'll be logged out and won't be able to get back in — reactivation means contacting us directly. Your records are retained for ${retention}. Export a full backup first (Settings → Backup & export) if you want your own copy.`,
+      message: `This closes the account and locks the app on this device — you'll be logged out and won't be able to get back in (reactivation means contacting us directly). First we'll download a full backup and the audit-log CSV, and open an email with your request, so you keep everything for the ${retention} you must retain it.`,
       confirmLabel: 'Close account',
       danger: true,
     })
     if (!ok) return
     setBusy(true)
+    // Hand the business its records BEFORE locking: a complete JSON backup
+    // (every bottle, site, unit, transaction, technician, the change log,
+    // and photos/signatures) plus the auditor-readable CSV log. These are
+    // what must legally be retained for 5–7 years.
+    try {
+      await downloadBackup(state)
+      downloadLogCsv(state)
+    } catch {
+      toast.show('Could not generate the backup — try again.', 'error')
+      setBusy(false)
+      return
+    }
+    // Open the user's email app with the closure request pre-filled.
+    const mailto = `mailto:?subject=${encodeURIComponent(
+      `Account closure request — ${state.businessName || 'RefrigHandle'}`,
+    )}&body=${encodeURIComponent(closureEmailBody())}`
+    const mail = document.createElement('a')
+    mail.href = mailto
+    mail.click()
+
     requestAccountClosure({
       reason: reasonLabel,
       details,
@@ -78,9 +99,30 @@ export default function AccountDeletion() {
       contactEmail: email,
       contactPhone: phone,
     })
-    toast.show('Account closed', 'info')
+    toast.show('Account closed — records downloaded', 'info')
     // The AccountClosedGate takes over on the next render and replaces the
     // whole app, so there's nothing more to do here.
+  }
+
+  function closureEmailBody(): string {
+    return [
+      'ACCOUNT CLOSURE REQUEST',
+      '',
+      `Business: ${state.businessName || '—'}`,
+      state.businessAbn ? `${profile.businessNumberShort}: ${state.businessAbn}` : '',
+      state.arcAuthorisationNumber
+        ? `${profile.businessAuthShort}: ${state.arcAuthorisationNumber}`
+        : '',
+      `Contact: ${contactName}`,
+      email ? `Email: ${email}` : '',
+      phone ? `Phone: ${phone}` : '',
+      `Reason: ${reasonLabel}`,
+      details.trim() ? `Details: ${details.trim()}` : '',
+      '',
+      'A full backup and audit-log CSV were exported at closure and retained by the business.',
+    ]
+      .filter(Boolean)
+      .join('\n')
   }
 
   return (
@@ -111,10 +153,11 @@ export default function AccountDeletion() {
           you'll need to contact us directly.
         </p>
         <p className="mt-2 text-sm text-amber-900/80 dark:text-amber-100/80">
-          By law your refrigerant and business records are retained for{' '}
-          <strong>{retention}</strong> and are not destroyed before then.
-          Export a full backup (Settings → Backup &amp; export) first if you
-          want your own copy.
+          By law your refrigerant and business records must be kept for{' '}
+          <strong>{retention}</strong>. When you submit, the app{' '}
+          <strong>automatically downloads a full backup and the audit-log
+          CSV</strong> and opens an email with your request — keep those files
+          safe for the whole retention period.
         </p>
       </Card>
 

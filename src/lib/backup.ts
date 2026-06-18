@@ -1,5 +1,7 @@
 import type { AppState } from './types'
+import { transactionLoss } from './types'
 import { exportAttachments } from './attachments'
+import { formatDateTime, localDateTimeInput } from './datetime'
 
 // Backup freshness tracking. Until records live on a server (team
 // accounts), every byte of compliance history exists only in this
@@ -76,6 +78,168 @@ export async function downloadBackup(state: AppState): Promise<void> {
   a.click()
   URL.revokeObjectURL(url)
   markBackedUp()
+}
+
+// The audit-friendly CSV of the refrigerant log: active transactions, then
+// a second section listing every soft-deleted row (with who/when/why), so
+// an auditor sees the full ledger and what was removed from it. Optional
+// inclusive date range (local calendar days, business timezone). Shared by
+// Settings → Export and the account-closure auto-export.
+export function buildLogCsv(
+  state: AppState,
+  from?: string,
+  to?: string,
+): string {
+  const inRange = (iso: string) => {
+    if (!from && !to) return true
+    const day = localDateTimeInput(new Date(iso), state.location.timezone).slice(
+      0,
+      10,
+    )
+    if (from && day < from) return false
+    if (to && day > to) return false
+    return true
+  }
+  const liveHeader = [
+    'id',
+    'date',
+    'local_datetime',
+    'timezone',
+    'kind',
+    'bottleNumber',
+    'sourceBottleNumber',
+    'refrigerantType',
+    'amount_into_equipment_kg',
+    'amount_from_bottle_kg',
+    'loss_kg',
+    'weightBefore_kg',
+    'weightAfter_kg',
+    'sourceWeightBefore_kg',
+    'sourceWeightAfter_kg',
+    'site',
+    'client',
+    'unit',
+    'unitSerial',
+    'equipment',
+    'reason',
+    'leakTestPerformed',
+    'correctsId',
+    'correctionReason',
+    'returnDestination',
+    'docketNumber',
+    'supplier',
+    'invoiceNumber',
+    'technician',
+    'technicianLicence',
+    'businessName',
+    'businessAbn',
+    'arcAuthorisationNumber',
+    'notes',
+  ]
+  const deletedHeader = [
+    ...liveHeader,
+    'deletedAt',
+    'deletedBy',
+    'deletedByLicence',
+    'deletedReason',
+  ]
+  function rowFor(t: AppState['transactions'][number]): string[] {
+    const b = state.bottles.find((x) => x.id === t.bottleId)
+    const sb = t.sourceBottleId
+      ? state.bottles.find((x) => x.id === t.sourceBottleId)
+      : null
+    const s = state.sites.find((x) => x.id === t.siteId)
+    const u = state.units.find((x) => x.id === t.unitId)
+    const loss = transactionLoss(t)
+    return [
+      t.id,
+      t.date,
+      formatDateTime(t.date, t.tz || state.location.timezone, state.clock, true),
+      t.tz || state.location.timezone || '',
+      t.kind,
+      b?.bottleNumber ?? '',
+      sb?.bottleNumber ?? '',
+      b?.refrigerantType ?? '',
+      t.amount.toFixed(3),
+      (t.bottleAmount ?? t.amount).toFixed(3),
+      loss.toFixed(3),
+      t.weightBefore.toFixed(3),
+      t.weightAfter.toFixed(3),
+      t.sourceWeightBefore?.toFixed(3) ?? '',
+      t.sourceWeightAfter?.toFixed(3) ?? '',
+      s?.name ?? t.siteName ?? '',
+      s?.client ?? '',
+      u?.name ?? t.unitName ?? '',
+      u?.serial ?? '',
+      t.equipment ?? '',
+      t.reason ?? '',
+      t.leakTestPerformed === undefined ? '' : t.leakTestPerformed ? 'Yes' : 'No',
+      t.correctsId ?? '',
+      (t.correctionReason ?? '').replace(/[\r\n]+/g, ' '),
+      t.returnDestination ?? '',
+      t.docketNumber ?? '',
+      t.supplier ?? '',
+      t.invoiceNumber ?? '',
+      t.technician ?? '',
+      t.technicianLicence ?? '',
+      t.businessName ?? '',
+      t.businessAbn ?? '',
+      t.arcAuthorisationNumber ?? '',
+      (t.notes ?? '').replace(/[\r\n]+/g, ' '),
+    ]
+  }
+  const liveTxs = state.transactions.filter((t) => !t.deletedAt && inRange(t.date))
+  const deletedTxs = state.transactions
+    .filter((t) => !!t.deletedAt && inRange(t.date))
+    .slice()
+    .sort((a, b) => (b.deletedAt ?? '').localeCompare(a.deletedAt ?? ''))
+  const rows: (string[] | string)[] = [
+    ['ACTIVE TRANSACTIONS'],
+    liveHeader,
+    ...liveTxs.map((t) => rowFor(t)),
+  ]
+  if (deletedTxs.length > 0) {
+    rows.push([])
+    rows.push([`DELETED TRANSACTIONS (audit trail · ${deletedTxs.length})`])
+    rows.push(deletedHeader)
+    for (const t of deletedTxs) {
+      rows.push([
+        ...rowFor(t),
+        t.deletedAt ?? '',
+        t.deletedBy ?? '',
+        t.deletedByLicence ?? '',
+        (t.deletedReason ?? '').replace(/[\r\n]+/g, ' '),
+      ])
+    }
+  }
+  return rows
+    .map((r) =>
+      (Array.isArray(r) ? r : [r])
+        .map((cell) => {
+          let s = String(cell ?? '')
+          // Spreadsheet formula-injection guard: a free-text field starting
+          // with = @ + or - would execute as a formula in Excel. Prefix
+          // with ' to force text — but leave plain negative numbers be.
+          if (/^[=@]/.test(s) || (/^[+-]/.test(s) && !/^[+-]?\d+(\.\d+)?$/.test(s))) {
+            s = `'${s}`
+          }
+          return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
+        })
+        .join(','),
+    )
+    .join('\n')
+}
+
+export function downloadLogCsv(state: AppState, from?: string, to?: string): void {
+  const csv = buildLogCsv(state, from, to)
+  const blob = new Blob([csv], { type: 'text/csv' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  const range = from || to ? `-${from || 'start'}-to-${to || 'now'}` : ''
+  a.download = `refrighandle-log${range}-${new Date().toISOString().slice(0, 10)}.csv`
+  a.click()
+  URL.revokeObjectURL(url)
 }
 
 export interface BackupStatus {
