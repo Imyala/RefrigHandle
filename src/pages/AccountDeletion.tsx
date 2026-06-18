@@ -6,7 +6,6 @@ import { useStore } from '../lib/store'
 import { useToast } from '../lib/toast'
 import { useConfirm } from '../lib/confirm'
 import { profileFor } from '../lib/compliance'
-import { RetentionNotice } from '../components/RetentionNotice'
 
 // Common reasons, offered as a picker so the request is quick to fill and
 // the responses stay consistent. "Other" reveals the free-text box.
@@ -77,7 +76,7 @@ export default function AccountDeletion() {
     // the user's responsibility; we don't re-download here.
     const ok = await confirm({
       title: 'Close this account?',
-      message: `This closes your account. You'll be signed out, and it can't be used again unless you request that it be reopened — which we'll formally review. A ZIP of your records (full backup + audit-log CSV) was downloaded when you opened this page; saving and keeping it for the period you're legally required to retain it is your responsibility.`,
+      message: `This closes your account and signs you out. A copy of your records (full backup + audit-log CSV) downloaded when you opened this page — export and securely retain your own copy; RefrigHandle should not be relied upon as your sole archive. Once closed, access may no longer be available, and account data may be deleted in accordance with RefrigHandle's Privacy Policy and internal data retention practices.`,
       confirmLabel: 'Close account',
       danger: true,
     })
@@ -146,22 +145,35 @@ export default function AccountDeletion() {
         <div className="text-sm font-semibold text-amber-900 dark:text-amber-200">
           Before you request closure
         </div>
-        <p className="mt-1 text-sm text-amber-900/80 dark:text-amber-100/80">
-          Submitting will <strong>close your account</strong>. You'll be signed
-          out, and the account can't be used again. If you wish to reopen it,
-          you'll need to submit a request, which we'll{' '}
-          <strong>formally review</strong>.
-        </p>
-        <div className="mt-2 space-y-2 text-sm text-amber-900/80 dark:text-amber-100/80">
-          <RetentionNotice />
+        <div className="mt-1 space-y-2 text-sm text-amber-900/80 dark:text-amber-100/80">
+          <p>Submitting this request will close your account and sign you out.</p>
+          <p>
+            <strong>
+              Before closing your account, export and securely retain your own
+              copies of all records.
+            </strong>{' '}
+            RefrigHandle should not be relied upon as your sole archive or
+            backup system. A copy of your records (a full backup plus the
+            audit-log CSV) downloaded to this device when you opened this page,
+            and submitting opens a pre-filled request email — save the file
+            somewhere safe.
+          </p>
+          <p>
+            You are responsible for retaining records for the period required
+            under applicable laws and regulations. Requirements may vary
+            depending on your circumstances and may include obligations under
+            the ATO, ARC/ARCtick, ASIC and other legislation.
+          </p>
+          <p>
+            If you are unsure which requirements apply, seek advice from the
+            relevant authority or your own adviser.
+          </p>
+          <p>
+            Once an account is closed, access may no longer be available.
+            Account data may be deleted in accordance with RefrigHandle’s
+            Privacy Policy and internal data retention practices.
+          </p>
         </div>
-        <p className="mt-2 text-sm text-amber-900/80 dark:text-amber-100/80">
-          <strong>Exporting and keeping your own copy is your responsibility.</strong>{' '}
-          To help, a <strong>ZIP of everything</strong> (a full backup plus the
-          audit-log CSV) downloaded as soon as you opened this page, and
-          submitting opens a pre-filled request email. Save the file somewhere
-          safe before you close.
-        </p>
       </Card>
 
       <Card>
