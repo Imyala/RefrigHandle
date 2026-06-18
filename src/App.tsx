@@ -13,7 +13,7 @@ import Transactions from './pages/Transactions'
 import AuditLog from './pages/AuditLog'
 import Settings from './pages/Settings'
 import AccountDeletion from './pages/AccountDeletion'
-import TermsPage from './components/Terms'
+import TermsPage, { TermsGate } from './components/Terms'
 
 export default function App() {
   // ToastProvider sits ABOVE StoreProvider so the store can surface
@@ -26,6 +26,7 @@ export default function App() {
           <ThemeApplier />
           <AccountClosedGate>
             <OnboardingGate>
+            <TermsGate>
             <HashRouter>
               <Routes>
                 <Route element={<Layout />}>
@@ -43,6 +44,7 @@ export default function App() {
                 </Route>
               </Routes>
             </HashRouter>
+            </TermsGate>
             </OnboardingGate>
           </AccountClosedGate>
         </StoreProvider>

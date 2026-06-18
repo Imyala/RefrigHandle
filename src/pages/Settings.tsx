@@ -606,7 +606,7 @@ export default function Settings() {
           </Field>
           <Field
             label="Business structure"
-            hint="Determines the records-retention period — companies keep records 7 years, others 5."
+            hint="How your business is registered — each option explains who it's for. Determines the records-retention period (7 years for companies, 5 for others)."
           >
             <Picker
               title="Business structure"

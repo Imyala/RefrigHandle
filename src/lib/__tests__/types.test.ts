@@ -30,8 +30,9 @@ import {
 import { makeBottle, makeTx } from './fixtures'
 
 describe('records retention by business structure', () => {
-  it('companies keep records 7 years, everyone else 5', () => {
+  it('companies (and "other") keep records 7 years, the rest 5', () => {
     expect(retentionYears('company')).toBe(7)
+    expect(retentionYears('other')).toBe(7)
     expect(retentionYears('sole_trader')).toBe(5)
     expect(retentionYears('partnership')).toBe(5)
     expect(retentionYears('trust')).toBe(5)
@@ -47,6 +48,9 @@ describe('records retention by business structure', () => {
     expect(retentionSummary('company')).toContain('ASIC')
     expect(retentionSummary('sole_trader')).toContain('5 years')
     expect(retentionSummary('sole_trader')).toContain('ATO')
+    // "Other" is a conservative 7-year floor, not asserted as ASIC.
+    expect(retentionSummary('other')).toContain('7 years')
+    expect(retentionSummary('other')).toContain('conservative')
   })
 })
 

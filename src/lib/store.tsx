@@ -30,6 +30,7 @@ import {
   composeName,
   DEFAULT_TECHNICIAN_ROLE,
   TECHNICIAN_PURGE_DAYS,
+  TERMS_VERSION,
   daysUntilPurge,
 } from './types'
 import {
@@ -156,6 +157,8 @@ interface StoreApi {
     contactEmail?: string
     contactPhone?: string
   }) => void
+  // Re-accept the Terms after a version bump (see TermsGate).
+  acceptTerms: () => void
   setLocation: (l: LocationSettings) => void
   setUnit: (u: WeightUnit) => void
   setTheme: (t: Theme) => void
@@ -1166,6 +1169,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         activeTechnicianId: s.activeTechnicianId ?? tech.id,
         setupCompletedAt: now,
         termsAcceptedAt: now,
+        termsAcceptedVersion: TERMS_VERSION,
         settingsUpdatedAt: now,
         auditLog: [...entries, ...s.auditLog],
       }
@@ -1310,6 +1314,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       ),
     [],
   )
+
+  const acceptTerms = useCallback(() => {
+    const now = new Date().toISOString()
+    setState((s) => ({
+      ...s,
+      termsAcceptedAt: now,
+      termsAcceptedVersion: TERMS_VERSION,
+      settingsUpdatedAt: now,
+    }))
+  }, [])
 
   const requestAccountClosure: StoreApi['requestAccountClosure'] = useCallback(
     (req) => {
@@ -1600,6 +1614,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setBusinessAbn,
       setBusinessStructure,
       requestAccountClosure,
+      acceptTerms,
       setLocation,
       setUnit,
       setTheme,
@@ -1643,6 +1658,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setBusinessAbn,
       setBusinessStructure,
       requestAccountClosure,
+      acceptTerms,
       setLocation,
       setUnit,
       setTheme,

@@ -286,7 +286,7 @@ function OnboardingScreen() {
               <Field
                 label="Business structure *"
                 error={structureErr}
-                hint="Sets how long records must be kept — companies keep them 7 years, others 5. Locked once setup is complete."
+                hint="How your business is registered — each option explains who it's for. Sets how long records must be kept (7 years for companies, 5 for others). Locked once setup is complete."
               >
                 <Picker
                   title="Business structure"

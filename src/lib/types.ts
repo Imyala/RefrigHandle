@@ -455,15 +455,38 @@ export type BusinessStructure =
   | 'partnership'
   | 'company'
   | 'trust'
+  | 'other'
 
 export const BUSINESS_STRUCTURES: {
   value: BusinessStructure
   label: string
+  hint?: string
 }[] = [
-  { value: 'sole_trader', label: 'Sole trader' },
-  { value: 'partnership', label: 'Partnership' },
-  { value: 'company', label: 'Company (Pty Ltd)' },
-  { value: 'trust', label: 'Trust' },
+  {
+    value: 'sole_trader',
+    label: 'Sole trader',
+    hint: 'Just you, trading under your own ABN — no separate company.',
+  },
+  {
+    value: 'partnership',
+    label: 'Partnership',
+    hint: 'Two or more people running the business together.',
+  },
+  {
+    value: 'company',
+    label: 'Company (Pty Ltd)',
+    hint: 'Registered with ASIC, has an ACN; name usually ends in “Pty Ltd”.',
+  },
+  {
+    value: 'trust',
+    label: 'Trust',
+    hint: 'A trustee runs the business on behalf of beneficiaries.',
+  },
+  {
+    value: 'other',
+    label: 'Other (government, co-op, association…)',
+    hint: 'Anything else — kept 7 years to be safe; confirm your own obligation.',
+  },
 ]
 
 export function businessStructureLabel(s?: BusinessStructure): string {
@@ -471,22 +494,34 @@ export function businessStructureLabel(s?: BusinessStructure): string {
 }
 
 // Years that business / refrigerant records must be retained for this
-// structure. Null when the structure isn't known yet (legacy installs that
-// predate the setting) — callers then show the conservative 5–7 range.
+// structure. Companies keep them 7 years (ASIC); "other" is treated as 7 as
+// a conservative floor. Null when the structure isn't known yet (legacy
+// installs that predate the setting) — callers show the 5–7 range.
 export function retentionYears(s?: BusinessStructure): number | null {
   if (!s) return null
-  return s === 'company' ? 7 : 5
+  return s === 'company' || s === 'other' ? 7 : 5
 }
 
-// Plain-English retention period for messaging — the exact figure when the
-// structure is known, or the conservative 5–7 range when it isn't.
+// Plain-English retention period for messaging — structure-aware, with the
+// conservative 5–7 range when the structure isn't known.
 export function retentionSummary(s?: BusinessStructure): string {
-  const y = retentionYears(s)
-  if (y === 7) return '7 years (ASIC — Corporations Act 2001 s286)'
-  if (y === 5)
-    return '5 years (ATO; Ozone Protection and Synthetic Greenhouse Gas Management Regulations 1995)'
-  return '5–7 years (5 for sole traders, partnerships and trusts; 7 for companies under ASIC)'
+  switch (s) {
+    case 'company':
+      return '7 years (ASIC — Corporations Act 2001 s286)'
+    case 'other':
+      return '7 years (a conservative minimum — confirm your entity’s own obligation)'
+    case 'sole_trader':
+    case 'partnership':
+    case 'trust':
+      return '5 years (ATO; Ozone Protection and Synthetic Greenhouse Gas Management Regulations 1995)'
+    default:
+      return '5–7 years (5 for sole traders, partnerships and trusts; 7 for companies under ASIC)'
+  }
 }
+
+// Bump when the Terms & disclaimer wording materially changes, so users are
+// asked to re-accept (see TermsGate). Stored as termsAcceptedVersion.
+export const TERMS_VERSION = 1
 
 // Recorded when an owner requests account closure. Its presence locks the
 // app (see AccountClosedGate) — the device can't be used again until the
@@ -848,9 +883,10 @@ export interface AppState {
   // blocks everything else. Existing installs are grandfathered in
   // `normalize()` so an upgrade never locks a returning user out.
   setupCompletedAt?: string
-  // ISO timestamp when the Terms & disclaimer were accepted at first-run
-  // setup. Onboarding requires the tick before setup can finish.
+  // When the Terms & disclaimer were accepted, and which version. Onboarding
+  // requires the tick to finish; a later TERMS_VERSION bump re-prompts.
   termsAcceptedAt?: string
+  termsAcceptedVersion?: number
   // Set when the owner has requested account closure. While present the
   // app is locked (AccountClosedGate) and nothing else is reachable.
   accountClosure?: AccountClosure

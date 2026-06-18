@@ -171,10 +171,12 @@ export default function AccountDeletion() {
         {retentionYrs ? (
           <p className="mt-2 text-sm text-amber-900/80 dark:text-amber-100/80">
             You must keep your refrigerant and business records for{' '}
-            <strong>{retentionYrs} years</strong> before they can be destroyed
-            {retentionYrs === 7
+            <strong>{periodText}</strong> before they can be destroyed
+            {state.businessStructure === 'company'
               ? ' — financial records under the Corporations Act 2001 (ASIC), and refrigerant records under the Ozone Protection and Synthetic Greenhouse Gas Management Regulations 1995.'
-              : ' — business records for the ATO, and refrigerant records under the Ozone Protection and Synthetic Greenhouse Gas Management Regulations 1995.'}
+              : state.businessStructure === 'other'
+                ? '. 7 years is a conservative minimum — some entities (e.g. government bodies or co-operatives) must keep records longer, so confirm what applies to you. Refrigerant records fall under the Ozone Protection and Synthetic Greenhouse Gas Management Regulations 1995.'
+                : ' — business records for the ATO, and refrigerant records under the Ozone Protection and Synthetic Greenhouse Gas Management Regulations 1995.'}
           </p>
         ) : (
           <>

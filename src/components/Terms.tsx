@@ -1,5 +1,8 @@
+import { useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
-import { Card } from './ui'
+import { Button, Card } from './ui'
+import { useStore } from '../lib/store'
+import { isSetupComplete, TERMS_VERSION } from '../lib/types'
 
 // One place for the Terms & disclaimer text, shown at first-run setup (with
 // the acceptance tick) and on the standalone /terms page from Settings.
@@ -50,13 +53,74 @@ export function TermsContent() {
   )
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
     <div>
       <div className="font-semibold text-slate-900 dark:text-slate-100">
         {title}
       </div>
       <p className="mt-0.5">{children}</p>
+    </div>
+  )
+}
+
+// After setup, if the Terms have been updated past the version the user last
+// accepted (or they predate the Terms entirely), require re-acceptance
+// before the app can be used. First acceptance is handled in onboarding.
+export function TermsGate({ children }: { children: ReactNode }) {
+  const { state } = useStore()
+  if (
+    isSetupComplete(state) &&
+    (state.termsAcceptedVersion ?? 0) < TERMS_VERSION
+  ) {
+    return <TermsAcceptScreen />
+  }
+  return <>{children}</>
+}
+
+function TermsAcceptScreen() {
+  const { acceptTerms } = useStore()
+  const [agree, setAgree] = useState(false)
+  return (
+    <div className="flex min-h-svh flex-col bg-slate-50 dark:bg-slate-950">
+      <header
+        className="border-b border-slate-200 bg-white/90 px-4 py-3 backdrop-blur dark:border-slate-800 dark:bg-slate-950/90"
+        style={{ paddingTop: 'calc(env(safe-area-inset-top) + 0.75rem)' }}
+      >
+        <div className="mx-auto flex max-w-2xl flex-col items-center text-center">
+          <h1 className="text-xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
+            Refrigerant Handling
+          </h1>
+          <p className="mt-0.5 text-[11px] font-medium uppercase tracking-[0.18em] text-brand-600 dark:text-brand-400">
+            Updated terms
+          </p>
+        </div>
+      </header>
+      <main className="mx-auto w-full max-w-2xl flex-1 space-y-4 px-4 py-5">
+        <p className="px-1 text-sm text-slate-600 dark:text-slate-400">
+          Our Terms &amp; disclaimer have been updated. Please read and accept
+          them to keep using the app.
+        </p>
+        <Card>
+          <TermsContent />
+        </Card>
+        <Card>
+          <label className="flex items-start gap-2 text-sm text-slate-700 dark:text-slate-200">
+            <input
+              type="checkbox"
+              className="mt-0.5 h-4 w-4 accent-brand-600"
+              checked={agree}
+              onChange={(e) => setAgree(e.target.checked)}
+            />
+            <span>I have read and agree to the updated Terms &amp; disclaimer.</span>
+          </label>
+          <div className="mt-3">
+            <Button full disabled={!agree} onClick={acceptTerms}>
+              Agree and continue
+            </Button>
+          </div>
+        </Card>
+      </main>
     </div>
   )
 }
