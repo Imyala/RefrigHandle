@@ -307,7 +307,7 @@ export default function AccountDeletion() {
               reason === 'other' && details.trim() === '',
               'Add a short description.',
             )}
-            hint="Anything that helps us process the request."
+            hint="Optional — anything you'd like to add about your request."
           >
             <TextArea
               value={details}
@@ -328,8 +328,12 @@ export default function AccountDeletion() {
               onChange={(ev) => setAckRetention(ev.target.checked)}
             />
             <span>
-              I understand I am required by law to keep my refrigerant and
-              business records for <strong>{periodText}</strong>.
+              I understand that keeping my records for <strong>{periodText}</strong>{' '}
+              is my own legal responsibility — my refrigerant-handling records
+              under the Ozone Protection and Synthetic Greenhouse Gas Management
+              Regulations 1995 (the ARC / ARCtick scheme), and my business and
+              financial records under the Australian Taxation Office (ATO) and,
+              if I trade as a company, ASIC under the Corporations Act 2001.
             </span>
           </label>
           <label className="flex items-start gap-2 text-sm text-slate-700 dark:text-slate-200">
@@ -341,8 +345,9 @@ export default function AccountDeletion() {
             />
             <span>
               I confirm I have downloaded or backed up all my records, and
-              understand that once my account is closed RefrigHandle is no
-              longer responsible for keeping or maintaining them.
+              accept that once my account is closed RefrigHandle no longer
+              holds, keeps, or is responsible for them, and is not responsible
+              for my compliance with the laws above.
             </span>
           </label>
         </div>
@@ -351,6 +356,13 @@ export default function AccountDeletion() {
             Please tick both boxes to continue.
           </p>
         )}
+        <p className="mt-3 border-t border-slate-200 pt-3 text-xs text-slate-500 dark:border-slate-800">
+          RefrigHandle is a record-keeping tool, not a record-keeping service
+          or a provider of legal or compliance advice. Meeting your retention
+          and reporting obligations is your responsibility — if you're unsure
+          what applies to you, check with the ATO, the ARC, ASIC, or your own
+          adviser.
+        </p>
       </Card>
 
       <Button full variant="danger" disabled={busy} onClick={submit}>
