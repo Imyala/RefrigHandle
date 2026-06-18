@@ -25,6 +25,7 @@ import {
   type Transaction,
   type Unit,
   type WeightUnit,
+  EMPTY_STATE,
   transactionLabel,
   composeName,
   DEFAULT_TECHNICIAN_ROLE,
@@ -154,6 +155,11 @@ interface StoreApi {
     contactEmail?: string
     contactPhone?: string
   }) => void
+  // Wipe the device back to a pristine install (the account-creation
+  // screen). Fired automatically a few minutes after closure so a closed
+  // account doesn't linger on screen — the business has already been
+  // handed its records ZIP at closure time.
+  resetToFreshInstall: () => void
   // Re-accept the Terms after a version bump (see TermsGate).
   acceptTerms: () => void
   setLocation: (l: LocationSettings) => void
@@ -1335,6 +1341,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     [],
   )
 
+  const resetToFreshInstall: StoreApi['resetToFreshInstall'] = useCallback(() => {
+    // Replace the whole dataset with a clean slate. With setupCompletedAt
+    // cleared (and accountClosure gone) the gates fall back to the
+    // first-run account-creation screen on the next render.
+    setState(() => ({ ...EMPTY_STATE }))
+  }, [])
+
   const setLocation = useCallback(
     (location: LocationSettings) =>
       setState((s) => {
@@ -1589,6 +1602,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setBusinessName,
       setBusinessAbn,
       requestAccountClosure,
+      resetToFreshInstall,
       acceptTerms,
       setLocation,
       setUnit,
@@ -1632,6 +1646,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setBusinessName,
       setBusinessAbn,
       requestAccountClosure,
+      resetToFreshInstall,
       acceptTerms,
       setLocation,
       setUnit,
