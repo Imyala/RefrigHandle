@@ -5,9 +5,10 @@ import { formatDateTime } from '../lib/datetime'
 import { retentionSummary } from '../lib/types'
 import type { AccountClosure } from '../lib/types'
 
-// Gate that locks the entire app once account closure has been requested.
-// There is deliberately no in-app way back — reactivation means contacting
-// us directly (or restoring a pre-closure backup / clearing app data).
+// Once account closure has been requested, the app shows the closed screen
+// instead of the normal UI. There is deliberately no in-app way to reopen —
+// that takes a request we formally review (or restoring a pre-closure
+// backup / clearing app data).
 export function AccountClosedGate({ children }: { children: ReactNode }) {
   const { state } = useStore()
   if (state.accountClosure) {
@@ -62,16 +63,16 @@ function AccountClosedScreen({ closure }: { closure: AccountClosure }) {
 
         <Card>
           <p className="text-sm text-slate-700 dark:text-slate-300">
-            Account closure was requested on <strong>{stamp}</strong>. This
-            account is closed and locked on this device — it can't be used.
+            Your account was closed on <strong>{stamp}</strong> and can't be
+            used until it's reopened.
           </p>
           <p className="mt-3 text-sm text-slate-700 dark:text-slate-300">
-            To reactivate, <strong>contact us directly</strong>. For your
-            security it can't be reopened from the app.
+            To reopen it, <strong>submit a request</strong> — we'll formally
+            review it before the account is reopened.
           </p>
           <p className="mt-3 border-t border-slate-200 pt-3 text-xs text-slate-500 dark:border-slate-800">
             <strong>Records retention:</strong> your refrigerant and business
-            records are retained for {retention} and are not destroyed before
+            records must be kept for {retention} and are not destroyed before
             then.
           </p>
         </Card>

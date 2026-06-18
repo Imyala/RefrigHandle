@@ -7,7 +7,11 @@ import { useToast } from '../lib/toast'
 import { useConfirm } from '../lib/confirm'
 import { profileFor } from '../lib/compliance'
 import { downloadRecordsZip } from '../lib/backup'
-import { businessStructureLabel, retentionSummary } from '../lib/types'
+import {
+  businessStructureLabel,
+  retentionExplanation,
+  retentionSummary,
+} from '../lib/types'
 
 // Common reasons, offered as a picker so the request is quick to fill and
 // the responses stay consistent. "Other" reveals the free-text box.
@@ -39,6 +43,7 @@ export default function AccountDeletion() {
     (t) => t.id === state.activeTechnicianId,
   )
   const retention = retentionSummary(state.businessStructure)
+  const retentionWhy = retentionExplanation(state.businessStructure)
 
   const [contactName, setContactName] = useState(activeTech?.name ?? '')
   const [email, setEmail] = useState('')
@@ -72,7 +77,7 @@ export default function AccountDeletion() {
     }
     const ok = await confirm({
       title: 'Close this account?',
-      message: `This closes the account and locks the app on this device — you'll be logged out and won't be able to get back in (reactivation means contacting us directly). First we'll download a ZIP of all your records (full backup + audit-log CSV) and open an email with your request, so you keep everything for the ${retention} you must retain it.`,
+      message: `This closes your account. You'll be signed out, and it can't be used again until it's reopened — which means submitting a request that we'll formally review. First we'll download a ZIP of all your records (full backup + audit-log CSV) and open a pre-filled email, so you keep everything for the ${retention} you must retain it.`,
       confirmLabel: 'Close account',
       danger: true,
     })
@@ -153,17 +158,20 @@ export default function AccountDeletion() {
           Before you request closure
         </div>
         <p className="mt-1 text-sm text-amber-900/80 dark:text-amber-100/80">
-          Submitting will <strong>close your account and lock the app on this
-          device</strong>. You'll be signed out straight away and won't be able
-          to get back in — to reopen the account later, you'll need to contact
-          us directly.
+          Submitting will <strong>close your account</strong>. You'll be signed
+          out, and the account can't be used again until it's reopened. To
+          reopen it you'll need to submit a request, which we'll{' '}
+          <strong>formally review</strong>.
         </p>
         <p className="mt-2 text-sm text-amber-900/80 dark:text-amber-100/80">
-          By law you must keep your refrigerant and business records for{' '}
-          <strong>{retention}</strong>. So nothing is lost, the moment you
-          submit the app downloads a single{' '}
-          <strong>ZIP of all your records</strong> (a full backup plus the
-          audit-log CSV) and opens a pre-filled email with your request. Save
+          You must keep your refrigerant and business records for{' '}
+          <strong>{retention}</strong> before they can be destroyed.{' '}
+          {retentionWhy}
+        </p>
+        <p className="mt-2 text-sm text-amber-900/80 dark:text-amber-100/80">
+          So nothing is lost, the moment you submit the app downloads a single{' '}
+          <strong>ZIP of all your records</strong> — a full backup plus the
+          audit-log CSV — and opens a pre-filled email with your request. Save
           that ZIP somewhere safe and keep it for the full retention period.
         </p>
       </Card>
@@ -292,9 +300,9 @@ export default function AccountDeletion() {
             onChange={(ev) => setAck(ev.target.checked)}
           />
           <span>
-            I understand this closes and locks the account, that I'll need to
-            contact us to reactivate it, and that my records are retained for{' '}
-            {retention} before they can be destroyed.
+            I understand this closes my account, that reopening it means
+            submitting a request for formal review, and that I must keep my
+            records for {retention} before they can be destroyed.
           </span>
         </label>
         {attempted && !ack && (
