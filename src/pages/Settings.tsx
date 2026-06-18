@@ -28,6 +28,8 @@ import {
   DEFAULT_TECHNICIAN_ROLE,
   TECHNICIAN_PURGE_DAYS,
   roleInfo,
+  roleAtLeast,
+  canAssignRole,
   daysUntilPurge,
   isTechnicianActive,
   canManageTechnicians,
@@ -1042,6 +1044,10 @@ export default function Settings() {
       <TechnicianModal
         open={techModalOpen}
         editing={editingTech}
+        actorRole={activeTech?.role}
+        ownerExists={state.technicians.some(
+          (t) => t.role === 'owner' && isTechnicianActive(t),
+        )}
         onClose={() => setTechModalOpen(false)}
         onSave={(data) => {
           const passwordHashPatch =
@@ -1130,12 +1136,18 @@ type TechSavePayload = {
 function TechnicianModal({
   open,
   editing,
+  actorRole,
+  ownerExists,
   onClose,
   onSave,
   onDelete,
 }: {
   open: boolean
   editing: Technician | null
+  // Role of the profile doing the editing, and whether an owner account
+  // already exists — together these decide which roles can be assigned.
+  actorRole: TechnicianRole | undefined
+  ownerExists: boolean
   onClose: () => void
   onSave: (data: TechSavePayload) => void
   onDelete?: () => void
@@ -1186,6 +1198,18 @@ function TechnicianModal({
   // existing one is kept unless a new one is typed.
   const passwordRequired = !editing
 
+  // Roles this editor is allowed to assign. The tech's CURRENT role is
+  // always kept in the list so editing other fields never forces a role
+  // change. Editing an owner from a lower tier locks the field entirely,
+  // so a supervisor can't demote an owner (or, with the owner slot freed,
+  // slip themselves into it).
+  const editingOwnerAsNonOwner =
+    !!editing && editing.role === 'owner' && !roleAtLeast(actorRole, 'owner')
+  const assignableRoles = TECHNICIAN_ROLES.filter(
+    (r) =>
+      canAssignRole(actorRole, r.value, ownerExists) || r.value === editing?.role,
+  )
+
   // Field-level validation, surfaced after the first save attempt.
   const firstErr = attempted && !firstName.trim() ? 'First name is required.' : undefined
   const lastErr = attempted && !lastName.trim() ? 'Surname is required.' : undefined
@@ -1235,10 +1259,16 @@ function TechnicianModal({
       middleName: middleName.trim() || undefined,
       lastName: lastName.trim(),
     }
+    // Defensive: never let a disallowed role through even if the picker is
+    // bypassed — fall back to the tech's current role (or the default).
+    const safeRole =
+      canAssignRole(actorRole, role, ownerExists) || role === editing?.role
+        ? role
+        : editing?.role ?? DEFAULT_TECHNICIAN_ROLE
     onSave({
       ...parts,
       name: composeName(parts),
-      role,
+      role: safeRole,
       arcLicenceNumber: rhl.trim(),
       licenceExpiry,
       passwordChange,
@@ -1275,19 +1305,25 @@ function TechnicianModal({
         <Field
           label="Role"
           hint={
-            editing
-              ? `${roleInfo(role).blurb} Change this when someone's position changes — e.g. promote an apprentice to technician once they qualify.`
-              : roleInfo(role).blurb
+            editingOwnerAsNonOwner
+              ? 'Only an owner can change an owner’s role.'
+              : editing
+                ? `${roleInfo(role).blurb} Change this when someone's position changes — e.g. promote an apprentice to technician once they qualify.`
+                : roleInfo(role).blurb
           }
         >
           <Picker
             title="Role"
             value={role}
+            disabled={editingOwnerAsNonOwner}
             onChange={(v) => setRole(v as TechnicianRole)}
-            options={TECHNICIAN_ROLES.map((r) => ({
+            options={assignableRoles.map((r) => ({
               value: r.value,
               label: r.label,
-              hint: r.blurb,
+              hint:
+                r.value === 'owner' && !ownerExists && !roleAtLeast(actorRole, 'owner')
+                  ? `${r.blurb} (only assignable while there's no owner)`
+                  : r.blurb,
             }))}
           />
         </Field>

@@ -8,6 +8,7 @@ import {
   isOverfilled,
   netWeight,
   overfillKg,
+  canAssignRole,
   canManageTechnicians,
   composeName,
   daysUntilPurge,
@@ -24,6 +25,37 @@ import {
   transactionLoss,
 } from '../types'
 import { makeBottle, makeTx } from './fixtures'
+
+describe('role assignment guard (canAssignRole)', () => {
+  it('a supervisor cannot grant owner while an owner exists', () => {
+    expect(canAssignRole('supervisor', 'owner', true)).toBe(false)
+    // ...not even to themselves (same call — actor is a supervisor).
+    expect(canAssignRole('supervisor', 'supervisor', true)).toBe(true)
+  })
+
+  it('a supervisor can appoint an owner only when none exists', () => {
+    expect(canAssignRole('supervisor', 'owner', false)).toBe(true)
+  })
+
+  it('an owner can assign any role', () => {
+    expect(canAssignRole('owner', 'owner', true)).toBe(true)
+    expect(canAssignRole('owner', 'supervisor', true)).toBe(true)
+    expect(canAssignRole('owner', 'apprentice', true)).toBe(true)
+  })
+
+  it('non-managers cannot assign any role', () => {
+    expect(canAssignRole('technician', 'apprentice', false)).toBe(false)
+    expect(canAssignRole('apprentice', 'apprentice', false)).toBe(false)
+    expect(canAssignRole(undefined, 'technician', false)).toBe(false)
+  })
+
+  it('a supervisor cannot assign a role above their own tier', () => {
+    // owner is above supervisor and gated separately; supervisor can
+    // assign supervisor and below.
+    expect(canAssignRole('supervisor', 'technician', true)).toBe(true)
+    expect(canAssignRole('supervisor', 'apprentice', true)).toBe(true)
+  })
+})
 
 describe('bottle weight math', () => {
   it('net weight is gross minus tare, floored at zero', () => {

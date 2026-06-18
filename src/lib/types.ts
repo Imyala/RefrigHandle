@@ -574,6 +574,24 @@ export function canDeleteRecords(role: TechnicianRole | undefined): boolean {
   return roleAtLeast(role, 'supervisor')
 }
 
+// Which role an actor is allowed to ASSIGN when adding or editing a tech.
+// Only an owner can hand out the owner role; a supervisor may assign up to
+// their own tier, and may grant 'owner' ONLY when no owner account exists
+// (so a sole-supervisor business can still appoint one). This stops a
+// supervisor promoting themselves — or anyone — to owner while an owner is
+// already in charge.
+export function canAssignRole(
+  actor: TechnicianRole | undefined,
+  target: TechnicianRole,
+  ownerExists: boolean,
+): boolean {
+  if (!canManageTechnicians(actor)) return false
+  if (roleAtLeast(actor, 'owner')) return true
+  if (target === 'owner') return !ownerExists
+  // Never assign a role above your own tier.
+  return roleInfo(target).level <= roleInfo(actor).level
+}
+
 // --- Deactivation lifecycle ------------------------------------------
 // A technician who leaves is first deactivated (account disabled but
 // kept), then fully purged after this many days. Their logged work is

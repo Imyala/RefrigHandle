@@ -109,10 +109,12 @@ export default function AccountDeletion() {
           </dl>
           <p className="mt-3 border-t border-slate-200 pt-3 text-xs text-slate-500 dark:border-slate-800">
             <strong>Retention notice:</strong> refrigerant handling and business
-            records are retained for <strong>5 years</strong> as required by the
-            Australian Taxation Office and the Ozone Protection and Synthetic
-            Greenhouse Gas Management Regulations 1995. The account is closed on
-            request, but these records are only destroyed after that period.
+            records are retained for the legally required minimum —{' '}
+            <strong>5 years</strong> (Australian Taxation Office; Ozone
+            Protection and Synthetic Greenhouse Gas Management Regulations 1995),
+            or <strong>7 years</strong> for companies (ASIC; Corporations Act
+            2001 s&nbsp;286). The account is closed on request, but these records
+            are only destroyed after the applicable period.
           </p>
         </Card>
 
@@ -146,12 +148,23 @@ export default function AccountDeletion() {
           Before you request deletion
         </div>
         <p className="mt-1 text-sm text-amber-900/80 dark:text-amber-100/80">
-          By law your refrigerant and business records must be kept for{' '}
-          <strong>5 years</strong> — required by the ATO and the Ozone
-          Protection and Synthetic Greenhouse Gas Management Regulations 1995.
-          Closing the account does not delete those records before then. Export
-          a full backup (Settings → Backup &amp; export) first if you want your
-          own copy.
+          By law your refrigerant and business records must be kept for a
+          minimum period before anything can be destroyed:
+        </p>
+        <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-amber-900/80 dark:text-amber-100/80">
+          <li>
+            <strong>5 years</strong> for all businesses — the ATO and the Ozone
+            Protection and Synthetic Greenhouse Gas Management Regulations 1995.
+          </li>
+          <li>
+            <strong>7 years</strong> if you trade as a company (Pty Ltd) — ASIC
+            under the Corporations Act 2001 (s&nbsp;286).
+          </li>
+        </ul>
+        <p className="mt-2 text-sm text-amber-900/80 dark:text-amber-100/80">
+          Closing the account does not delete those records before the period
+          that applies to you. Export a full backup (Settings → Backup &amp;
+          export) first if you want your own copy.
         </p>
       </Card>
 
@@ -273,9 +286,11 @@ export default function AccountDeletion() {
           />
           <span>
             I understand my refrigerant and business records will be retained
-            for <strong>5 years</strong> as required by the ATO and the Ozone
-            Protection and Synthetic Greenhouse Gas Management Regulations 1995,
-            and will only be destroyed after that period.
+            for the legally required minimum — <strong>5 years</strong> (ATO and
+            the Ozone Protection and Synthetic Greenhouse Gas Management
+            Regulations 1995), or <strong>7 years</strong> if I trade as a
+            company (ASIC, Corporations Act 2001 s&nbsp;286) — and will only be
+            destroyed after the period that applies to me.
           </span>
         </label>
         {attempted && !ack && (
