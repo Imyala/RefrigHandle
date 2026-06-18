@@ -480,7 +480,7 @@ export const APP_COMMIT = (
 // lettered string, bumped by hand — unlike APP_VERSION this MUST NOT move
 // every deploy, or users would be forced to re-accept the terms on each
 // release. Re-acceptance triggers on any change, not on numeric ordering.
-export const TERMS_VERSION = 'v1.1c'
+export const TERMS_VERSION = 'v1.1d'
 
 // Recorded when an owner requests account closure. Its presence locks the
 // app (see AccountClosedGate) — the device can't be used again until the

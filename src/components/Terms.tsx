@@ -22,9 +22,16 @@ export function TermsContent() {
       </Section>
       <Section title="Your responsibilities">
         You are responsible for the accuracy of what you enter, for keeping your
-        own backups, and for meeting all of your legal obligations. Users are
-        responsible for retaining records for the period required under
-        applicable ARC, ATO, ASIC and other relevant legislation.
+        own backups, and for meeting all of your legal and regulatory
+        obligations.
+      </Section>
+      <Section title="Record retention requirements">
+        You are responsible for retaining your own records for the period
+        required by applicable laws and regulations. Retention periods vary
+        depending on your circumstances and may include requirements from the
+        Australian Taxation Office (ATO), the Australian Refrigeration Council
+        (ARC/ARCtick), ASIC and other authorities. If you are unsure, seek
+        advice from the relevant authority or your own adviser.
       </Section>
       <Section title="No legal or compliance advice">
         Information provided by RefrigHandle is general in nature and should not
@@ -44,12 +51,14 @@ export function TermsContent() {
         information is governed by the Privacy Policy.
       </Section>
       <Section title="Closing your account">
-        You may request account closure at any time. Before doing so, you should
-        export and retain copies of all records you wish to keep. Users remain
-        responsible for complying with any statutory record retention
-        obligations. RefrigHandle may delete account data after closure in
-        accordance with its Privacy Policy and internal data retention
-        practices.
+        You may request account closure at any time. Before closing your
+        account, export and securely retain your own copies of all records —
+        RefrigHandle should not be relied upon as your sole archive or backup
+        system. Once an account is closed, access may no longer be available,
+        and any future reactivation requests will be considered at
+        RefrigHandle’s discretion. Account data may be deleted after closure in
+        accordance with RefrigHandle’s Privacy Policy and internal data
+        retention practices.
       </Section>
     </div>
   )
