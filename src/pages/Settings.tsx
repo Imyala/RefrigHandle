@@ -48,7 +48,7 @@ import { screenNewPassword } from '../lib/passwordStrength'
 import { PasswordPromptModal } from '../components/PasswordPromptModal'
 import { isSyncConfigured } from '../lib/sync'
 import { verifyAuditChains, type ChainReport } from '../lib/auditChain'
-import { downloadBackup, downloadLogCsv, getLastBackupAt } from '../lib/backup'
+import { downloadBackup, downloadLogCsv, downloadRecordsZip, getLastBackupAt } from '../lib/backup'
 import { importAttachments } from '../lib/attachments'
 import type { PickerOption } from '../components/Picker'
 
@@ -882,6 +882,17 @@ export default function Settings() {
         </Link>
         <Link
           to="/account-deletion"
+          onClick={() => {
+            // Hand the user their records the moment they start the closure
+            // flow — best effort; saving and keeping it is their
+            // responsibility (the deletion page says as much).
+            void downloadRecordsZip(state).catch(() => {
+              toast.show(
+                'Could not auto-export your records — use Settings → export a backup before closing.',
+                'error',
+              )
+            })
+          }}
           className="text-xs text-slate-400 underline-offset-2 hover:text-slate-600 hover:underline dark:hover:text-slate-300"
         >
           Request deletion of account

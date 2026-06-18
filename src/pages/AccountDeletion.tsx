@@ -6,7 +6,6 @@ import { useStore } from '../lib/store'
 import { useToast } from '../lib/toast'
 import { useConfirm } from '../lib/confirm'
 import { profileFor } from '../lib/compliance'
-import { downloadRecordsZip } from '../lib/backup'
 import { RetentionNotice } from '../components/RetentionNotice'
 
 // Common reasons, offered as a picker so the request is quick to fill and
@@ -73,24 +72,12 @@ export default function AccountDeletion() {
       setAttempted(true)
       return
     }
-    setBusy(true)
-    // Start the records export the moment they select delete — BEFORE the
-    // confirm dialog — so they keep a copy even if they back out. One ZIP
-    // holding the complete JSON backup (every bottle, site, unit,
-    // transaction, technician, the change log, and photos/signatures) and
-    // the auditor-readable CSV log. Saving and retaining it is the user's
-    // responsibility; this just hands them the file to make that easy.
-    try {
-      await downloadRecordsZip(state)
-    } catch {
-      toast.show('Could not generate the records file — try again.', 'error')
-      setBusy(false)
-      return
-    }
-    setBusy(false)
+    // The records ZIP already downloaded when this page was opened (from
+    // the "Request deletion of account" link). Saving and retaining it is
+    // the user's responsibility; we don't re-download here.
     const ok = await confirm({
       title: 'Close this account?',
-      message: `This closes your account. You'll be signed out, and it can't be used again unless you request that it be reopened — which we'll formally review. A ZIP of your records (full backup + audit-log CSV) has been downloaded; saving and keeping it for the period you're legally required to retain it is your responsibility.`,
+      message: `This closes your account. You'll be signed out, and it can't be used again unless you request that it be reopened — which we'll formally review. A ZIP of your records (full backup + audit-log CSV) was downloaded when you opened this page; saving and keeping it for the period you're legally required to retain it is your responsibility.`,
       confirmLabel: 'Close account',
       danger: true,
     })
@@ -111,7 +98,7 @@ export default function AccountDeletion() {
       contactEmail: email,
       contactPhone: phone,
     })
-    toast.show('Account closed — records downloaded', 'info')
+    toast.show('Account closed', 'info')
     // The AccountClosedGate takes over on the next render and replaces the
     // whole app, so there's nothing more to do here.
   }
@@ -171,9 +158,9 @@ export default function AccountDeletion() {
         <p className="mt-2 text-sm text-amber-900/80 dark:text-amber-100/80">
           <strong>Exporting and keeping your own copy is your responsibility.</strong>{' '}
           To help, a <strong>ZIP of everything</strong> (a full backup plus the
-          audit-log CSV) starts downloading the moment you submit, and a
-          pre-filled request email opens. Save the file somewhere safe before
-          you close.
+          audit-log CSV) downloaded as soon as you opened this page, and
+          submitting opens a pre-filled request email. Save the file somewhere
+          safe before you close.
         </p>
       </Card>
 
