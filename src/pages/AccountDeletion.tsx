@@ -6,7 +6,7 @@ import { useStore } from '../lib/store'
 import { useToast } from '../lib/toast'
 import { useConfirm } from '../lib/confirm'
 import { profileFor } from '../lib/compliance'
-import { downloadBackup, downloadLogCsv } from '../lib/backup'
+import { downloadRecordsZip } from '../lib/backup'
 import { businessStructureLabel, retentionSummary } from '../lib/types'
 
 // Common reasons, offered as a picker so the request is quick to fill and
@@ -42,6 +42,7 @@ export default function AccountDeletion() {
 
   const [contactName, setContactName] = useState(activeTech?.name ?? '')
   const [email, setEmail] = useState('')
+  const [confirmEmail, setConfirmEmail] = useState('')
   const [phone, setPhone] = useState('')
   const [reason, setReason] = useState('')
   const [details, setDetails] = useState('')
@@ -51,9 +52,14 @@ export default function AccountDeletion() {
 
   const reasonLabel = REASONS.find((r) => r.value === reason)?.label ?? ''
   const contactOk = contactName.trim() !== ''
+  // A contact email is required so the closure can be confirmed, and it's
+  // entered twice to catch a typo on something we can't easily fix later.
+  const emailOk = /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email.trim())
+  const emailsMatch =
+    email.trim() !== '' && email.trim() === confirmEmail.trim()
   const reasonOk =
     reason !== '' && (reason !== 'other' || details.trim() !== '')
-  const canSubmit = contactOk && reasonOk && ack
+  const canSubmit = contactOk && emailOk && emailsMatch && reasonOk && ack
 
   const fieldErr = (show: boolean, msg: string) =>
     attempted && show ? msg : undefined
@@ -66,21 +72,20 @@ export default function AccountDeletion() {
     }
     const ok = await confirm({
       title: 'Close this account?',
-      message: `This closes the account and locks the app on this device — you'll be logged out and won't be able to get back in (reactivation means contacting us directly). First we'll download a full backup and the audit-log CSV, and open an email with your request, so you keep everything for the ${retention} you must retain it.`,
+      message: `This closes the account and locks the app on this device — you'll be logged out and won't be able to get back in (reactivation means contacting us directly). First we'll download a ZIP of all your records (full backup + audit-log CSV) and open an email with your request, so you keep everything for the ${retention} you must retain it.`,
       confirmLabel: 'Close account',
       danger: true,
     })
     if (!ok) return
     setBusy(true)
-    // Hand the business its records BEFORE locking: a complete JSON backup
-    // (every bottle, site, unit, transaction, technician, the change log,
-    // and photos/signatures) plus the auditor-readable CSV log. These are
-    // what must legally be retained for 5–7 years.
+    // Hand the business its records BEFORE locking: one ZIP holding the
+    // complete JSON backup (every bottle, site, unit, transaction,
+    // technician, the change log, and photos/signatures) and the
+    // auditor-readable CSV log — what must legally be retained for 5–7 years.
     try {
-      await downloadBackup(state)
-      downloadLogCsv(state)
+      await downloadRecordsZip(state)
     } catch {
-      toast.show('Could not generate the backup — try again.', 'error')
+      toast.show('Could not generate the records file — try again.', 'error')
       setBusy(false)
       return
     }
@@ -155,9 +160,9 @@ export default function AccountDeletion() {
         <p className="mt-2 text-sm text-amber-900/80 dark:text-amber-100/80">
           By law your refrigerant and business records must be kept for{' '}
           <strong>{retention}</strong>. When you submit, the app{' '}
-          <strong>automatically downloads a full backup and the audit-log
-          CSV</strong> and opens an email with your request — keep those files
-          safe for the whole retention period.
+          <strong>automatically downloads a ZIP of all your records</strong>{' '}
+          (full backup + audit-log CSV) and opens an email with your request —
+          keep that file safe for the whole retention period.
         </p>
       </Card>
 
@@ -201,25 +206,43 @@ export default function AccountDeletion() {
             />
           </Field>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <Field label="Email" hint="So we can confirm the closure.">
+            <Field
+              label="Email *"
+              error={fieldErr(!emailOk, 'Enter a valid email address.')}
+              hint="We use this to confirm the closure."
+            >
               <TextInput
                 type="email"
                 inputMode="email"
                 value={email}
+                invalid={!!fieldErr(!emailOk, 'x')}
                 onChange={(ev) => setEmail(ev.target.value)}
                 placeholder="e.g. you@business.com.au"
               />
             </Field>
-            <Field label="Phone">
+            <Field
+              label="Confirm email *"
+              error={fieldErr(emailOk && !emailsMatch, 'Emails don’t match.')}
+            >
               <TextInput
-                type="tel"
-                inputMode="tel"
-                value={phone}
-                onChange={(ev) => setPhone(ev.target.value)}
-                placeholder="e.g. 0400 000 000"
+                type="email"
+                inputMode="email"
+                value={confirmEmail}
+                invalid={!!fieldErr(emailOk && !emailsMatch, 'x')}
+                onChange={(ev) => setConfirmEmail(ev.target.value)}
+                placeholder="Re-enter email"
               />
             </Field>
           </div>
+          <Field label="Phone">
+            <TextInput
+              type="tel"
+              inputMode="tel"
+              value={phone}
+              onChange={(ev) => setPhone(ev.target.value)}
+              placeholder="e.g. 0400 000 000"
+            />
+          </Field>
         </div>
       </Card>
 

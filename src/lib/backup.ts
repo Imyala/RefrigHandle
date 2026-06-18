@@ -2,6 +2,7 @@ import type { AppState } from './types'
 import { transactionLoss } from './types'
 import { exportAttachments } from './attachments'
 import { formatDateTime, localDateTimeInput } from './datetime'
+import { createZip } from './zip'
 
 // Backup freshness tracking. Until records live on a server (team
 // accounts), every byte of compliance history exists only in this
@@ -64,19 +65,46 @@ function snoozedUntil(): string | null {
 // Photos and signatures (IndexedDB, see lib/attachments.ts) ride along
 // under `__attachments` so "full backup" stays true; import strips the
 // key back out before the state is restored.
-export async function downloadBackup(state: AppState): Promise<void> {
+// The full backup as a JSON string — the entire app state plus photos and
+// signatures bundled under `__attachments`. Shared by the JSON download and
+// the closure ZIP so "full backup" means the same thing everywhere.
+export async function buildBackupJson(state: AppState): Promise<string> {
   const attachments = await exportAttachments()
   const payload =
     attachments.length > 0 ? { ...state, __attachments: attachments } : state
-  const blob = new Blob([JSON.stringify(payload, null, 2)], {
-    type: 'application/json',
-  })
+  return JSON.stringify(payload, null, 2)
+}
+
+function triggerDownload(blob: Blob, filename: string): void {
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
-  a.download = `refrighandle-${new Date().toISOString().slice(0, 10)}.json`
+  a.download = filename
   a.click()
   URL.revokeObjectURL(url)
+}
+
+export async function downloadBackup(state: AppState): Promise<void> {
+  const json = await buildBackupJson(state)
+  triggerDownload(
+    new Blob([json], { type: 'application/json' }),
+    `refrighandle-${new Date().toISOString().slice(0, 10)}.json`,
+  )
+  markBackedUp()
+}
+
+// One ZIP holding the complete JSON backup and the auditor-readable CSV log
+// — the records a business must retain for 5–7 years, downloaded in a
+// single file at account closure.
+export async function downloadRecordsZip(state: AppState): Promise<void> {
+  const stamp = new Date().toISOString().slice(0, 10)
+  const json = await buildBackupJson(state)
+  const csv = buildLogCsv(state)
+  const zip = createZip([
+    { name: `refrighandle-backup-${stamp}.json`, data: json },
+    { name: `refrighandle-log-${stamp}.csv`, data: csv },
+  ])
+  triggerDownload(zip, `refrighandle-records-${stamp}.zip`)
   markBackedUp()
 }
 
