@@ -91,7 +91,8 @@ function BackupAlert() {
         {status.lastBackupAt
           ? `Last full backup was ${status.daysSinceBackup} days ago.`
           : 'This device has never saved a full backup.'}{' '}
-        Refrigerant records must be producible for five years, but right
+        Refrigerant records must be kept and producible for the period
+        required by applicable regulations, but right
         now they exist only in this browser
         {persisted
           ? '.'

@@ -42,7 +42,8 @@ export function QuarterlyReportCard() {
       <p className="mb-3 text-xs text-slate-500">
         Refrigerant bought, used, recovered and returned per quarter — the
         record an ARC permit condition check asks for (they request the last
-        two quarters; records must be kept five years).
+        two quarters; records must be kept for the period required by
+        applicable regulations).
       </p>
       <Button variant="secondary" onClick={() => setOpen(true)}>
         Quarterly report
@@ -258,7 +259,7 @@ function QuarterlyReportModal({ onClose }: { onClose: () => void }) {
             Refrigerant Trading Authorisation under the Ozone Protection and
             Synthetic Greenhouse Gas Management Regulations (records of
             refrigerant acquired, recovered, sold or otherwise disposed of,
-            retained for five years).
+            retained for the period required by applicable regulations).
           </p>
           <p className="mt-2">Generated {generatedAt}.</p>
           <div className="mt-4 grid grid-cols-2 gap-6 print:mt-8">
