@@ -905,6 +905,12 @@ export default function Settings() {
           Data Retention &amp; Deletion Policy
         </Link>
         <Link
+          to="/security"
+          className="text-xs text-slate-400 underline-offset-2 hover:text-slate-600 hover:underline dark:hover:text-slate-300"
+        >
+          Security &amp; Disclosure Policy
+        </Link>
+        <Link
           to="/account-deletion"
           onClick={() => {
             // Hand the user their records the moment they start the closure
