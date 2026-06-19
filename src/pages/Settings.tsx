@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 import {
   Button,
   Card,
@@ -141,6 +141,22 @@ export default function Settings() {
   // the business's regulatory identity is a higher bar (supervisor+).
   const canManage = canManageTechnicians(activeTech?.role)
   const canEditCompany = canEditCompanyIdentity(activeTech?.role)
+
+  // Deep-link scroll: alert cards (e.g. the licence-expiry warning) link
+  // here with navigation state { scrollTo: 'technicians' | 'compliance' } so
+  // tapping them lands on the right card instead of the top of this long
+  // page. Runs once on mount after layout.
+  const location = useLocation()
+  useEffect(() => {
+    const target = (location.state as { scrollTo?: string } | null)?.scrollTo
+    if (!target) return
+    const el = document.getElementById(`settings-${target}`)
+    if (!el) return
+    // Defer to the next frame so the card is laid out before we scroll.
+    requestAnimationFrame(() => {
+      el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    })
+  }, [location.state])
 
   // Company identity (business name, ABN, ARC RTA number) is stamped onto
   // every record, so it's locked read-only once entered and only an
@@ -379,7 +395,7 @@ export default function Settings() {
 
       <SectionHeading>Business &amp; people</SectionHeading>
 
-      <Card>
+      <Card id="settings-technicians">
         <div className="mb-1 flex items-center justify-between gap-2">
           <div className="text-sm font-semibold text-slate-700 dark:text-slate-200">
             Technicians
@@ -533,7 +549,7 @@ export default function Settings() {
         )}
       </Card>
 
-      <Card>
+      <Card id="settings-compliance">
         <div className="mb-1 flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-200">
             Compliance details — {profile.name}

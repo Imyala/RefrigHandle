@@ -12,6 +12,7 @@ import {
   snoozeBackupReminder,
 } from '../lib/backup'
 import { isStoragePersisted, requestPersistentStorage } from '../lib/storage'
+import { isAlertSnoozed, snoozeAlert } from '../lib/alertSnooze'
 import { useToast } from '../lib/toast'
 
 // Shared alert panel surfaced on both the Home and Log pages so a tech
@@ -131,6 +132,8 @@ function BackupAlert() {
 function LicenceAlerts() {
   const { state } = useStore()
   const profile = profileFor(state.jurisdiction)
+  // Hidden for 24h once dismissed, then it re-alerts (see alertSnooze).
+  const [snoozed, setSnoozed] = useState(() => isAlertSnoozed('licence'))
 
   const rows: { key: string; label: string; expiry: string; ex: ExpiryStatus }[] = []
   for (const t of state.technicians) {
@@ -159,7 +162,13 @@ function LicenceAlerts() {
   // Most urgent first (already expired, then soonest to lapse).
   rows.sort((a, b) => (a.ex.daysLeft ?? 0) - (b.ex.daysLeft ?? 0))
 
-  if (rows.length === 0) return null
+  if (rows.length === 0 || snoozed) return null
+
+  // Send the tech to the right card: licences live on technician profiles,
+  // the RTA on the compliance card just below it.
+  const scrollTo = rows.some((r) => r.key.startsWith('tech:'))
+    ? 'technicians'
+    : 'compliance'
 
   return (
     <Card className="!border-amber-300 !bg-amber-50 dark:!border-amber-900/50 dark:!bg-amber-900/20">
@@ -169,6 +178,7 @@ function LicenceAlerts() {
         </div>
         <Link
           to="/settings"
+          state={{ scrollTo }}
           className="text-xs font-medium text-amber-900 hover:underline dark:text-amber-200"
         >
           Settings
@@ -199,6 +209,20 @@ function LicenceAlerts() {
           </li>
         ))}
       </ul>
+      <div className="mt-3 flex items-center justify-between gap-2">
+        <Button
+          variant="ghost"
+          onClick={() => {
+            snoozeAlert('licence')
+            setSnoozed(true)
+          }}
+        >
+          Hide
+        </Button>
+        <span className="text-[11px] text-amber-900/60 dark:text-amber-100/60">
+          Reappears in 24 hours.
+        </span>
+      </div>
     </Card>
   )
 }
@@ -206,13 +230,15 @@ function LicenceAlerts() {
 function HydroAlerts() {
   const { state } = useStore()
   const { bottles } = state
+  // Hidden for 24h once dismissed, then it re-alerts (see alertSnooze).
+  const [snoozed, setSnoozed] = useState(() => isAlertSnoozed('hydro'))
 
   const hydroAlerts = bottles
     .map((b) => ({ b, h: hydroStatusFor(b) }))
     .filter((x) => x.h.status === 'overdue' || x.h.status === 'due_soon')
     .sort((a, b) => (a.h.monthsUntilDue ?? 0) - (b.h.monthsUntilDue ?? 0))
 
-  if (hydroAlerts.length === 0) return null
+  if (hydroAlerts.length === 0 || snoozed) return null
 
   return (
     <Card className="!border-red-300 !bg-red-50 dark:!border-red-900/50 dark:!bg-red-900/20">
@@ -264,6 +290,20 @@ function HydroAlerts() {
           </li>
         )}
       </ul>
+      <div className="mt-3 flex items-center justify-between gap-2">
+        <Button
+          variant="ghost"
+          onClick={() => {
+            snoozeAlert('hydro')
+            setSnoozed(true)
+          }}
+        >
+          Hide
+        </Button>
+        <span className="text-[11px] text-red-900/60 dark:text-red-100/60">
+          Reappears in 24 hours.
+        </span>
+      </div>
     </Card>
   )
 }
