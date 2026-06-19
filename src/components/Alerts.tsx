@@ -164,11 +164,9 @@ function LicenceAlerts() {
 
   if (rows.length === 0 || snoozed) return null
 
-  // Send the tech to the right card: licences live on technician profiles,
-  // the RTA on the compliance card just below it.
-  const scrollTo = rows.some((r) => r.key.startsWith('tech:'))
-    ? 'technicians'
-    : 'compliance'
+  // Deep-link to the "Business & people" section in Settings (which holds
+  // both technician profiles and the compliance/RTA card) and force it open.
+  const scrollTo = 'business'
 
   return (
     <Card className="!border-amber-300 !bg-amber-50 dark:!border-amber-900/50 dark:!bg-amber-900/20">

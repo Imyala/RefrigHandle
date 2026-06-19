@@ -304,8 +304,12 @@ export default function Settings() {
         Settings
       </h2>
 
-      <SectionHeading>Audit &amp; records</SectionHeading>
-
+      <CollapsibleSection
+        title="Audit & records"
+        storageKey="audit"
+        defaultOpen
+        resetOnMount
+      >
       {/* The quarterly record matches the ARC RTA permit conditions. */}
       <QuarterlyReportCard />
 
@@ -393,9 +397,14 @@ export default function Settings() {
         </div>
       </Card>
 
-      <SectionHeading>Business &amp; people</SectionHeading>
+      </CollapsibleSection>
 
-      <Card id="settings-technicians">
+      <CollapsibleSection
+        title="Business & people"
+        storageKey="business"
+        defaultOpen
+      >
+      <Card>
         <div className="mb-1 flex items-center justify-between gap-2">
           <div className="text-sm font-semibold text-slate-700 dark:text-slate-200">
             Technicians
@@ -549,7 +558,7 @@ export default function Settings() {
         )}
       </Card>
 
-      <Card id="settings-compliance">
+      <Card>
         <div className="mb-1 flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-200">
             Compliance details — {profile.name}
@@ -657,8 +666,9 @@ export default function Settings() {
         </div>
       </Card>
 
-      <SectionHeading>App settings</SectionHeading>
+      </CollapsibleSection>
 
+      <CollapsibleSection title="App settings" storageKey="app">
       <Card>
         <div className="mb-1 flex items-center justify-between gap-2">
           <div className="text-sm font-semibold text-slate-700 dark:text-slate-200">
@@ -885,9 +895,12 @@ export default function Settings() {
         </p>
         <InstallAppButton variant="full" />
       </Card>
+      </CollapsibleSection>
 
+      {/* Sync status. No backend yet, so this reflects the local cloud-sync
+          toggle; once the server lands it'll show the last-synced time. */}
       <p className="px-1 text-center text-xs text-slate-400">
-        Refrigerant Handling · data stored locally on this device
+        {state.sync.enabled ? 'Sync up to date' : 'Saved on this device'}
       </p>
 
       <Card>
@@ -1439,11 +1452,73 @@ function locationEqual(a: LocationSettings, b: LocationSettings): boolean {
 
 // A small grouping label that breaks the long Settings page into scannable
 // sections (Audit & records / Business & people / App settings).
-function SectionHeading({ children }: { children: ReactNode }) {
+// Collapsible group of Settings cards. Open/closed state is remembered
+// per-device in localStorage so the page reopens the way the user left it —
+// except sections passed resetOnMount (Audit & records), which always
+// re-open. A deep-link (navigation state { scrollTo }) force-opens its
+// target section so the linked card is visible even if it was collapsed.
+function CollapsibleSection({
+  title,
+  storageKey,
+  defaultOpen = false,
+  resetOnMount = false,
+  children,
+}: {
+  title: string
+  storageKey: string
+  defaultOpen?: boolean
+  resetOnMount?: boolean
+  children: ReactNode
+}) {
+  const location = useLocation()
+  const isScrollTarget =
+    (location.state as { scrollTo?: string } | null)?.scrollTo === storageKey
+  const lsKey = `refrighandle.settingsOpen.${storageKey}`
+  const [open, setOpen] = useState(() => {
+    if (isScrollTarget) return true
+    if (resetOnMount) return defaultOpen
+    try {
+      const saved = localStorage.getItem(lsKey)
+      return saved === null ? defaultOpen : saved === '1'
+    } catch {
+      return defaultOpen
+    }
+  })
+  function toggle() {
+    setOpen((o) => {
+      const next = !o
+      if (!resetOnMount) {
+        try {
+          localStorage.setItem(lsKey, next ? '1' : '0')
+        } catch {
+          // ignore (private mode / disabled storage)
+        }
+      }
+      return next
+    })
+  }
   return (
-    <h3 className="px-1 pb-0.5 pt-3 text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
-      {children}
-    </h3>
+    <section id={`settings-${storageKey}`} className="space-y-4">
+      <button
+        type="button"
+        onClick={toggle}
+        aria-expanded={open}
+        className="flex w-full items-center gap-1.5 px-1 pt-3 text-left"
+      >
+        <span className="text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+          {title}
+        </span>
+        <span
+          aria-hidden
+          className={`text-base leading-none text-slate-400 transition-transform ${
+            open ? 'rotate-90' : ''
+          }`}
+        >
+          ›
+        </span>
+      </button>
+      {open && children}
+    </section>
   )
 }
 
