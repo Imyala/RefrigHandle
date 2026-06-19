@@ -487,8 +487,10 @@ function OnboardingScreen() {
                         : ''
                     }
                   >
-                    I confirm that I hold any licences required by law and that
-                    the information provided is accurate and current. *
+                    I confirm that I hold a current ARC Refrigerant Handling
+                    Licence (RHL) appropriate for the work I perform, and that
+                    the licence details I have entered are accurate and current.
+                    *
                   </span>
                 </label>
                 {attempted && !licenceDeclared && (
