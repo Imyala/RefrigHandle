@@ -205,7 +205,13 @@ export default function Bottles() {
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase()
     return bottles
-      .filter((b) => filter === 'all' || b.status === filter)
+      // A returned bottle has gone back to the supplier — it's out of the
+      // tech's hands, so it's hidden from the working list (All / In stock /
+      // On site / Empty) and only shows under the "Returned" filter, where
+      // a mistaken return can be corrected. Its log entries stay untouched.
+      .filter((b) =>
+        filter === 'all' ? b.status !== 'returned' : b.status === filter,
+      )
       .filter((b) => {
         if (!q) return true
         // Bottle search is intentionally bottle-number-only — a tech
@@ -394,7 +400,7 @@ export default function Bottles() {
           (f) => {
             const count =
               f === 'all'
-                ? bottles.length
+                ? bottles.filter((b) => b.status !== 'returned').length
                 : bottles.filter((b) => b.status === f).length
             return (
               <button
@@ -643,6 +649,7 @@ function BottleActionSheet({
 }) {
   const { state, updateBottle } = useStore()
   const toast = useToast()
+  const confirm = useConfirm()
   // Inline cylinder-test-date editor, revealed by "Update test dates".
   // Seeded from the bottle and reset whenever the sheet opens or switches
   // bottles (render-adjustment pattern, no effect needed).
@@ -846,14 +853,34 @@ function BottleActionSheet({
           </Button>
         </div>
 
-        <Button
-          onClick={() => onLog('return')}
-          variant="secondary"
-          full
-          disabled={bottle.status === 'returned'}
-        >
-          {bottle.status === 'returned' ? 'Already returned' : 'Return bottle'}
-        </Button>
+        {bottle.status === 'returned' ? (
+          // Correction for a return logged by mistake — brings the bottle
+          // back into stock. The original return stays in the log.
+          <Button
+            variant="secondary"
+            full
+            onClick={async () => {
+              const ok = await confirm({
+                title: 'Return this bottle to stock?',
+                message:
+                  'Use this to correct a return logged by mistake — it brings the bottle back into your stock. The original return stays on the log.',
+                confirmLabel: 'Return to stock',
+              })
+              if (!ok) return
+              updateBottle(bottle.id, {
+                status: net > 0.01 ? 'in_stock' : 'empty',
+              })
+              toast.show('Bottle returned to stock')
+              onClose()
+            }}
+          >
+            Return to stock
+          </Button>
+        ) : (
+          <Button onClick={() => onLog('return')} variant="secondary" full>
+            Return bottle
+          </Button>
+        )}
 
         <Button onClick={onEdit} variant="ghost" full>
           Edit details
