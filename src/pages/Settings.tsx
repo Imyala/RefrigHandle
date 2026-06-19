@@ -32,7 +32,6 @@ import {
   canManageTech,
   daysUntilPurge,
   isTechnicianActive,
-  canManageTechnicians,
   canEditCompanyIdentity,
   composeName,
   splitName,
@@ -139,7 +138,9 @@ export default function Settings() {
   // Whether the seated profile can manage people at all (lead tech and
   // above) — per-person scope is decided by canManageTech below. Editing
   // the business's regulatory identity is a higher bar (supervisor+).
-  const canManage = canManageTechnicians(activeTech?.role)
+  // Managing technicians (add / edit role / deactivate / delete) is for
+  // owners and supervisors only — roles below that just switch profiles.
+  const canManage = roleAtLeast(activeTech?.role, 'supervisor')
   const canEditCompany = canEditCompanyIdentity(activeTech?.role)
 
   // Deep-link scroll: alert cards (e.g. the licence-expiry warning) link
@@ -426,8 +427,8 @@ export default function Settings() {
         {!canManage && (
           <p className="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:bg-amber-900/30 dark:text-amber-200">
             This profile ({roleInfo(activeTech?.role).label}) can't manage
-            accounts. Switch to a lead technician, supervisor or owner profile
-            to add or manage technicians.
+            accounts. Switch to a supervisor or owner profile to add or manage
+            technicians.
           </p>
         )}
         {state.technicians.length === 0 ? (
@@ -441,12 +442,12 @@ export default function Settings() {
               const isActive = state.activeTechnicianId === t.id
               const active = isTechnicianActive(t)
               const untilPurge = active ? null : daysUntilPurge(t, new Date())
-              // You can manage people strictly below your own tier, and you
-              // can always edit your own profile (the role picker still
-              // blocks self-promotion).
+              // Only owners/supervisors get the Manage button. They can
+              // manage people strictly below their own tier, plus their own
+              // profile (the role picker still blocks self-promotion).
               const canManageThis =
-                canManageTech(activeTech?.role, t.role) ||
-                (isActive && canManage)
+                canManage &&
+                (canManageTech(activeTech?.role, t.role) || isActive)
               return (
                 <div
                   key={t.id}
@@ -507,15 +508,6 @@ export default function Settings() {
                     )}
                   </div>
                   <div className="flex shrink-0 items-center gap-1">
-                    {t.passwordHash && (
-                      <span
-                        className="text-slate-400 dark:text-slate-500"
-                        aria-label="Password protected"
-                        title="Password protected"
-                      >
-                        🔒
-                      </span>
-                    )}
                     {active ? (
                       <>
                         {!isActive && (
@@ -528,7 +520,7 @@ export default function Settings() {
                         )}
                         {canManageThis && (
                           <Button variant="ghost" onClick={() => openEditTech(t)}>
-                            Edit
+                            Manage
                           </Button>
                         )}
                       </>
@@ -998,7 +990,8 @@ export default function Settings() {
                   ? data.passwordChange.hash
                   : undefined,
             })
-            setActiveTechnicianId(created.id)
+            // Stay signed in as the manager who created the account — don't
+            // switch into the new profile.
             toast.show(`${created.name} added`)
           }
           setTechModalOpen(false)
@@ -1015,6 +1008,27 @@ export default function Settings() {
                 if (ok) {
                   deactivateTechnician(editingTech.id)
                   toast.show('Tech deactivated', 'info')
+                  setTechModalOpen(false)
+                }
+              }
+            : undefined
+        }
+        onDeleteForever={
+          // Permanent delete — offered only for someone other than the
+          // signed-in profile (you can't delete the account you're using).
+          // The tech's logged work stays frozen on the record for audit.
+          editingTech && editingTech.id !== state.activeTechnicianId
+            ? async () => {
+                const ok = await confirm({
+                  title: `Delete ${editingTech.name} permanently?`,
+                  message:
+                    'This removes the account immediately and can’t be undone. Everything they have logged stays frozen on the record for audit. To keep the account recoverable, use Deactivate instead.',
+                  confirmLabel: 'Delete permanently',
+                  danger: true,
+                })
+                if (ok) {
+                  deleteTechnician(editingTech.id)
+                  toast.show('Tech deleted', 'info')
                   setTechModalOpen(false)
                 }
               }
@@ -1059,6 +1073,7 @@ function TechnicianModal({
   onClose,
   onSave,
   onDelete,
+  onDeleteForever,
 }: {
   open: boolean
   editing: Technician | null
@@ -1068,7 +1083,10 @@ function TechnicianModal({
   ownerExists: boolean
   onClose: () => void
   onSave: (data: TechSavePayload) => void
+  // Suspend (deactivate, reversible) and permanent delete — only wired for
+  // a manager editing someone other than their own active profile.
   onDelete?: () => void
+  onDeleteForever?: () => void
 }) {
   const { state } = useStore()
   const profile = profileFor(state.jurisdiction)
@@ -1364,6 +1382,13 @@ function TechnicianModal({
             </Button>
           )}
         </div>
+        {onDeleteForever && (
+          <Button type="button" variant="ghost" full onClick={onDeleteForever}>
+            <span className="text-red-600 dark:text-red-400">
+              Delete account permanently
+            </span>
+          </Button>
+        )}
       </form>
     </Modal>
   )
