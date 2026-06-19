@@ -42,6 +42,7 @@ import { profileFor } from '../lib/compliance'
 import { formatDateTime, formatPlainDate } from '../lib/datetime'
 import { useToast } from '../lib/toast'
 import { useConfirm } from '../lib/confirm'
+import { useDevicePrefs, setDevicePref } from '../lib/devicePrefs'
 import { hashPassword, MIN_PASSWORD_LENGTH } from '../lib/auth'
 import { screenNewPassword } from '../lib/passwordStrength'
 import { PasswordPromptModal } from '../components/PasswordPromptModal'
@@ -100,6 +101,7 @@ export default function Settings() {
   } = useStore()
   const toast = useToast()
   const confirm = useConfirm()
+  const devicePrefs = useDevicePrefs()
   // Editable mirrors of store values — re-synced when the store changes
   // from outside this card (sync merge, JSON import, onboarding).
   const [arcAuth, setArcAuth] = useStoreSyncedState(state.arcAuthorisationNumber)
@@ -763,6 +765,55 @@ export default function Settings() {
             ))}
           </div>
         </Field>
+      </Card>
+
+      <Card>
+        <div className="mb-1 text-sm font-semibold text-slate-700 dark:text-slate-200">
+          Time &amp; timezone
+        </div>
+        <p className="mb-3 text-xs text-slate-500">
+          Every time is recorded in UTC and shown with its zone (e.g. 10:00
+          AEST). New entries are stamped in this device's timezone.
+        </p>
+        <div className="space-y-3">
+          <label className="flex items-start justify-between gap-3">
+            <span className="text-sm text-slate-700 dark:text-slate-200">
+              <span className="font-medium">
+                Use my location for accurate timezone
+              </span>
+              <span className="mt-0.5 block text-xs text-slate-500">
+                Works out your timezone from your device's location (asks
+                permission) so work is logged in the zone you're actually in —
+                even if your device clock isn't set to update automatically
+                while travelling. Falls back to the device clock if off or
+                denied.
+              </span>
+            </span>
+            <input
+              type="checkbox"
+              className="mt-0.5 h-4 w-4 shrink-0 accent-brand-600"
+              checked={devicePrefs.locationTimezone}
+              onChange={(e) =>
+                setDevicePref('locationTimezone', e.target.checked)
+              }
+            />
+          </label>
+          <label className="flex items-start justify-between gap-3">
+            <span className="text-sm text-slate-700 dark:text-slate-200">
+              <span className="font-medium">Show times in UTC</span>
+              <span className="mt-0.5 block text-xs text-slate-500">
+                Display all times in UTC instead of local time. Records are
+                always stored in UTC regardless of this setting.
+              </span>
+            </span>
+            <input
+              type="checkbox"
+              className="mt-0.5 h-4 w-4 shrink-0 accent-brand-600"
+              checked={devicePrefs.displayUtc}
+              onChange={(e) => setDevicePref('displayUtc', e.target.checked)}
+            />
+          </label>
+        </div>
       </Card>
 
       <Card>

@@ -90,6 +90,7 @@ export function PrivacyContent() {
             'IP address',
             'Error reports',
             'Login activity',
+            'Approximate location (only if you enable location-based timezone; used on your device to determine your timezone)',
           ]}
         />
         <SubHead>Payment information</SubHead>

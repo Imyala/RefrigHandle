@@ -12,6 +12,19 @@
 // office staff work in one tz but the cylinders/equipment are in
 // another.
 
+import { getDevicePrefs } from './devicePrefs'
+
+// Timezone resolved from the device's physical location (geolocation),
+// updated by the LocationTimezoneSync watcher when the "Use my location for
+// accurate timezone" device pref is on. Overrides the device-clock zone for
+// stamping new logs, so a tech whose phone clock doesn't auto-update still
+// logs in the zone they're physically in.
+let resolvedLocationTz = ''
+export function setResolvedLocationTz(tz: string): void {
+  resolvedLocationTz = tz || ''
+}
+
+
 // "YYYY-MM-DDTHH:MM" representing the instant `now` as seen in `tz`.
 // Empty/invalid `tz` falls back to the browser's local timezone.
 export function localDateTimeInput(
@@ -86,17 +99,22 @@ export function formatDateTime(
   withZone = false,
 ): string {
   if (!iso) return ''
+  // "Show times in UTC" device pref overrides the display zone and always
+  // labels the time so it can't be misread as local.
+  const utc = getDevicePrefs().displayUtc
+  const effTz = utc ? 'UTC' : tz
+  const showZone = withZone || utc
   const d = new Date(iso)
   const opts: Intl.DateTimeFormatOptions = {
     dateStyle: 'medium',
     timeStyle: 'short',
   }
-  if (tz && isTzSupported(tz)) opts.timeZone = tz
+  if (effTz && isTzSupported(effTz)) opts.timeZone = effTz
   if (clock === '12h') opts.hour12 = true
   else if (clock === '24h') opts.hour12 = false
   let out = d.toLocaleString(undefined, opts)
-  if (withZone) {
-    const ab = tzAbbrev(iso, tz)
+  if (showZone) {
+    const ab = tzAbbrev(iso, effTz)
     if (ab) out += ` ${ab}`
   }
   return out
@@ -106,6 +124,11 @@ export function formatDateTime(
 // Each device resolves its own, so a Brisbane tech and a Perth tech on
 // the same synced account each log work in their own local time.
 export function deviceTimeZone(): string {
+  // Prefer the location-resolved zone when the user has opted into
+  // location-based timezone and we've resolved one.
+  if (getDevicePrefs().locationTimezone && resolvedLocationTz) {
+    return resolvedLocationTz
+  }
   try {
     return Intl.DateTimeFormat().resolvedOptions().timeZone || ''
   } catch {
@@ -147,9 +170,10 @@ export function formatStampedTime(
 // early-morning job onto the previous calendar day.
 export function formatDate(iso: string, tz?: string): string {
   if (!iso) return ''
+  const effTz = getDevicePrefs().displayUtc ? 'UTC' : tz
   const d = new Date(iso)
   const opts: Intl.DateTimeFormatOptions = { dateStyle: 'medium' }
-  if (tz && isTzSupported(tz)) opts.timeZone = tz
+  if (effTz && isTzSupported(effTz)) opts.timeZone = effTz
   return d.toLocaleDateString('en-AU', opts)
 }
 

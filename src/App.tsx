@@ -1,6 +1,7 @@
 import { HashRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { Layout } from './components/Layout'
 import { ScrollRestoration } from './components/ScrollRestoration'
+import { LocationTimezoneSync } from './components/LocationTimezoneSync'
 import { OnboardingGate } from './components/Onboarding'
 import { AccountClosedGate } from './components/AccountClosed'
 import { StoreProvider } from './lib/store'
@@ -32,6 +33,7 @@ export default function App() {
       <ConfirmProvider>
         <StoreProvider>
           <ThemeApplier />
+          <LocationTimezoneSync />
           <AccountClosedGate>
             <OnboardingGate>
             <TermsGate>

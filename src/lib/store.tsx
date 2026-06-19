@@ -288,7 +288,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
               entity: 'technician',
               entityId: t.id,
               target: t.name,
-              summary: `Auto-deleted technician ${t.name} after ${TECHNICIAN_PURGE_DAYS}-day retention; their logged work is retained`,
+              summary: `Account deleted — technician ${t.name} removed automatically after the ${TECHNICIAN_PURGE_DAYS}-day retention period following deactivation. Their logged work is retained`,
             },
           )
         }

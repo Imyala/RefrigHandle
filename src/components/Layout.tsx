@@ -1,5 +1,6 @@
 import { NavLink, Outlet } from 'react-router-dom'
 import type { ReactNode } from 'react'
+import { useDevicePrefs } from '../lib/devicePrefs'
 
 // Bottom tab bar — "floating centre button" layout. Bottles is the core
 // entity, so it's promoted to a raised circular button in the middle,
@@ -53,6 +54,10 @@ function TabLink({
 }
 
 export function Layout() {
+  // Subscribe so the whole app (rendered through <Outlet/>) re-renders when
+  // a display pref like "Show times in UTC" is toggled — the time formatters
+  // read these prefs, so every visible timestamp updates live.
+  useDevicePrefs()
   return (
     <div className="flex min-h-svh flex-col bg-slate-50 dark:bg-slate-950">
       <header
