@@ -1343,9 +1343,8 @@ function TechnicianModal({
                     : ''
                 }
               >
-                I confirm that this technician holds a current Refrigerant
-                Handling Licence appropriate for the work performed and that the
-                information provided is accurate. *
+                I confirm that this technician holds any licences required by law
+                and that the information provided is accurate and current. *
               </span>
             </label>
             {attempted && !licenceDeclared && (

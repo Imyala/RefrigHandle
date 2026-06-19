@@ -1150,6 +1150,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
             data.businessName.trim() || '(unnamed business)'
           }`,
         }),
+        // Acceptance record: who (entityId = the User ID), when (at = now),
+        // and which policy version. IP is captured server-side once the
+        // backend lands — it can't be obtained reliably/privately client-side.
+        mk({
+          action: 'settings',
+          entity: 'settings',
+          entityId: tech.id,
+          target: 'Policy acceptance',
+          summary: `Accepted the Terms of Use, Privacy Policy, Acceptable Use Policy, Billing & Refund Policy and all other RefrigHandle policies (version ${TERMS_VERSION})`,
+        }),
         mk({
           action: 'create',
           entity: 'technician',
