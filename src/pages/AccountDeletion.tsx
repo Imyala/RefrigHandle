@@ -90,14 +90,9 @@ export default function AccountDeletion() {
     })
     if (!ok) return
     setBusy(true)
-    // Open the user's email app with the closure request pre-filled.
-    const mailto = `mailto:?subject=${encodeURIComponent(
-      `Account closure request — ${state.businessName || 'RefrigHandle'}`,
-    )}&body=${encodeURIComponent(closureEmailBody())}`
-    const mail = document.createElement('a')
-    mail.href = mailto
-    mail.click()
-
+    // No email is sent or opened — the closure is recorded in the account
+    // and we're notified through our own systems; the business doesn't need
+    // to email us.
     requestAccountClosure({
       reason: reasonLabel,
       details,
@@ -108,27 +103,6 @@ export default function AccountDeletion() {
     toast.show('Account closed', 'info')
     // The AccountClosedGate takes over on the next render and replaces the
     // whole app, so there's nothing more to do here.
-  }
-
-  function closureEmailBody(): string {
-    return [
-      'ACCOUNT CLOSURE REQUEST',
-      '',
-      `Business: ${state.businessName || '—'}`,
-      state.businessAbn ? `${profile.businessNumberShort}: ${state.businessAbn}` : '',
-      state.arcAuthorisationNumber
-        ? `${profile.businessAuthShort}: ${state.arcAuthorisationNumber}`
-        : '',
-      `Contact: ${contactName}`,
-      email ? `Email: ${email}` : '',
-      phone ? `Phone: ${phone}` : '',
-      `Reason: ${reasonLabel}`,
-      details.trim() ? `Details: ${details.trim()}` : '',
-      '',
-      'A full backup and audit-log CSV were exported at closure and retained by the business.',
-    ]
-      .filter(Boolean)
-      .join('\n')
   }
 
   return (
@@ -157,9 +131,8 @@ export default function AccountDeletion() {
             </strong>{' '}
             RefrigHandle should not be relied upon as your sole archive or
             backup system. A copy of your records (a full backup plus the
-            audit-log CSV) downloaded to this device when you opened this page,
-            and submitting opens a pre-filled request email — save the file
-            somewhere safe.
+            audit-log CSV) downloaded to this device when you opened this page —
+            save the file somewhere safe.
           </p>
           <p>
             You are responsible for retaining records for the period required

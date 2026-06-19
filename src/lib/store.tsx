@@ -1072,7 +1072,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
             entity: 'technician',
             entityId: id,
             target: target.name,
-            summary: `Deactivated technician ${target.name} — kept ${TECHNICIAN_PURGE_DAYS} days, then deleted; their logged work is retained`,
+            summary: `Deactivated technician ${target.name} — account disabled; if not reactivated within ${TECHNICIAN_PURGE_DAYS} days it will be deleted automatically. Their logged work is retained`,
           }),
         }
       })
