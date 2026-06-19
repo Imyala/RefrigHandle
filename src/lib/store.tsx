@@ -1116,6 +1116,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         name: composeName(data.technician),
         arcLicenceNumber: data.technician.arcLicenceNumber.trim(),
         licenceExpiry: data.technician.licenceExpiry || undefined,
+        // Setup requires the licence self-declaration before completeSetup
+        // is called, so stamp when it was made.
+        licenceDeclaredAt: now,
         passwordHash: data.technician.passwordHash,
         // Top authority for the install — owner, or supervisor for an org
         // whose owner won't use the app. Chosen on the setup screen.

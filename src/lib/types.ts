@@ -482,7 +482,7 @@ export const APP_COMMIT = (
 // lettered string, bumped by hand — unlike APP_VERSION this MUST NOT move
 // every deploy, or users would be forced to re-accept the terms on each
 // release. Re-acceptance triggers on any change, not on numeric ordering.
-export const TERMS_VERSION = 'v1.1e'
+export const TERMS_VERSION = 'v1.1f'
 
 // Recorded when an owner requests account closure. Its presence locks the
 // app (see AccountClosedGate) — the device can't be used again until the
@@ -777,6 +777,11 @@ export interface Technician {
   // against a lapsed licence is itself a breach, so the app alerts as
   // expiry approaches (see expiryStatus).
   licenceExpiry?: string
+  // When the licence self-declaration was made at account creation — the
+  // creator confirmed a current RHL appropriate for the work and that the
+  // details are accurate. RefrigHandle does not verify licences (see the
+  // Terms). Optional: profiles created before this requirement lack it.
+  licenceDeclaredAt?: string
   // Optional soft lock for switching the active profile on a shared
   // device. A salted PBKDF2 derivation of the password (see lib/auth.ts).
   // Storage is localStorage, so this only deters casual snooping —

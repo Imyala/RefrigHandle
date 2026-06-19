@@ -111,6 +111,9 @@ function OnboardingScreen() {
   const [techExpiry, setTechExpiry] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPw, setConfirmPw] = useState('')
+  // Licence self-declaration — confirms a current RHL and accurate details.
+  // Required to finish setup; RefrigHandle does not verify licences.
+  const [licenceDeclared, setLicenceDeclared] = useState(false)
   const [busy, setBusy] = useState(false)
   // Async "known-bad password" reason (too common / found in a breach),
   // surfaced after a finish attempt. Cleared as soon as the password is
@@ -158,7 +161,8 @@ function OnboardingScreen() {
   // and becomes the sign-in once team accounts land.
   const passwordOk =
     password.length >= MIN_PASSWORD_LENGTH && password === confirmPw
-  const techOk = nameOk && techRhl.trim() !== '' && expiryOk && passwordOk
+  const techOk =
+    nameOk && techRhl.trim() !== '' && expiryOk && passwordOk && licenceDeclared
   const locOk = isLocationComplete(loc)
   const canFinish =
     businessOk &&
@@ -189,6 +193,7 @@ function OnboardingScreen() {
   if (techRhl.trim() === '') missing.push(profile.techLicenceShort)
   if (!expiryOk) missing.push(`${profile.techLicenceShort} expiry`)
   if (!passwordOk) missing.push('password')
+  if (!licenceDeclared) missing.push('the licence declaration')
   if (loc.country === 'Australia' && !loc.region.trim()) {
     missing.push('state / territory')
   }
@@ -489,6 +494,32 @@ function OnboardingScreen() {
                   placeholder="Re-enter password"
                 />
               </Field>
+              <div className="rounded-xl border border-slate-200 p-3 dark:border-slate-800">
+                <label className="flex items-start gap-2 text-sm text-slate-700 dark:text-slate-200">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5 h-4 w-4 accent-brand-600"
+                    checked={licenceDeclared}
+                    onChange={(e) => setLicenceDeclared(e.target.checked)}
+                  />
+                  <span
+                    className={
+                      attempted && !licenceDeclared
+                        ? 'text-red-600 dark:text-red-400'
+                        : ''
+                    }
+                  >
+                    I confirm that I hold a current Refrigerant Handling Licence
+                    appropriate for the work performed and that the information
+                    provided is accurate. *
+                  </span>
+                </label>
+                {attempted && !licenceDeclared && (
+                  <p className="mt-1 text-xs font-medium text-red-600 dark:text-red-400">
+                    Please confirm the licence declaration to continue.
+                  </p>
+                )}
+              </div>
             </div>
           </Card>
 

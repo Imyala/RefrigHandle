@@ -287,7 +287,18 @@ export function PrivacyContent() {
         </p>
       </Section>
 
-      <Section title="16. Changes to this Privacy Policy">
+      <Section title="16. Licence information">
+        <p>
+          RefrigHandle does not verify Refrigerant Handling Licence numbers or
+          the identity of users. Users and businesses are solely responsible for
+          ensuring that all licence information entered into the platform is
+          accurate, current, and compliant with applicable laws and regulations.
+          RefrigHandle relies on information provided by users and makes no
+          representation regarding the validity of any licence.
+        </p>
+      </Section>
+
+      <Section title="17. Changes to this Privacy Policy">
         <p>This Privacy Policy may be updated from time to time.</p>
         <p>
           The latest version will be made available through the RefrigHandle
@@ -297,7 +308,7 @@ export function PrivacyContent() {
         </p>
       </Section>
 
-      <Section title="17. Contact information">
+      <Section title="18. Contact information">
         <p>RefrigHandle</p>
         <p>
           For privacy enquiries, or to request access to or correction of your

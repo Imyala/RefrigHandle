@@ -59,6 +59,14 @@ export function TermsContent() {
         (ARC/ARCtick), ASIC and other authorities. If you are unsure, seek
         advice from the relevant authority or your own adviser.
       </Section>
+      <Section title="Licence information">
+        RefrigHandle does not verify Refrigerant Handling Licence numbers or the
+        identity of users. Users and businesses are solely responsible for
+        ensuring that all licence information entered into the platform is
+        accurate, current, and compliant with applicable laws and regulations.
+        RefrigHandle relies on information provided by users and makes no
+        representation regarding the validity of any licence.
+      </Section>
       <Section title="No legal or compliance advice">
         Information provided by RefrigHandle is general in nature and should not
         be relied upon as legal, taxation or compliance advice. If you are

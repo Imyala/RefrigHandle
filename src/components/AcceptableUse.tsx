@@ -172,7 +172,18 @@ export function AcceptableUseContent() {
         </p>
       </Section>
 
-      <Section title="11. Changes to this Policy">
+      <Section title="11. Licence information">
+        <p>
+          RefrigHandle does not verify Refrigerant Handling Licence numbers or
+          the identity of users. Users and businesses are solely responsible for
+          ensuring that all licence information entered into the platform is
+          accurate, current, and compliant with applicable laws and regulations.
+          RefrigHandle relies on information provided by users and makes no
+          representation regarding the validity of any licence.
+        </p>
+      </Section>
+
+      <Section title="12. Changes to this Policy">
         <p>RefrigHandle may amend this Policy from time to time.</p>
         <p>
           Updated versions become effective when published through the
@@ -181,7 +192,7 @@ export function AcceptableUseContent() {
         </p>
       </Section>
 
-      <Section title="12. Contact information">
+      <Section title="13. Contact information">
         <p>RefrigHandle</p>
         <p>
           For questions about this Policy, contact us at legal@refrighandle.com.

@@ -996,6 +996,9 @@ export default function Settings() {
               role: data.role,
               arcLicenceNumber: data.arcLicenceNumber,
               licenceExpiry: data.licenceExpiry,
+              // The modal requires the licence self-declaration before
+              // onSave fires, so stamp when it was made.
+              licenceDeclaredAt: new Date().toISOString(),
               passwordHash:
                 data.passwordChange?.kind === 'set'
                   ? data.passwordChange.hash
@@ -1083,6 +1086,10 @@ function TechnicianModal({
   const [licenceExpiry, setLicenceExpiry] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPw, setConfirmPw] = useState('')
+  // Licence self-declaration — required when creating a new account. Places
+  // responsibility for licence accuracy on the user (RefrigHandle does not
+  // verify licences). Not shown when editing an existing profile.
+  const [licenceDeclared, setLicenceDeclared] = useState(false)
   const [attempted, setAttempted] = useState(false)
   const [pwError, setPwError] = useState('')
   const [busy, setBusy] = useState(false)
@@ -1107,6 +1114,7 @@ function TechnicianModal({
     setLicenceExpiry(editing?.licenceExpiry ?? '')
     setPassword('')
     setConfirmPw('')
+    setLicenceDeclared(false)
     setAttempted(false)
     setPwError('')
   }
@@ -1145,8 +1153,10 @@ function TechnicianModal({
     setAttempted(true)
     setPwError('')
 
-    // Block on the required identity/compliance fields first.
+    // Block on the required identity/compliance fields first. New accounts
+    // also require the licence self-declaration.
     if (!firstName.trim() || !lastName.trim() || !licenceExpiry) return
+    if (!editing && !licenceDeclared) return
 
     let passwordChange: TechSavePayload['passwordChange']
     if (password) {
@@ -1316,6 +1326,35 @@ function TechnicianModal({
             )}
           </div>
         </div>
+
+        {!editing && (
+          <div className="rounded-xl border border-slate-200 p-3 dark:border-slate-800">
+            <label className="flex items-start gap-2 text-sm text-slate-700 dark:text-slate-200">
+              <input
+                type="checkbox"
+                className="mt-0.5 h-4 w-4 accent-brand-600"
+                checked={licenceDeclared}
+                onChange={(e) => setLicenceDeclared(e.target.checked)}
+              />
+              <span
+                className={
+                  attempted && !licenceDeclared
+                    ? 'text-red-600 dark:text-red-400'
+                    : ''
+                }
+              >
+                I confirm that this technician holds a current Refrigerant
+                Handling Licence appropriate for the work performed and that the
+                information provided is accurate. *
+              </span>
+            </label>
+            {attempted && !licenceDeclared && (
+              <p className="mt-1 text-xs font-medium text-red-600 dark:text-red-400">
+                Please confirm the licence declaration to add this account.
+              </p>
+            )}
+          </div>
+        )}
 
         <div className="flex gap-2">
           <Button type="submit" full disabled={busy}>
