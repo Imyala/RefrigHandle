@@ -1,13 +1,19 @@
-// Ordered by R-number (ascending), then by suffix, so the chips and every
-// refrigerant dropdown read in a predictable numeric/alphabetical order.
-// "Unknown" is the one non-numeric entry and always sorts last.
+// Ordered as a plain string sort of the code — character by character, so
+// digits sort before letters (R12 < R134A < R22 < R23 < R290 < R32 < R401A…).
+// This is "number order, then letter order" reading left to right, which is
+// how the chips and every refrigerant dropdown read. "Unknown" is the one
+// non-numeric entry and always sorts last.
 export const REFRIGERANT_TYPES = [
   'R12',
+  'R1233ZD',
+  'R1234YF',
+  'R1234ZE',
+  'R1270',
+  'R134A',
   'R22',
   'R23',
-  'R32',
-  'R134A',
   'R290',
+  'R32',
   'R401A',
   'R402A',
   'R404A',
@@ -32,10 +38,6 @@ export const REFRIGERANT_TYPES = [
   'R600A',
   'R717',
   'R744',
-  'R1233ZD',
-  'R1234YF',
-  'R1234ZE',
-  'R1270',
   // Unknown / unidentified — e.g. a pump-down or recovery bottle holding
   // mixed or unlabelled refrigerant that hasn't been identified yet.
   'Unknown',
