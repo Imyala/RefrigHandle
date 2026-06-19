@@ -897,12 +897,6 @@ export default function Settings() {
       </Card>
       </CollapsibleSection>
 
-      {/* Sync status. No backend yet, so this reflects the local cloud-sync
-          toggle; once the server lands it'll show the last-synced time. */}
-      <p className="px-1 text-center text-xs text-slate-400">
-        {state.sync.enabled ? 'Sync up to date' : 'Saved on this device'}
-      </p>
-
       <Card>
         <div className="mb-1 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
           Legal &amp; policies
