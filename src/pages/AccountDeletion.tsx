@@ -59,8 +59,16 @@ export default function AccountDeletion() {
     email.trim() !== '' && email.trim() === confirmEmail.trim()
   const reasonOk =
     reason !== '' && (reason !== 'other' || details.trim() !== '')
+  // Phone is required so the closure can also be confirmed by phone.
+  const phoneOk = phone.trim() !== ''
   const canSubmit =
-    contactOk && emailOk && emailsMatch && reasonOk && ackRetention && ackBackup
+    contactOk &&
+    emailOk &&
+    emailsMatch &&
+    phoneOk &&
+    reasonOk &&
+    ackRetention &&
+    ackBackup
 
   const fieldErr = (show: boolean, msg: string) =>
     attempted && show ? msg : undefined
@@ -235,11 +243,16 @@ export default function AccountDeletion() {
               />
             </Field>
           </div>
-          <Field label="Phone">
+          <Field
+            label="Phone *"
+            error={fieldErr(!phoneOk, 'Enter a contact phone number.')}
+            hint="We use this to confirm the closure."
+          >
             <TextInput
               type="tel"
               inputMode="tel"
               value={phone}
+              invalid={!!fieldErr(!phoneOk, 'x')}
               onChange={(ev) => setPhone(ev.target.value)}
               placeholder="e.g. 0400 000 000"
             />
@@ -271,7 +284,11 @@ export default function AccountDeletion() {
               reason === 'other' && details.trim() === '',
               'Add a short description.',
             )}
-            hint="Optional — anything you'd like to add about your request."
+            hint={
+              reason === 'other'
+                ? 'Required — describe your reason for closure.'
+                : 'Optional — anything you’d like to add about your request.'
+            }
           >
             <TextArea
               value={details}

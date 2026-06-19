@@ -246,6 +246,19 @@ export default function Settings() {
     }
   }
 
+  async function requestReactivate(t: Technician) {
+    const ok = await confirm({
+      title: `Reactivate ${t.name}?`,
+      message:
+        'This re-enables the account so it can be used again and stops the deletion countdown.',
+      confirmLabel: 'Reactivate',
+    })
+    if (ok) {
+      reactivateTechnician(t.id)
+      toast.show(`${t.name} reactivated`)
+    }
+  }
+
   function exportJson() {
     // Shared with the overdue-backup alert — stamps the device-local
     // "last backup" marker that drives the nudge. Bundles photos and
@@ -529,7 +542,7 @@ export default function Settings() {
                         <>
                           <Button
                             variant="secondary"
-                            onClick={() => reactivateTechnician(t.id)}
+                            onClick={() => requestReactivate(t)}
                           >
                             Reactivate
                           </Button>
@@ -554,15 +567,6 @@ export default function Settings() {
         <div className="mb-1 flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-200">
             Compliance details — {profile.name}
-            {companyLocked && (
-              <span
-                className="text-slate-400 dark:text-slate-500"
-                aria-label="Locked"
-                title="Company identity is locked"
-              >
-                🔒
-              </span>
-            )}
           </div>
           <div className="flex items-center gap-2">
             <SavedFlash show={compSaved} />
