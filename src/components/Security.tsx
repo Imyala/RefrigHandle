@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { Link } from 'react-router-dom'
+import { BackLink } from './BackLink'
 import { Card } from './ui'
 
 // Effective date shown at the top of the policy. Update this whenever the
@@ -189,12 +189,7 @@ function Bullets({ items }: { items: string[] }) {
 export default function SecurityPage() {
   return (
     <div className="space-y-4">
-      <Link
-        to="/settings"
-        className="inline-flex items-center gap-1 text-sm font-medium text-brand-600 hover:underline"
-      >
-        ← Back to Settings
-      </Link>
+      <BackLink>← Back to Settings</BackLink>
       <h2 className="text-xl font-semibold text-slate-900 dark:text-slate-100">
         Security and Responsible Disclosure Policy
       </h2>

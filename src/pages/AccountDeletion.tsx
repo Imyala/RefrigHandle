@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { BackLink } from '../components/BackLink'
 import { Button, Card, Field, TextArea, TextInput } from '../components/ui'
 import { Picker } from '../components/Picker'
 import { useStore } from '../lib/store'
@@ -125,12 +125,7 @@ export default function AccountDeletion() {
 
   return (
     <div className="space-y-4">
-      <Link
-        to="/settings"
-        className="inline-flex items-center gap-1 text-sm font-medium text-brand-600 hover:underline"
-      >
-        ← Back to Settings
-      </Link>
+      <BackLink>← Back to Settings</BackLink>
 
       <div>
         <h2 className="text-xl font-semibold text-slate-900 dark:text-slate-100">

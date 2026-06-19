@@ -1,5 +1,6 @@
 import { HashRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { Layout } from './components/Layout'
+import { ScrollRestoration } from './components/ScrollRestoration'
 import { OnboardingGate } from './components/Onboarding'
 import { AccountClosedGate } from './components/AccountClosed'
 import { StoreProvider } from './lib/store'
@@ -35,6 +36,7 @@ export default function App() {
             <OnboardingGate>
             <TermsGate>
             <HashRouter>
+              <ScrollRestoration />
               <Routes>
                 <Route element={<Layout />}>
                   <Route index element={<Dashboard />} />
