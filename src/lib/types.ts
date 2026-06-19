@@ -772,6 +772,10 @@ export interface Technician {
   // is disabled but kept for TECHNICIAN_PURGE_DAYS so their recent work
   // stays attributable, then it is purged. Unset = active.
   deactivatedAt?: string
+  // Manager lock: while set the account is suspended — it can't be switched
+  // into until a manager lifts the suspension. Distinct from deactivatedAt
+  // (a leaver with a purge countdown); a suspension never purges.
+  suspendedAt?: string
   arcLicenceNumber: string // ARC RHL — personal licence, per tech
   // RHL expiry date (YYYY-MM-DD). RHLs run for two years; logging work
   // against a lapsed licence is itself a breach, so the app alerts as

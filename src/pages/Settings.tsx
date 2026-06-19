@@ -80,6 +80,8 @@ export default function Settings() {
     updateTechnician,
     deactivateTechnician,
     reactivateTechnician,
+    suspendTechnician,
+    unsuspendTechnician,
     deleteTechnician,
     setActiveTechnicianId,
     setArcAuthorisationNumber,
@@ -222,6 +224,13 @@ export default function Settings() {
   // Password prompt for "Use"-switching into a protected tech.
   const [pwPromptTech, setPwPromptTech] = useState<Technician | null>(null)
   function requestActivate(t: Technician) {
+    if (t.suspendedAt) {
+      toast.show(
+        'This account is suspended — a manager must lift the suspension first.',
+        'error',
+      )
+      return
+    }
     if (t.passwordHash) {
       setPwPromptTech(t)
     } else {
@@ -485,6 +494,9 @@ export default function Settings() {
                       </span>
                       {isActive && active && <Pill tone="green">Active</Pill>}
                       {!active && <Pill tone="amber">Deactivated</Pill>}
+                      {active && t.suspendedAt && (
+                        <Pill tone="red">Suspended</Pill>
+                      )}
                       <Pill tone={roleInfo(t.role).level >= 3 ? 'blue' : 'slate'}>
                         {roleInfo(t.role).label}
                       </Pill>
@@ -526,9 +538,10 @@ export default function Settings() {
                         {!isActive && (
                           <Button
                             variant="secondary"
+                            disabled={!!t.suspendedAt}
                             onClick={() => requestActivate(t)}
                           >
-                            Use
+                            {t.suspendedAt ? 'Suspended' : 'Use'}
                           </Button>
                         )}
                         {canManageThis && (
@@ -1038,6 +1051,40 @@ export default function Settings() {
               }
             : undefined
         }
+        onToggleSuspend={
+          // Lock / unlock — offered only for someone other than the
+          // signed-in profile (you can't suspend the account you're using).
+          editingTech && editingTech.id !== state.activeTechnicianId
+            ? async () => {
+                if (editingTech.suspendedAt) {
+                  const ok = await confirm({
+                    title: `Lift suspension on ${editingTech.name}?`,
+                    message:
+                      'Re-enables the account so it can be used again.',
+                    confirmLabel: 'Lift suspension',
+                  })
+                  if (ok) {
+                    unsuspendTechnician(editingTech.id)
+                    toast.show(`${editingTech.name} unsuspended`)
+                    setTechModalOpen(false)
+                  }
+                } else {
+                  const ok = await confirm({
+                    title: `Suspend ${editingTech.name}?`,
+                    message:
+                      'Locks the account so it can’t be used until a manager lifts the suspension. Nothing is deleted and their logged work is untouched.',
+                    confirmLabel: 'Suspend',
+                    danger: true,
+                  })
+                  if (ok) {
+                    suspendTechnician(editingTech.id)
+                    toast.show(`${editingTech.name} suspended`, 'info')
+                    setTechModalOpen(false)
+                  }
+                }
+              }
+            : undefined
+        }
       />
 
       <PasswordPromptModal
@@ -1078,6 +1125,7 @@ function TechnicianModal({
   onSave,
   onDelete,
   onDeleteForever,
+  onToggleSuspend,
 }: {
   open: boolean
   editing: Technician | null
@@ -1091,6 +1139,9 @@ function TechnicianModal({
   // a manager editing someone other than their own active profile.
   onDelete?: () => void
   onDeleteForever?: () => void
+  // Lock / unlock the account (manager suspension). Label flips on the
+  // editing tech's current suspended state.
+  onToggleSuspend?: () => void
 }) {
   const { state } = useStore()
   const profile = profileFor(state.jurisdiction)
@@ -1386,6 +1437,16 @@ function TechnicianModal({
             </Button>
           )}
         </div>
+        {onToggleSuspend && editing && (
+          <Button
+            type="button"
+            variant="secondary"
+            full
+            onClick={onToggleSuspend}
+          >
+            {editing.suspendedAt ? 'Lift suspension' : 'Suspend account'}
+          </Button>
+        )}
         {onDeleteForever && (
           <Button type="button" variant="ghost" full onClick={onDeleteForever}>
             <span className="text-red-600 dark:text-red-400">

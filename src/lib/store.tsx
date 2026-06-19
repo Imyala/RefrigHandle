@@ -115,6 +115,10 @@ interface StoreApi {
   // window, then purged. Reassigns the active seat if needed.
   deactivateTechnician: (id: string) => void
   reactivateTechnician: (id: string) => void
+  // Manager lock / unlock — suspends a profile so it can't be used until
+  // lifted. Separate from deactivate (a leaver, with a purge countdown).
+  suspendTechnician: (id: string) => void
+  unsuspendTechnician: (id: string) => void
   deleteTechnician: (id: string) => void
   setActiveTechnicianId: (id: string | undefined) => void
   // first-run onboarding — writes business identity, ARC RTA, the first
@@ -1100,6 +1104,60 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     [],
   )
 
+  const suspendTechnician: StoreApi['suspendTechnician'] = useCallback((id) => {
+    setState((s) => {
+      const target = s.technicians.find((t) => t.id === id)
+      if (!target || target.suspendedAt) return s
+      const now = new Date().toISOString()
+      // Don't leave a suspended profile in the active seat — hand it to the
+      // first profile that's still usable.
+      const nextActive =
+        s.activeTechnicianId === id
+          ? s.technicians.find(
+              (t) => t.id !== id && !t.deactivatedAt && !t.suspendedAt,
+            )?.id
+          : s.activeTechnicianId
+      return {
+        ...s,
+        activeTechnicianId: nextActive,
+        technicians: s.technicians.map((t) =>
+          t.id === id ? { ...t, suspendedAt: now, updatedAt: now } : t,
+        ),
+        auditLog: withAudit(s, {
+          action: 'update',
+          entity: 'technician',
+          entityId: id,
+          target: target.name,
+          summary: `Suspended technician ${target.name} — locked until a manager lifts it`,
+        }),
+      }
+    })
+  }, [])
+
+  const unsuspendTechnician: StoreApi['unsuspendTechnician'] = useCallback(
+    (id) => {
+      setState((s) => {
+        const target = s.technicians.find((t) => t.id === id)
+        if (!target || !target.suspendedAt) return s
+        const now = new Date().toISOString()
+        return {
+          ...s,
+          technicians: s.technicians.map((t) =>
+            t.id === id ? { ...t, suspendedAt: undefined, updatedAt: now } : t,
+          ),
+          auditLog: withAudit(s, {
+            action: 'update',
+            entity: 'technician',
+            entityId: id,
+            target: target.name,
+            summary: `Lifted suspension on technician ${target.name}`,
+          }),
+        }
+      })
+    },
+    [],
+  )
+
   const setActiveTechnicianId: StoreApi['setActiveTechnicianId'] = useCallback(
     (id) => setState((s) => ({ ...s, activeTechnicianId: id })),
     [],
@@ -1605,6 +1663,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       updateTechnician,
       deactivateTechnician,
       reactivateTechnician,
+      suspendTechnician,
+      unsuspendTechnician,
       deleteTechnician,
       setActiveTechnicianId,
       completeSetup,
@@ -1649,6 +1709,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       updateTechnician,
       deactivateTechnician,
       reactivateTechnician,
+      suspendTechnician,
+      unsuspendTechnician,
       deleteTechnician,
       setActiveTechnicianId,
       completeSetup,
