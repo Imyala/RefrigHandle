@@ -351,6 +351,11 @@ export interface Transaction {
   deletedBy?: string // technician name who soft-deleted
   deletedByLicence?: string // RHL of the technician who soft-deleted
   deletedReason?: string
+  // Set when a soft-deleted row is restored (deletedAt is cleared at the
+  // same time). Kept so a sync merge can tell a restore that happened
+  // AFTER a deletion from a stale deleted copy still held elsewhere —
+  // the later of deletedAt / restoredAt is the live fact (see merge.ts).
+  restoredAt?: string
 }
 
 // --- Audit / change log ----------------------------------------------

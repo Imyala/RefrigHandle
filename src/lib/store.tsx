@@ -108,6 +108,10 @@ interface StoreApi {
   // and restore it if the deletion was a mistake. Bottle weight is
   // NOT reverted (matches the previous hard-delete behaviour).
   deleteTransaction: (id: string, reason?: string) => void
+  // Undo a soft-delete: clears the deletion marker so the row returns to
+  // the activity log and cumulative calcs, and records a 'restore' entry
+  // on the change log. No-op if the row isn't currently deleted.
+  restoreTransaction: (id: string) => void
   // technician profiles
   addTechnician: (t: Omit<Technician, 'id' | 'createdAt'>) => Technician
   updateTechnician: (id: string, patch: Partial<Technician>) => void
@@ -941,6 +945,48 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     [],
   )
 
+  const restoreTransaction: StoreApi['restoreTransaction'] = useCallback(
+    (id) => {
+      const now = new Date().toISOString()
+      setState((s) => {
+        const target = s.transactions.find((t) => t.id === id)
+        // Only act on a row that's actually soft-deleted, so a stale tap
+        // (or a row already restored on another device) is a clean no-op.
+        if (!target || !target.deletedAt) return s
+        const bottleNo =
+          s.bottles.find((b) => b.id === target.bottleId)?.bottleNumber ??
+          '(deleted bottle)'
+        return {
+          ...s,
+          transactions: s.transactions.map((t) =>
+            t.id === id
+              ? {
+                  ...t,
+                  deletedAt: undefined,
+                  deletedBy: undefined,
+                  deletedByLicence: undefined,
+                  deletedReason: undefined,
+                  // Stamp the restore so a sync merge keeps it (the later
+                  // of deletedAt / restoredAt is the live fact).
+                  restoredAt: now,
+                }
+              : t,
+          ),
+          auditLog: withAudit(s, {
+            action: 'restore',
+            entity: 'transaction',
+            entityId: id,
+            target: bottleNo,
+            summary: `Restored ${transactionLabel(
+              target.kind,
+            )} log entry for bottle ${bottleNo}`,
+          }),
+        }
+      })
+    },
+    [],
+  )
+
   const addTechnician: StoreApi['addTechnician'] = useCallback((t) => {
     const tech: Technician = {
       ...t,
@@ -1659,6 +1705,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       reactivateUnit,
       addTransaction,
       deleteTransaction,
+      restoreTransaction,
       addTechnician,
       updateTechnician,
       deactivateTechnician,
@@ -1705,6 +1752,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       reactivateUnit,
       addTransaction,
       deleteTransaction,
+      restoreTransaction,
       addTechnician,
       updateTechnician,
       deactivateTechnician,

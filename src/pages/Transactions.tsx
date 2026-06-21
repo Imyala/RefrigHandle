@@ -5,7 +5,6 @@ import {
   EmptyState,
   Field,
   Modal,
-  Pill,
   TextArea,
   TextInput,
 } from '../components/ui'
@@ -18,14 +17,11 @@ import {
   type TransactionReason,
   REASON_LABELS,
   chargeSanity,
-  isRestatement,
-  movementSummary,
   netWeight,
   overfillKg,
   scaleDeltaKg,
   siteLabel,
   transactionLabel,
-  transactionLoss,
 } from '../lib/types'
 import { useToast } from '../lib/toast'
 import { displayToKg, formatWeight, kgToDisplay } from '../lib/units'
@@ -34,7 +30,6 @@ import { DateTimeInput } from '../components/DateTimeInput'
 import {
   dateTimeInputToIso,
   deviceTimeZone,
-  formatStampedTime,
   localDateTimeInput,
   tzAbbrev,
 } from '../lib/datetime'
@@ -52,6 +47,7 @@ import type { Technician } from '../lib/types'
 import { PendingPhotoPicker, PhotoSection } from '../components/Photos'
 import { SignatureSection } from '../components/Signatures'
 import { addPhoto, attachmentCounts } from '../lib/attachments'
+import { TransactionDetails } from '../components/TransactionDetails'
 
 const KIND_OPTIONS: readonly PickerOption[] = [
   { value: 'charge', label: 'Charge', hint: 'into equipment (bottle weight decreases)' },
@@ -61,23 +57,10 @@ const KIND_OPTIONS: readonly PickerOption[] = [
   { value: 'adjust', label: 'Manual adjust (signed)' },
 ]
 
-const kindTone: Record<
-  TransactionKind,
-  'green' | 'amber' | 'blue' | 'slate' | 'red'
-> = {
-  charge: 'amber',
-  recover: 'green',
-  transfer: 'blue',
-  return: 'slate',
-  adjust: 'red',
-  intake: 'green',
-}
-
 export default function Transactions() {
   const { state, addTransaction, deleteTransaction } = useStore()
-  const { bottles, sites, transactions, unit } = state
+  const { bottles, sites, transactions } = state
   const toast = useToast()
-  const licShort = profileFor(state.jurisdiction).techLicenceShort
 
   const [adding, setAdding] = useState(false)
   // Row whose photos / customer sign-off are being viewed or added.
@@ -126,7 +109,7 @@ export default function Transactions() {
       [...transactions]
         // Soft-deleted rows are kept in storage for the audit trail
         // but hidden from the working activity log. Admins can review
-        // and restore them from Settings → Deleted transactions.
+        // the full entry and restore them from the Change log.
         .filter((t) => !t.deletedAt)
         .filter((t) => filterKind === 'all' || t.kind === filterKind)
         .filter((t) => {
@@ -339,17 +322,6 @@ export default function Transactions() {
       ) : (
         <div className="space-y-2">
           {visible.map((t) => {
-            const bottle = bottles.find((b) => b.id === t.bottleId)
-            const sourceBottle = t.sourceBottleId
-              ? bottles.find((b) => b.id === t.sourceBottleId)
-              : null
-            const site = sites.find((j) => j.id === t.siteId)
-            const txUnit = state.units.find((u) => u.id === t.unitId)
-            const move = movementSummary(
-              t,
-              transactions,
-              (id) => sites.find((j) => j.id === id)?.name,
-            )
             // Correction linkage: the entry this one corrects (if it's a
             // correction), and the live correction that supersedes this
             // one (if it's an original that was corrected).
@@ -360,146 +332,11 @@ export default function Transactions() {
             return (
               <Card key={t.id} className="!p-3">
                 <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Pill tone={kindTone[t.kind]}>{transactionLabel(t.kind)}</Pill>
-                      {t.amount > 0 && (
-                        <span className="font-semibold text-slate-900 dark:text-slate-100">
-                          {formatWeight(t.amount, unit)}
-                        </span>
-                      )}
-                      <span className="text-sm text-slate-500">
-                        {bottle?.refrigerantType ?? '?'}
-                      </span>
-                      {corrects && <Pill tone="blue">Correction</Pill>}
-                      {supersededBy && <Pill tone="amber">Corrected</Pill>}
-                    </div>
-                    {corrects && (
-                      <div className="mt-1 rounded-lg border border-blue-200 bg-blue-50 px-2 py-1 text-xs text-blue-900 dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-100">
-                        {isRestatement(t) ? 'Re-states' : 'Corrects'} a{' '}
-                        {transactionLabel(corrects.kind).toLowerCase()} of{' '}
-                        {formatWeight(corrects.amount, unit)} from{' '}
-                        {formatStampedTime(corrects.date, corrects.tz, state.location.timezone, state.clock)}
-                        {t.correctionReason && <> — “{t.correctionReason}”</>}
-                        {isRestatement(t) && (
-                          <> · Equipment records and totals count this entry.</>
-                        )}
-                      </div>
-                    )}
-                    {supersededBy && (
-                      <div className="mt-1 rounded-lg border border-amber-200 bg-amber-50 px-2 py-1 text-xs text-amber-900 dark:border-amber-700 dark:bg-amber-900/20 dark:text-amber-100">
-                        Superseded by a correction logged{' '}
-                        {formatStampedTime(
-                          supersededBy.loggedAt ?? supersededBy.date,
-                          supersededBy.tz,
-                          state.location.timezone,
-                          state.clock,
-                        )}
-                        {supersededBy.correctionReason && <> — “{supersededBy.correctionReason}”</>}
-                        {isRestatement(supersededBy) && (
-                          <> · Excluded from totals in favour of the correction.</>
-                        )}
-                      </div>
-                    )}
-                    <div className="mt-1 text-sm text-slate-700 dark:text-slate-300">
-                      {bottle?.bottleNumber ?? '(deleted)'}
-                      {sourceBottle && ` ← ${sourceBottle.bottleNumber}`}
-                      {/* Fall back to the name frozen on the row when the
-                          site record was deleted. */}
-                      {!move && (site?.name ?? t.siteName)
-                        ? ` · ${site?.name ?? t.siteName}`
-                        : ''}
-                    </div>
-                    {move && (
-                      <div className="mt-0.5 flex flex-wrap items-center gap-1 text-sm text-slate-700 dark:text-slate-300">
-                        <span className="text-xs uppercase tracking-wider text-slate-400">
-                          From
-                        </span>
-                        <span className="font-medium">{move.from}</span>
-                        <span aria-hidden className="text-slate-400">
-                          →
-                        </span>
-                        <span className="text-xs uppercase tracking-wider text-slate-400">
-                          to
-                        </span>
-                        <span className="font-medium">{move.to}</span>
-                      </div>
-                    )}
-                    {(txUnit || t.unitName || t.equipment || t.reason) && (
-                      <div className="text-xs text-slate-500">
-                        {txUnit?.name ?? t.unitName ?? t.equipment}
-                        {(txUnit || t.unitName || t.equipment) &&
-                          t.reason &&
-                          ' · '}
-                        {t.reason && REASON_LABELS[t.reason]}
-                      </div>
-                    )}
-                    {t.kind === 'return' && (t.returnDestination || t.docketNumber) && (
-                      <div className="text-xs text-slate-500">
-                        {t.returnDestination && `Returned to: ${t.returnDestination}`}
-                        {t.returnDestination && t.docketNumber && ' · '}
-                        {t.docketNumber && `Docket ${t.docketNumber}`}
-                      </div>
-                    )}
-                    {t.kind === 'intake' && (t.supplier || t.invoiceNumber) && (
-                      <div className="text-xs text-slate-500">
-                        {t.supplier && `Supplier: ${t.supplier}`}
-                        {t.supplier && t.invoiceNumber && ' · '}
-                        {t.invoiceNumber && `Invoice ${t.invoiceNumber}`}
-                      </div>
-                    )}
-                    {t.leakTestPerformed !== undefined && (
-                      <div className="text-xs text-slate-500">
-                        Leak test: {t.leakTestPerformed ? 'Yes' : 'No'}
-                      </div>
-                    )}
-                    <div className="text-xs text-slate-500">
-                      {formatStampedTime(t.date, t.tz, state.location.timezone, state.clock)}
-                      {t.amount > 0 && (
-                        <>
-                          {' · '}gross {kgToDisplay(t.weightBefore, unit).toFixed(2)} to{' '}
-                          {formatWeight(t.weightAfter, unit)}
-                        </>
-                      )}
-                    </div>
-                    {(t.technician ||
-                      t.technicianLicence ||
-                      t.businessName ||
-                      t.businessAbn ||
-                      t.arcAuthorisationNumber) && (
-                      <div className="mt-1 text-xs text-slate-500">
-                        {[
-                          t.technician &&
-                            `${t.technician}${t.technicianLicence ? ` · ${licShort} ${t.technicianLicence}` : ''}`,
-                          !t.technician && t.technicianLicence && `${licShort} ${t.technicianLicence}`,
-                          t.businessName &&
-                            `${t.businessName}${t.arcAuthorisationNumber ? ` · ${profileFor(state.jurisdiction).businessAuthShort || 'Auth'} ${t.arcAuthorisationNumber}` : ''}`,
-                          !t.businessName && t.arcAuthorisationNumber && `${profileFor(state.jurisdiction).businessAuthShort || 'Auth'} ${t.arcAuthorisationNumber}`,
-                          t.businessAbn && `${profileFor(state.jurisdiction).businessNumberShort} ${t.businessAbn}`,
-                        ]
-                          .filter(Boolean)
-                          .join(' · ')}
-                      </div>
-                    )}
-                    {transactionLoss(t) > 0 && (
-                      <div className="text-xs font-medium text-amber-600 dark:text-amber-400">
-                        Loss: {formatWeight(transactionLoss(t), unit)}
-                      </div>
-                    )}
-                    {t.refrigerantMismatch && (
-                      <div className="mt-1 rounded-lg border border-amber-300 bg-amber-50 px-2 py-1 text-xs font-medium text-amber-900 dark:border-amber-600 dark:bg-amber-900/20 dark:text-amber-100">
-                        ⚠ Refrigerant mismatch acknowledged — bottle{' '}
-                        <strong>{t.refrigerantMismatch.bottleType}</strong> into
-                        unit set up for{' '}
-                        <strong>{t.refrigerantMismatch.unitType}</strong>
-                      </div>
-                    )}
-                    {t.notes && (
-                      <div className="mt-1 text-xs italic text-slate-500">
-                        “{t.notes}”
-                      </div>
-                    )}
-                  </div>
+                  <TransactionDetails
+                    t={t}
+                    corrects={corrects}
+                    supersededBy={supersededBy}
+                  />
                   <div className="flex shrink-0 flex-col items-end gap-1">
                     <ShareTxButton t={t} />
                     {(() => {
@@ -626,8 +463,8 @@ export default function Transactions() {
       >
         <p className="text-sm text-slate-600 dark:text-slate-300">
           It will be hidden from the activity log but kept in storage so an
-          admin can review or restore it from{' '}
-          <span className="font-medium">Settings → Deleted transactions</span>.
+          admin can review the full entry or restore it from the{' '}
+          <span className="font-medium">Change log</span>.
         </p>
         <Field label="Reason (optional)">
           <TextInput
@@ -655,7 +492,7 @@ export default function Transactions() {
               deleteTransaction(deleting.id, deleting.reason)
               setDeleting(null)
               toast.show(
-                'Transaction deleted — recoverable in Settings',
+                'Transaction deleted — restore it from the Change log',
                 'info',
               )
             }}

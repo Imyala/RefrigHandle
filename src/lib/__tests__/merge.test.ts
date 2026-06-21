@@ -32,6 +32,47 @@ describe('transaction merge', () => {
     expect(b.transactions[0].deletedReason).toBe('dupe')
   })
 
+  it('a restore that happened after a deletion beats the stale deleted copy', () => {
+    // A restored row carries restoredAt and no deletedAt; a stale copy on
+    // the other device still holds the earlier deletion. The later
+    // lifecycle action (the restore) must win so the row stays live.
+    const dead = makeTx({
+      deletedAt: '2026-06-05T00:00:00.000Z',
+      deletedReason: 'dupe',
+    })
+    const restored = {
+      ...dead,
+      deletedAt: undefined,
+      deletedReason: undefined,
+      restoredAt: '2026-06-06T00:00:00.000Z',
+    }
+    const a = mergeStates(
+      makeState({ transactions: [dead] }),
+      makeState({ transactions: [restored] }),
+    )
+    const b = mergeStates(
+      makeState({ transactions: [restored] }),
+      makeState({ transactions: [dead] }),
+    )
+    expect(a.transactions[0].deletedAt).toBeUndefined()
+    expect(a.transactions[0].restoredAt).toBe(restored.restoredAt)
+    expect(b.transactions[0].deletedAt).toBeUndefined()
+  })
+
+  it('a re-deletion after a restore beats the restored copy', () => {
+    const restored = makeTx({ restoredAt: '2026-06-06T00:00:00.000Z' })
+    const reDeleted = {
+      ...restored,
+      deletedAt: '2026-06-07T00:00:00.000Z',
+      deletedReason: 'still a dupe',
+    }
+    const merged = mergeStates(
+      makeState({ transactions: [restored] }),
+      makeState({ transactions: [reDeleted] }),
+    )
+    expect(merged.transactions[0].deletedAt).toBe(reDeleted.deletedAt)
+  })
+
   it('is commutative on the record set', () => {
     const shared = makeTx({ date: '2026-06-01T00:00:00.000Z' })
     const onlyA = makeTx({ date: '2026-06-02T00:00:00.000Z' })

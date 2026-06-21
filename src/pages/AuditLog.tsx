@@ -8,8 +8,11 @@ import {
   AUDIT_ACTION_TONE,
   AUDIT_ENTITY_LABELS,
 } from '../lib/audit'
-import type { AuditEntity } from '../lib/types'
+import type { AuditEntity, Transaction } from '../lib/types'
 import { profileFor } from '../lib/compliance'
+import { TransactionDetails } from '../components/TransactionDetails'
+import { useToast } from '../lib/toast'
+import { useConfirm } from '../lib/confirm'
 
 // The entity filter bar — mirrors the kind filter on the activity log.
 // 'all' first, then the records people most often want to audit. The
@@ -38,10 +41,27 @@ function filterLabel(f: (typeof ENTITY_FILTERS)[number]): string {
 }
 
 export default function AuditLog() {
-  const { state } = useStore()
+  const { state, restoreTransaction } = useStore()
   const { auditLog } = state
   const tz = state.location.timezone
   const licShort = profileFor(state.jurisdiction).techLicenceShort
+  const toast = useToast()
+  const confirm = useConfirm()
+
+  // Restore a soft-deleted transaction straight from its change-log
+  // entry, after a confirm so an accidental tap can't quietly resurrect
+  // a removed row.
+  async function handleRestore(t: Transaction) {
+    const ok = await confirm({
+      title: 'Restore this transaction?',
+      message:
+        'It returns to the Refrigerant log and is counted again in bottle and equipment totals. The original deletion stays on this change log.',
+      confirmLabel: 'Restore',
+    })
+    if (!ok) return
+    restoreTransaction(t.id)
+    toast.show('Transaction restored', 'success')
+  }
 
   const [query, setQuery] = useState('')
   const [filter, setFilter] = useState<(typeof ENTITY_FILTERS)[number]>('all')
@@ -198,7 +218,16 @@ export default function AuditLog() {
         <EmptyState title="No matches for this filter" />
       ) : (
         <div className="space-y-2">
-          {visible.map((e) => (
+          {visible.map((e) => {
+            // For a transaction change (a deletion, or a later restore),
+            // pull the underlying row — still in storage when soft-deleted
+            // — so the entry can show the full job details, not just a
+            // one-line summary, and offer to restore it if it's deleted.
+            const tx =
+              e.entity === 'transaction' && e.entityId
+                ? state.transactions.find((t) => t.id === e.entityId)
+                : undefined
+            return (
             <Card key={e.id} className="!p-3">
               <div className="flex flex-wrap items-center gap-2">
                 <Pill tone={AUDIT_ACTION_TONE[e.action]}>
@@ -240,6 +269,29 @@ export default function AuditLog() {
                 </ul>
               )}
 
+              {/* Full detail of the affected transaction, mirroring the
+                  Refrigerant log so an owner can see exactly what the
+                  removed (or restored) entry was — and put it back. */}
+              {tx && (
+                <div className="mt-2 rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-800/40">
+                  <div className="mb-1.5 flex items-center justify-between gap-2">
+                    <span className="text-xs font-medium uppercase tracking-wider text-slate-400">
+                      Entry details
+                    </span>
+                    {tx.deletedAt && (
+                      <button
+                        onClick={() => handleRestore(tx)}
+                        className="rounded-lg px-2 py-1 text-xs font-medium text-brand-600 hover:bg-brand-50 dark:hover:bg-brand-900/20"
+                        aria-label="Restore this transaction"
+                      >
+                        ↩ Restore
+                      </button>
+                    )}
+                  </div>
+                  <TransactionDetails t={tx} />
+                </div>
+              )}
+
               <div className="mt-1 text-xs text-slate-500">
                 {formatStampedTime(e.at, e.tz, tz, state.clock)}
                 {e.by && (
@@ -251,7 +303,8 @@ export default function AuditLog() {
                 )}
               </div>
             </Card>
-          ))}
+            )
+          })}
           {rows.length > limit && (
             <Button
               variant="secondary"
