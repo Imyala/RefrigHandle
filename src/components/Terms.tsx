@@ -1,8 +1,36 @@
 import { useState, type ReactNode } from 'react'
 import { BackLink } from './BackLink'
-import { Button, Card } from './ui'
+import { Button, Card, Modal } from './ui'
 import { useStore } from '../lib/store'
 import { isSetupComplete, TERMS_VERSION } from '../lib/types'
+import { PrivacyContent } from './Privacy'
+import { AcceptableUseContent } from './AcceptableUse'
+import { BillingRefundContent } from './BillingRefund'
+import { DataRetentionContent } from './DataRetention'
+import { SecurityContent } from './Security'
+import { DisclaimerContent } from './Disclaimer'
+import { CopyrightContent } from './Copyright'
+
+// The policies that form part of the Terms. Each is rendered inline in a
+// modal so they are readable everywhere the Terms appear — including the
+// first-run setup and the re-acceptance gate, which both sit OUTSIDE the
+// router and so can't link to the standalone /privacy etc. pages.
+const RELATED_POLICIES: readonly { title: string; Content: () => ReactNode }[] =
+  [
+    { title: 'Privacy Policy', Content: PrivacyContent },
+    { title: 'Acceptable Use Policy', Content: AcceptableUseContent },
+    { title: 'Billing and Refund Policy', Content: BillingRefundContent },
+    { title: 'Data Retention and Deletion Policy', Content: DataRetentionContent },
+    {
+      title: 'Security and Responsible Disclosure Policy',
+      Content: SecurityContent,
+    },
+    {
+      title: 'Website and General Information Disclaimer',
+      Content: DisclaimerContent,
+    },
+    { title: 'Copyright and Trademark Policy', Content: CopyrightContent },
+  ]
 
 // Effective date shown at the top of the Terms. Update this whenever the
 // text materially changes so the published date stays accurate.
@@ -13,6 +41,10 @@ const EFFECTIVE_DATE = '18 June 2026'
 // Plain-English and deliberately conservative — it is NOT legal advice and
 // should be reviewed by a solicitor before relying on it commercially.
 export function TermsContent() {
+  // Which related policy is open in the modal (index into RELATED_POLICIES),
+  // or null when none is open.
+  const [openPolicy, setOpenPolicy] = useState<number | null>(null)
+  const active = openPolicy != null ? RELATED_POLICIES[openPolicy] : null
   return (
     <div className="space-y-3 text-sm text-slate-700 dark:text-slate-300">
       <p className="text-xs text-slate-500">Effective date: {EFFECTIVE_DATE}</p>
@@ -97,18 +129,39 @@ export function TermsContent() {
       <Section title="Related policies">
         <p>
           The following policies form part of these Terms of Use and apply to
-          your use of the Services. Each can be read from Settings:
+          your use of the Services. Tap any policy to read it:
         </p>
-        <ul className="list-disc space-y-1 pl-5">
-          <li>Privacy Policy</li>
-          <li>Acceptable Use Policy</li>
-          <li>Billing and Refund Policy</li>
-          <li>Data Retention and Deletion Policy</li>
-          <li>Security and Responsible Disclosure Policy</li>
-          <li>Website and General Information Disclaimer</li>
-          <li>Copyright and Trademark Policy</li>
+        <ul className="space-y-1">
+          {RELATED_POLICIES.map((p, i) => (
+            <li key={p.title}>
+              <button
+                type="button"
+                onClick={() => setOpenPolicy(i)}
+                className="text-left font-medium text-brand-600 underline decoration-brand-600/40 underline-offset-2 hover:decoration-brand-600 dark:text-brand-400"
+              >
+                {p.title}
+              </button>
+            </li>
+          ))}
         </ul>
       </Section>
+
+      {/* Inline policy reader. Modal portals to <body>, so this works even
+          on the first-run / re-acceptance screens that render outside the
+          app router. */}
+      <Modal
+        open={active != null}
+        title={active?.title ?? ''}
+        size="lg"
+        onClose={() => setOpenPolicy(null)}
+      >
+        {active && <active.Content />}
+        <div className="mt-4">
+          <Button full variant="secondary" onClick={() => setOpenPolicy(null)}>
+            Close
+          </Button>
+        </div>
+      </Modal>
     </div>
   )
 }
