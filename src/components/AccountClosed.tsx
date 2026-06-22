@@ -94,13 +94,17 @@ function AccountClosedScreen({ closure }: { closure: AccountClosure }) {
 
         <Card>
           <div className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-            Your request
+            Closure record
           </div>
+          <p className="mb-2 text-xs text-slate-500 dark:text-slate-400">
+            A copy of your closure details, for your own records. Email or
+            print it to keep.
+          </p>
           <pre className="whitespace-pre-wrap break-words font-mono text-xs leading-relaxed text-slate-700 dark:text-slate-300">
             {requestText}
           </pre>
           <div className="mt-3 flex flex-wrap gap-2">
-            <Button onClick={emailRequest}>Email request</Button>
+            <Button onClick={emailRequest}>Email a copy</Button>
             <Button variant="secondary" onClick={() => window.print()}>
               Print
             </Button>
