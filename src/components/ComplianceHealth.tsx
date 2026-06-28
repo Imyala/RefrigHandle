@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { Card, Pill } from './ui'
 import { useStore } from '../lib/store'
@@ -10,6 +10,7 @@ import {
 import { profileFor } from '../lib/compliance'
 import { backupStatus } from '../lib/backup'
 import { formatPlainDate } from '../lib/datetime'
+import { isStoragePersisted, requestPersistentStorage } from '../lib/storage'
 
 // At-a-glance compliance overview for the whole business. Rolls the four
 // things that actually get an operator in trouble — technician licences
@@ -72,6 +73,23 @@ function joinParts(parts: (string | false | 0)[]): string {
 export function ComplianceHealth() {
   const { state } = useStore()
   const profile = profileFor(state.jurisdiction)
+
+  // Once real records exist, quietly ask the browser to keep storage so the
+  // origin isn't evicted under pressure (harmless to ask; auto-granted for
+  // installed PWAs). This used to ride on the home-screen backup alert —
+  // kept here now that this card is the home compliance surface.
+  const hasData = state.transactions.length > 0
+  useEffect(() => {
+    if (!hasData) return
+    let cancelled = false
+    void isStoragePersisted().then((persisted) => {
+      if (cancelled || persisted) return
+      void requestPersistentStorage()
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [hasData])
 
   const rows = useMemo<Row[]>(() => {
     const out: Row[] = []

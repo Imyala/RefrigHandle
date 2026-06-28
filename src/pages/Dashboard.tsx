@@ -3,7 +3,6 @@ import { Link } from 'react-router-dom'
 import { Button, Card } from '../components/ui'
 import { CollapsibleSection } from '../components/CollapsibleSection'
 import { ShareTxButton } from '../components/ShareSheet'
-import { Alerts } from '../components/Alerts'
 import { ComplianceHealth } from '../components/ComplianceHealth'
 import { useStore } from '../lib/store'
 import {
@@ -83,8 +82,6 @@ export default function Dashboard() {
       </Card>
 
       <ComplianceHealth />
-
-      <Alerts />
 
       <div className="grid grid-cols-2 gap-3">
         <Link to="/bottles" className="block">
