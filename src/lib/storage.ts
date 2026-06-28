@@ -93,6 +93,14 @@ export interface LoadResult {
 }
 
 function normalize(parsed: LegacyState): AppState {
+  // Backups bundle photos/signatures under a top-level `__attachments`
+  // key for the attachment store, NOT for app state. Strip it before the
+  // `...parsed` spread below so a stray caller can never persist those
+  // base64 blobs into AppState (and blow the localStorage quota). Callers
+  // that want the attachments read them off the raw file first.
+  if (parsed && typeof parsed === 'object' && '__attachments' in parsed) {
+    delete (parsed as Record<string, unknown>).__attachments
+  }
   const bottles: Bottle[] = (parsed.bottles ?? []).map((b) => {
     const { currentJobId, currentLocationId, ...rest } = b
     const next = rest as unknown as Bottle

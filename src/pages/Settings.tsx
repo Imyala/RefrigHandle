@@ -17,6 +17,7 @@ import { useStore } from '../lib/store'
 import {
   expiryStatus,
   REFRIGERANT_TYPES,
+  type AppState,
   type ClockFormat,
   type LocationSettings,
   type Technician,
@@ -292,38 +293,106 @@ export default function Settings() {
   }
 
   async function importJson(file: File) {
+    let data: Record<string, unknown>
     try {
-      const text = await file.text()
-      const data = JSON.parse(text)
-      if (!data || !Array.isArray(data.bottles)) {
-        toast.show(
-          'That file does not look like a Refrigerant Handling export.',
-          'error',
-        )
-        return
+      data = JSON.parse(await file.text())
+    } catch {
+      toast.show(
+        'That file is not valid JSON — it may be corrupt or only partly downloaded.',
+        'error',
+      )
+      return
+    }
+    // A genuine export carries the core record arrays. Requiring both the
+    // cylinders AND the ledger guards against importing a truncated file
+    // that would otherwise wipe the transaction history (and, via the sync
+    // reset watermark, propagate that loss to other devices).
+    const required = ['bottles', 'transactions']
+    const missing =
+      !data || typeof data !== 'object'
+        ? required
+        : required.filter((k) => !Array.isArray(data[k]))
+    if (missing.length > 0) {
+      toast.show(
+        `That file does not look like a complete export (missing: ${missing.join(
+          ', ',
+        )}).`,
+        'error',
+      )
+      return
+    }
+
+    const count = (s: Pick<AppState, 'bottles' | 'sites' | 'units' | 'transactions'>) =>
+      s.bottles.length + s.sites.length + s.units.length + s.transactions.length
+    const incoming = count({
+      bottles: (data.bottles as unknown[]) ?? [],
+      sites: (data.sites as unknown[]) ?? [],
+      units: (data.units as unknown[]) ?? [],
+      transactions: (data.transactions as unknown[]) ?? [],
+    } as AppState)
+    const current = count(state)
+
+    const ok = await confirm({
+      title: 'Replace all current data?',
+      message:
+        `This device currently holds ${current} record${current === 1 ? '' : 's'}; ` +
+        `the file has ${incoming}. Importing overwrites every bottle, site, unit ` +
+        `and transaction here with the file's contents and cannot be undone.` +
+        (current > 0
+          ? ' A backup of the current data will be downloaded first.'
+          : ''),
+      confirmLabel: current > 0 ? 'Back up & replace' : 'Replace',
+      danger: true,
+    })
+    if (!ok) return
+
+    // Safety net: snapshot the current data before it's overwritten, so an
+    // accidental or wrong-file import is always recoverable.
+    if (current > 0) {
+      try {
+        await downloadBackup(state)
+        setLastBackupAt(getLastBackupAt())
+        toast.show('Saved a backup of the current data first.', 'success')
+      } catch {
+        const stillGo = await confirm({
+          title: 'Backup failed — import anyway?',
+          message:
+            'Could not save a backup of the current data. Importing will overwrite it permanently with no way back.',
+          confirmLabel: 'Import without a backup',
+          danger: true,
+        })
+        if (!stillGo) return
       }
-      const ok = await confirm({
-        title: 'Replace all current data?',
-        message:
-          'This will overwrite every bottle, site, unit, and transaction on this device with the contents of the imported file.',
-        confirmLabel: 'Replace',
-        danger: true,
-      })
-      if (ok) {
-        // Photos/signatures ride in the backup under __attachments —
-        // restore them to the attachment store and keep the key out of
-        // the app state.
-        const { __attachments, ...stateOnly } = data
-        importState(stateOnly)
-        if (Array.isArray(__attachments) && __attachments.length > 0) {
-          const n = await importAttachments(__attachments)
-          if (n > 0) {
-            toast.show(`Restored ${n} photo${n === 1 ? '' : 's'}/signatures`, 'success')
-          }
+    }
+
+    try {
+      // Photos/signatures ride in the backup under __attachments — restore
+      // them to the attachment store and keep the key out of the app state.
+      const { __attachments, ...stateOnly } = data
+      importState(stateOnly as unknown as AppState)
+      if (Array.isArray(__attachments) && __attachments.length > 0) {
+        const n = await importAttachments(__attachments)
+        if (n > 0) {
+          toast.show(
+            `Restored ${n} photo${n === 1 ? '' : 's'}/signatures`,
+            'success',
+          )
         }
       }
+      // Surface the integrity of what was just imported — a backup with a
+      // broken or tampered change log shouldn't pass silently.
+      const log = Array.isArray(stateOnly.auditLog)
+        ? (stateOnly.auditLog as AppState['auditLog'])
+        : []
+      const report = await verifyAuditChains(log, getRecordedHead())
+      if (!report.valid) {
+        toast.show(
+          "Imported — but the file's change log failed integrity verification. See Audit trail integrity.",
+          'error',
+        )
+      }
     } catch {
-      toast.show('Could not read that file.', 'error')
+      toast.show('Could not apply that file.', 'error')
     }
   }
 
