@@ -451,7 +451,7 @@ function OnboardingScreen() {
               <Field
                 label="Password *"
                 error={pwErr ?? pwBlock ?? undefined}
-                hint={`Secures switching into this profile, and becomes your sign-in once team accounts are added. A longer passphrase you'll remember beats a short, complex one — at least ${MIN_PASSWORD_LENGTH} characters.`}
+                hint={`Secures switching into this profile on a shared device. A longer passphrase you'll remember beats a short, complex one — at least ${MIN_PASSWORD_LENGTH} characters.`}
               >
                 <TextInput
                   type="password"

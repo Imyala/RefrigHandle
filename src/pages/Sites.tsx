@@ -961,6 +961,24 @@ function UnitCard({
           )}
         </button>
       </div>
+      {/* Leak detail INLINE (not a hover tooltip) so the actionable
+          insight is visible on a phone. */}
+      {(leak.level === 'watch' || leak.level === 'suspected') && (
+        <div
+          className={`mt-2 rounded-lg px-2.5 py-1.5 text-xs ${
+            leak.level === 'suspected'
+              ? 'bg-red-50 text-red-900 dark:bg-red-900/20 dark:text-red-100'
+              : 'bg-amber-50 text-amber-900 dark:bg-amber-900/20 dark:text-amber-100'
+          }`}
+        >
+          Top-ups in the last 12 months:{' '}
+          <strong>{formatWeight(leak.topUpKg, state.unit)}</strong> (
+          {Math.round(leak.fraction * 100)}% of charge).{' '}
+          {leak.level === 'suspected'
+            ? 'Repeated top-ups — investigate and rectify per AIRAH DA19 / CoP 2025.'
+            : 'Investigate per AIRAH DA19.'}
+        </div>
+      )}
       <div className="mt-3 flex flex-wrap gap-2">
         <Button variant="secondary" onClick={onLogbook}>
           Logbook

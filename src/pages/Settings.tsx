@@ -519,9 +519,9 @@ export default function Settings() {
           transaction logged is stamped with that profile's name, licence and
           role, frozen so the historical record is preserved if a tech later
           changes their licence or role. Roles (owner, supervisor, lead
-          technician, technician, apprentice) set each person's access level —
-          a profile can only manage people below its own tier. Access takes
-          effect once per-tech sign-in is added.
+          technician, technician, apprentice) set each person's access level:
+          correcting or deleting records is reserved for senior roles, and a
+          profile can only manage people below its own tier.
         </p>
         {!canManage && (
           <p className="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:bg-amber-900/30 dark:text-amber-200">
@@ -1486,7 +1486,7 @@ function TechnicianModal({
           </div>
           <p className="mb-3 text-xs text-slate-500">
             {passwordRequired
-              ? 'Each account needs a password — it secures switching into this profile and becomes their sign-in once team accounts are added. '
+              ? 'Each account needs a password — it secures switching into this profile on a shared device. '
               : 'Prompts on a shared device when someone tries to switch into this profile. '}
             {hasExistingPassword
               ? 'Leave blank to keep the current password. '
