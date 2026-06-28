@@ -265,6 +265,14 @@ export interface Transaction {
   bottleAmount?: number
   weightBefore: number // bottle gross weight before
   weightAfter: number // bottle gross weight after
+  // Bottle tare + refrigerant frozen at the time of work. Quarterly and
+  // CSV figures need the cylinder's tare (returned net = gross − tare) and
+  // its refrigerant (to bucket the row by gas) — freezing them here means
+  // those numbers survive the bottle record later being deleted, instead
+  // of silently dropping to zero / "Unknown". Optional: older rows fall
+  // back to the live bottle lookup.
+  bottleTareWeight?: number
+  bottleRefrigerantType?: string
   date: string // ISO date
   technician?: string
   // ARC Refrigerant Handling Licence number stamped at the time of
@@ -309,6 +317,18 @@ export interface Transaction {
   refrigerantMismatch?: {
     bottleType: string
     unitType: string
+  }
+  // Acknowledged warnings — the tech saved THROUGH an on-screen warning
+  // that the app allows past (per AS 2030.5 / consolidation workflows) but
+  // a supervisor should still be able to see after the fact. Frozen at the
+  // time of work so the override is auditable, not just a transient banner.
+  // savedOverSafeFill: the move pushed the bottle's net over its safe-fill
+  // limit. refrigerantContamination: a bottle-to-bottle decant where the
+  // source and destination refrigerants differed.
+  savedOverSafeFill?: boolean
+  refrigerantContamination?: {
+    sourceType: string
+    destType: string
   }
   // Correction link (append-only correction workflow). When set, this
   // transaction was logged to correct an earlier one — `correctsId` is

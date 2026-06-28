@@ -187,7 +187,9 @@ export function buildLogCsv(
       t.kind,
       b?.bottleNumber ?? '',
       sb?.bottleNumber ?? '',
-      b?.refrigerantType ?? '',
+      // Frozen refrigerant first so the CSV stays correct after a bottle
+      // is deleted (matches the quarterly report).
+      t.bottleRefrigerantType ?? b?.refrigerantType ?? '',
       t.amount.toFixed(3),
       (t.bottleAmount ?? t.amount).toFixed(3),
       loss.toFixed(3),

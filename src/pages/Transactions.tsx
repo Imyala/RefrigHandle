@@ -560,6 +560,7 @@ function TransactionForm({
     correctsId?: string
     correctionReason?: string
     refrigerantMismatch?: { bottleType: string; unitType: string }
+    savedOverSafeFill?: boolean
     // Staged camera shots, bound to the row's id after the save (they
     // live in the attachment store, never in the transaction itself).
     photos?: File[]
@@ -777,6 +778,16 @@ function TransactionForm({
   const showSite = kind !== 'adjust'
   const showCompliance = kind === 'charge' || kind === 'recover'
   const supportsLoss = kind === 'charge' || kind === 'recover'
+  // Whether the projected move leaves the bottle over its safe-fill limit
+  // (warn-only, allowed past). Persisted on the row so the override shows
+  // up for a supervisor reviewing the log later, not just at entry.
+  const projectedOverSafeFill =
+    !!bottle &&
+    showAmount &&
+    overfillKg(
+      Math.max(0, projectedAfter - bottle.tareWeight),
+      bottle.initialNetWeight,
+    ) > 0
 
   // Bottle-vs-unit refrigerant mismatch — charging R410A into a unit
   // labelled R32 (or vice-versa) is almost always a wrong-bottle mistake
@@ -883,6 +894,7 @@ function TransactionForm({
               unitType: selectedUnit.refrigerantType,
             }
           : undefined,
+      savedOverSafeFill: projectedOverSafeFill || undefined,
     }, share)
   }
 

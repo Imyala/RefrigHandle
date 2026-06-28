@@ -118,7 +118,11 @@ function QuarterlyReportModal({ onClose }: { onClose: () => void }) {
       const q = quarterOfDay(dayOf(t))
       if (!q || quarterKey(q) !== selectedKey) continue
       const bottle = state.bottles.find((b) => b.id === t.bottleId)
-      const b = bucket(bottle?.refrigerantType ?? 'Unknown')
+      // Prefer the refrigerant/tare frozen onto the row — they survive the
+      // bottle record being deleted, where the live lookup would not.
+      const b = bucket(
+        t.bottleRefrigerantType ?? bottle?.refrigerantType ?? 'Unknown',
+      )
       b.rows += 1
       if (t.kind === 'intake') b.purchasedKg += t.amount
       else if (t.kind === 'charge') b.chargedKg += t.amount
@@ -128,9 +132,11 @@ function QuarterlyReportModal({ onClose }: { onClose: () => void }) {
         if (!t.sourceBottleId) b.recoveredKg += t.amount
       } else if (t.kind === 'return') {
         // Net refrigerant leaving our books inside the returned
-        // cylinder: gross at return minus the cylinder's tare.
-        if (bottle) {
-          b.returnedKg += Math.max(0, t.weightBefore - bottle.tareWeight)
+        // cylinder: gross at return minus the cylinder's tare. Uses the
+        // frozen tare so a since-deleted bottle doesn't zero the figure.
+        const tare = t.bottleTareWeight ?? bottle?.tareWeight
+        if (tare != null) {
+          b.returnedKg += Math.max(0, t.weightBefore - tare)
         }
       } else if (t.kind === 'adjust') {
         b.adjustKg += t.amount

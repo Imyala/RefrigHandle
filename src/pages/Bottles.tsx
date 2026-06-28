@@ -953,6 +953,8 @@ function QuickLogModal({
     returnDestination?: string
     docketNumber?: string
     refrigerantMismatch?: { bottleType: string; unitType: string }
+    savedOverSafeFill?: boolean
+    refrigerantContamination?: { sourceType: string; destType: string }
   }, share?: boolean) => void
 }) {
   const { state, addBottle, addSite, addUnit, addCustomRefrigerant } =
@@ -1088,6 +1090,11 @@ function QuickLogModal({
         ? bottle.grossWeight + bottleAmountKg
         : bottle.grossWeight
   const projectedNet = Math.max(0, projectedAfter - bottle.tareWeight)
+  // The destination ending over its safe-fill limit (warn-only, allowed
+  // past). Persisted on the row so the override is visible to a supervisor
+  // afterwards, not just as a transient banner at entry.
+  const projectedOverSafeFill =
+    showAmount && overfillKg(projectedNet, bottle.initialNetWeight) > 0
   const projectedSourceAfter = sourceBottle
     ? Math.max(0, sourceBottle.grossWeight - amountKg)
     : 0
@@ -1206,6 +1213,14 @@ function QuickLogModal({
             ? {
                 bottleType: bottle.refrigerantType,
                 unitType: selectedUnit.refrigerantType,
+              }
+            : undefined,
+        savedOverSafeFill: projectedOverSafeFill || undefined,
+        refrigerantContamination:
+          refrigerantMismatch && sourceBottle
+            ? {
+                sourceType: sourceBottle.refrigerantType,
+                destType: bottle.refrigerantType,
               }
             : undefined,
       },

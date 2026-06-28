@@ -220,6 +220,19 @@ export function TransactionDetails({
           for <strong>{t.refrigerantMismatch.unitType}</strong>
         </div>
       )}
+      {t.refrigerantContamination && (
+        <div className="mt-1 rounded-lg border border-amber-300 bg-amber-50 px-2 py-1 text-xs font-medium text-amber-900 dark:border-amber-600 dark:bg-amber-900/20 dark:text-amber-100">
+          ⚠ Cross-refrigerant decant acknowledged — source{' '}
+          <strong>{t.refrigerantContamination.sourceType}</strong> into{' '}
+          <strong>{t.refrigerantContamination.destType}</strong> bottle
+        </div>
+      )}
+      {t.savedOverSafeFill && (
+        <div className="mt-1 rounded-lg border border-amber-300 bg-amber-50 px-2 py-1 text-xs font-medium text-amber-900 dark:border-amber-600 dark:bg-amber-900/20 dark:text-amber-100">
+          ⚠ Saved over safe fill — the bottle's net was left above its
+          safe-fill limit
+        </div>
+      )}
       {t.notes && (
         <div className="mt-1 text-xs italic text-slate-500">“{t.notes}”</div>
       )}

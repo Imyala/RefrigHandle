@@ -834,6 +834,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         weightAfter: after,
         sourceWeightBefore: sourceBefore,
         sourceWeightAfter: sourceAfter,
+        // Freeze the cylinder's tare + refrigerant so quarterly / CSV
+        // figures survive the bottle later being deleted (see Transaction).
+        bottleTareWeight: t.bottleTareWeight ?? bottle.tareWeight,
+        bottleRefrigerantType:
+          t.bottleRefrigerantType ?? bottle.refrigerantType,
         technician: t.technician ?? activeTech?.name ?? (s.technician || undefined),
         technicianLicence:
           t.technicianLicence ??
