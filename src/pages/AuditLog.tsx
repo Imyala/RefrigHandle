@@ -8,6 +8,7 @@ import {
   AUDIT_ACTION_TONE,
   AUDIT_ENTITY_LABELS,
 } from '../lib/audit'
+import { canDeleteRecords } from '../lib/types'
 import type { AuditEntity, Transaction } from '../lib/types'
 import { profileFor } from '../lib/compliance'
 import { TransactionDetails } from '../components/TransactionDetails'
@@ -47,6 +48,11 @@ export default function AuditLog() {
   const licShort = profileFor(state.jurisdiction).techLicenceShort
   const toast = useToast()
   const confirm = useConfirm()
+  // Restoring a soft-deleted row reverses a deletion, so it carries the
+  // same gate as deleting — supervisor and above.
+  const mayRestore = canDeleteRecords(
+    state.technicians.find((x) => x.id === state.activeTechnicianId)?.role,
+  )
 
   // Restore a soft-deleted transaction straight from its change-log
   // entry, after a confirm so an accidental tap can't quietly resurrect
@@ -278,7 +284,7 @@ export default function AuditLog() {
                     <span className="text-xs font-medium uppercase tracking-wider text-slate-400">
                       Entry details
                     </span>
-                    {tx.deletedAt && (
+                    {tx.deletedAt && mayRestore && (
                       <button
                         onClick={() => handleRestore(tx)}
                         className="rounded-lg px-2 py-1 text-xs font-medium text-brand-600 hover:bg-brand-50 dark:hover:bg-brand-900/20"

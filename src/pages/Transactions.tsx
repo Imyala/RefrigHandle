@@ -16,9 +16,12 @@ import {
   type TransactionKind,
   type TransactionReason,
   REASON_LABELS,
+  canCorrectRecords,
+  canDeleteRecords,
   chargeSanity,
   netWeight,
   overfillKg,
+  roleInfo,
   scaleDeltaKg,
   siteLabel,
   transactionLabel,
@@ -61,6 +64,16 @@ export default function Transactions() {
   const { state, addTransaction, deleteTransaction } = useStore()
   const { bottles, sites, transactions } = state
   const toast = useToast()
+
+  // Role gates for the active profile. Correcting a record is lead-tech and
+  // above; deleting (soft-delete) is supervisor and above. These match the
+  // capability blurbs shown on each role in Settings — without enforcement
+  // here the UI would promise a boundary it doesn't keep.
+  const activeRole = state.technicians.find(
+    (x) => x.id === state.activeTechnicianId,
+  )?.role
+  const mayCorrect = canCorrectRecords(activeRole)
+  const mayDelete = canDeleteRecords(activeRole)
 
   const [adding, setAdding] = useState(false)
   // Row whose photos / customer sign-off are being viewed or added.
@@ -321,6 +334,13 @@ export default function Transactions() {
         />
       ) : (
         <div className="space-y-2">
+          {!mayCorrect && !mayDelete && (
+            <p className="px-1 text-xs text-slate-500 dark:text-slate-400">
+              You're signed in as {roleInfo(activeRole).label}. Correcting or
+              deleting records is reserved for senior roles — log a new entry
+              to record any change.
+            </p>
+          )}
           {visible.map((t) => {
             // Correction linkage: the entry this one corrects (if it's a
             // correction), and the live correction that supersedes this
@@ -356,22 +376,26 @@ export default function Transactions() {
                         that keeps the supersede chain unambiguous). Legacy
                         bottle adjustments can't be re-corrected; log a manual
                         adjustment if one was wrong. */}
-                    {!supersededBy && !(t.correctsId && t.kind === 'adjust') && (
+                    {mayCorrect &&
+                      !supersededBy &&
+                      !(t.correctsId && t.kind === 'adjust') && (
+                        <button
+                          onClick={() => setCorrecting(t)}
+                          className="rounded-lg px-2 py-1 text-xs font-medium text-slate-500 hover:bg-slate-100 hover:text-brand-600 dark:hover:bg-slate-800"
+                          aria-label="Log a correction for this transaction"
+                        >
+                          Correct
+                        </button>
+                      )}
+                    {mayDelete && (
                       <button
-                        onClick={() => setCorrecting(t)}
-                        className="rounded-lg px-2 py-1 text-xs font-medium text-slate-500 hover:bg-slate-100 hover:text-brand-600 dark:hover:bg-slate-800"
-                        aria-label="Log a correction for this transaction"
+                        onClick={() => setDeleting({ id: t.id, reason: '' })}
+                        className="rounded-lg px-2 py-1 text-xs font-medium text-slate-500 hover:bg-slate-100 hover:text-red-600 dark:hover:bg-slate-800"
+                        aria-label="Delete transaction"
                       >
-                        Correct
+                        Delete
                       </button>
                     )}
-                    <button
-                      onClick={() => setDeleting({ id: t.id, reason: '' })}
-                      className="rounded-lg px-2 py-1 text-xs font-medium text-slate-500 hover:bg-slate-100 hover:text-red-600 dark:hover:bg-slate-800"
-                      aria-label="Delete transaction"
-                    >
-                      Delete
-                    </button>
                   </div>
                 </div>
               </Card>

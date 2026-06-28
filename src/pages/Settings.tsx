@@ -47,7 +47,11 @@ import { hashPassword, MIN_PASSWORD_LENGTH } from '../lib/auth'
 import { screenNewPassword } from '../lib/passwordStrength'
 import { PasswordPromptModal } from '../components/PasswordPromptModal'
 import { isSyncConfigured } from '../lib/sync'
-import { verifyAuditChains, type ChainReport } from '../lib/auditChain'
+import {
+  getRecordedHead,
+  verifyAuditChains,
+  type ChainReport,
+} from '../lib/auditChain'
 import { downloadBackup, downloadLogCsv, downloadRecordsZip, getLastBackupAt } from '../lib/backup'
 import { importAttachments } from '../lib/attachments'
 import type { PickerOption } from '../components/Picker'
@@ -1522,7 +1526,7 @@ function AuditIntegrityCard() {
   async function run() {
     setBusy(true)
     try {
-      setReport(await verifyAuditChains(state.auditLog))
+      setReport(await verifyAuditChains(state.auditLog, getRecordedHead()))
     } finally {
       setBusy(false)
     }
@@ -1545,9 +1549,11 @@ function AuditIntegrityCard() {
         Change-log entries are sealed into a cryptographic hash chain as
         they're written. Verifying re-derives every chain — an entry that
         was edited or deleted after sealing breaks its chain and is
-        reported here. Detects on-device tampering and storage corruption;
-        full non-repudiation (proof against someone rebuilding the whole
-        chain) will come with server-anchored team accounts.
+        reported here, and this device also remembers how far its own chain
+        reached, so removing the most recent entries is caught too. Detects
+        on-device tampering and storage corruption; full non-repudiation
+        (proof against someone rebuilding the whole chain) will come with
+        server-anchored team accounts.
       </p>
       <Button variant="secondary" disabled={busy} onClick={() => void run()}>
         {busy ? 'Verifying…' : 'Verify integrity'}

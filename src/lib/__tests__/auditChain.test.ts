@@ -83,6 +83,38 @@ describe('verifyAuditChains', () => {
     expect(report.problems.some((p) => p.message.includes('deleted'))).toBe(true)
   })
 
+  it('catches tail-truncation only when given the recorded head', async () => {
+    // Deleting the NEWEST entries leaves a contiguous 1..k chain that the
+    // link/hash/sequence checks alone cannot flag — this is the gap the
+    // recorded head closes.
+    const log = await sealedLog(4)
+    const bySeq = [...log].sort((a, b) => (a.seq ?? 0) - (b.seq ?? 0))
+    const tip = bySeq[bySeq.length - 1]
+    const head = { chainId: tip.chainId!, seq: tip.seq!, hash: tip.hash! }
+    // Lop off the two most recent entries.
+    const truncated = log.filter((e) => (e.seq ?? 0) <= 2)
+
+    // Without the head, truncation is invisible (the original weakness).
+    const blind = await verifyAuditChains(truncated)
+    expect(blind.valid).toBe(true)
+
+    // With the head, it is caught and named.
+    const seen = await verifyAuditChains(truncated, head)
+    expect(seen.valid).toBe(false)
+    expect(
+      seen.problems.some((p) => /removed|stops/.test(p.message)),
+    ).toBe(true)
+  })
+
+  it('a full chain that still reaches its recorded head verifies', async () => {
+    const log = await sealedLog(3)
+    const bySeq = [...log].sort((a, b) => (a.seq ?? 0) - (b.seq ?? 0))
+    const tip = bySeq[bySeq.length - 1]
+    const head = { chainId: tip.chainId!, seq: tip.seq!, hash: tip.hash! }
+    const report = await verifyAuditChains(log, head)
+    expect(report.valid).toBe(true)
+  })
+
   it('detects a broken link (prevHash rewritten)', async () => {
     const log = await sealedLog(3)
     const tampered = log.map((e) =>

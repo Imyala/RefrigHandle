@@ -20,6 +20,76 @@ import { uid } from './storage'
 // editor can't rewrite; that's the next step once team accounts exist.
 
 const CHAIN_ID_KEY = 'refrighandle.chainId'
+const CHAIN_HEAD_KEY = 'refrighandle.chainHead'
+
+// The highest sealed sequence (and its hash) this device has ever
+// written to its own chain — a tamper-resistant high-water mark kept
+// OUTSIDE the audit log. Deleting the newest entries leaves a perfectly
+// contiguous 1..k chain that the link/hash checks alone can't flag;
+// comparing against this recorded head is what catches that. It lives in
+// localStorage (per device) and so shares the same honest limit as the
+// rest of the scheme: it raises the bar for casual deletion and storage
+// corruption, but full non-repudiation still needs a server anchor.
+export interface ChainHead {
+  chainId: string
+  seq: number
+  hash: string
+}
+
+export function getRecordedHead(): ChainHead | null {
+  try {
+    const raw = localStorage.getItem(CHAIN_HEAD_KEY)
+    if (!raw) return null
+    const h = JSON.parse(raw)
+    if (
+      h &&
+      typeof h.chainId === 'string' &&
+      typeof h.seq === 'number' &&
+      typeof h.hash === 'string'
+    ) {
+      return h
+    }
+    return null
+  } catch {
+    return null
+  }
+}
+
+function writeHead(head: ChainHead | null): void {
+  try {
+    if (head) localStorage.setItem(CHAIN_HEAD_KEY, JSON.stringify(head))
+    else localStorage.removeItem(CHAIN_HEAD_KEY)
+  } catch {
+    // localStorage unavailable — head tracking is best-effort.
+  }
+}
+
+// Record the local chain tip after a seal, but never LOWER a previously
+// recorded head: deleting recent entries and re-sealing the remainder
+// must not be able to quietly reset the high-water mark.
+function recordHead(chainId: string, seq: number, hash: string): void {
+  if (seq <= 0 || !hash) return
+  const existing = getRecordedHead()
+  if (existing && existing.chainId === chainId && existing.seq >= seq) return
+  writeHead({ chainId, seq, hash })
+}
+
+// Re-baseline the head from a log we now trust wholesale — a backup the
+// user chose to import, or a fresh install. This overwrites the
+// high-water mark so importing an older/smaller backup doesn't read as
+// truncation. Callers should verify the imported chain separately.
+export function rebaseChainHead(log: readonly AuditEntry[]): void {
+  const chainId = deviceChainId()
+  let seq = 0
+  let hash = ''
+  for (const e of log) {
+    if (e.chainId === chainId && e.hash && (e.seq ?? 0) > seq) {
+      seq = e.seq!
+      hash = e.hash
+    }
+  }
+  writeHead(seq > 0 ? { chainId, seq, hash } : null)
+}
 
 export function deviceChainId(): string {
   try {
@@ -100,6 +170,9 @@ export async function sealAuditLog(
     patch.set(e.id, { chainId, seq, prevHash, hash })
     prevHash = hash
   }
+  // `seq`/`prevHash` now hold the local chain tip (whether we just sealed
+  // new entries or only found an existing tip) — record it as the head.
+  if (seq > 0) recordHead(chainId, seq, prevHash)
   return patch
 }
 
@@ -124,6 +197,7 @@ export interface ChainReport {
 // link shows up as a problem naming the chain and sequence number.
 export async function verifyAuditChains(
   log: readonly AuditEntry[],
+  recordedHead: ChainHead | null = null,
 ): Promise<ChainReport> {
   const problems: ChainProblem[] = []
   const byChain = new Map<string, AuditEntry[]>()
@@ -183,6 +257,29 @@ export async function verifyAuditChains(
       }
       prevHash = e.hash ?? ''
       expectedSeq = (e.seq ?? expectedSeq) + 1
+    }
+  }
+
+  // Tail-truncation check. The link/hash/sequence checks above only see
+  // the entries present, so lopping the newest entries off a chain leaves
+  // a clean 1..k that would otherwise pass. The recorded head is this
+  // device's independent memory of how far its chain reached.
+  if (recordedHead && recordedHead.seq > 0) {
+    const entries = byChain.get(recordedHead.chainId) ?? []
+    const headEntry = entries.find((e) => e.seq === recordedHead.seq)
+    const maxSeq = entries.reduce((m, e) => Math.max(m, e.seq ?? 0), 0)
+    if (!headEntry) {
+      problems.push({
+        chainId: recordedHead.chainId,
+        seq: recordedHead.seq,
+        message: `This device sealed entries up to #${recordedHead.seq}, but the change log now stops at #${maxSeq} — the most recent entries appear to have been removed.`,
+      })
+    } else if ((headEntry.hash ?? '') !== recordedHead.hash) {
+      problems.push({
+        chainId: recordedHead.chainId,
+        seq: recordedHead.seq,
+        message: `The most recent sealed entry (#${recordedHead.seq}) does not match this device's record — the end of the chain was altered.`,
+      })
     }
   }
 

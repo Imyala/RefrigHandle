@@ -54,7 +54,7 @@ import {
   subscribeToState,
 } from './sync'
 import { mergeStates } from './merge'
-import { sealAuditLog } from './auditChain'
+import { rebaseChainHead, sealAuditLog } from './auditChain'
 import { profileFor } from './compliance'
 import { deviceTimeZone } from './datetime'
 import { useToast } from './toast'
@@ -1463,6 +1463,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     // cleared (and accountClosure gone) the gates fall back to the
     // first-run account-creation screen on the next render.
     setState(() => ({ ...EMPTY_STATE }))
+    // Clear the audit-chain high-water mark — a fresh install starts a
+    // new chain, so the old head must not flag the empty log as truncated.
+    rebaseChainHead(EMPTY_STATE.auditLog)
   }, [])
 
   const setLocation = useCallback(
@@ -1670,6 +1673,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     // the same normalization as a local load so an old backup can't
     // land with missing arrays.
     const next = normalizeState(nextRaw)
+    // Re-baseline the chain head to the restored file: we trust an imported
+    // backup wholesale, so its (possibly shorter) chain must not read as
+    // truncation. The 'import' entry added below is sealed afterwards and
+    // raises the head from this new baseline.
+    rebaseChainHead(next.auditLog)
     setState(() => ({
       ...next,
       // Import is only reachable from inside the app (past the gate). An
