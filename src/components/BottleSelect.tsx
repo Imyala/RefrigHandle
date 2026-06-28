@@ -3,7 +3,7 @@ import { Modal, Button } from './ui'
 import { ScanButton } from './ScanButton'
 import { useStore } from '../lib/store'
 import { useToast } from '../lib/toast'
-import { netWeight, statusLabel } from '../lib/types'
+import { netWeight, statusLabel, type Bottle } from '../lib/types'
 import { formatWeight } from '../lib/units'
 
 const triggerStyle =
@@ -18,6 +18,7 @@ export function BottleSelect({
   onAddNew,
   placeholder = 'Pick a bottle',
   modalTitle = 'Pick a bottle',
+  candidateFilter,
 }: {
   value: string
   onChange: (id: string) => void
@@ -27,12 +28,20 @@ export function BottleSelect({
   onAddNew?: () => void
   placeholder?: string
   modalTitle?: string
+  // Optional extra predicate to limit which bottles can be picked (e.g.
+  // a recovery source can't be a cylinder that's been returned to the
+  // supplier). The currently-selected bottle is always kept visible so a
+  // pre-existing pick never silently disappears.
+  candidateFilter?: (b: Bottle) => boolean
 }) {
   const { state } = useStore()
   const toast = useToast()
   const [open, setOpen] = useState(false)
 
-  const candidates = state.bottles.filter((b) => b.id !== excludeId)
+  const candidates = state.bottles.filter(
+    (b) =>
+      b.id !== excludeId && (b.id === value || !candidateFilter || candidateFilter(b)),
+  )
   const selected = state.bottles.find((b) => b.id === value)
 
   const display = selected

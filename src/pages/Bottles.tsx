@@ -570,6 +570,24 @@ export default function Bottles() {
                 })
               }
             }
+            // A manual change to the gross weight changes the bottle's
+            // contents with no charge/recover to explain it. Record a
+            // signed 'adjust' so the refrigerant ledger (and the audit
+            // trail) reflects the change instead of it happening silently.
+            // updateBottle below sets gross to the same value absolutely,
+            // so the delta is applied once, not twice. Tare-only edits
+            // (an empty-mass correction) aren't refrigerant and don't log.
+            const grossDelta =
+              Math.round(((data.grossWeight ?? editing.grossWeight) - editing.grossWeight) * 1000) / 1000
+            if (Math.abs(grossDelta) > 0.0005) {
+              addTransaction({
+                bottleId: editing.id,
+                kind: 'adjust',
+                amount: grossDelta,
+                date: new Date().toISOString(),
+                notes: 'Manual weight correction (bottle edit)',
+              })
+            }
             updateBottle(editing.id, data)
           }
           setEditing(null)
@@ -1145,16 +1163,22 @@ function QuickLogModal({
   // picked and the leak-test question answered Yes or No.
   const missingReason = showCompliance && !reason
   const missingLeakTest = showCompliance && leakTest === null
-  // Plausibility guard on charges — catches gross typos (e.g. 50 kg into
-  // a split). Uses the selected unit's kind + recorded charge when known.
+  // Plausibility guard on charges AND recoveries — catches gross typos
+  // (e.g. 50 kg into / out of a split). Uses the selected unit's kind +
+  // recorded charge when known (bottle-to-bottle has no unit, so it's a
+  // no-op there).
   const sanity =
-    kind === 'charge'
+    kind === 'charge' || kind === 'recover'
       ? chargeSanity(amountKg, {
           unitKind: selectedUnit?.kind,
           recordedChargeKg: selectedUnit?.refrigerantCharge,
         })
       : { level: 'ok' as const }
   const blockImplausible = sanity.level === 'block'
+  // No-op guard: a charge/recover of 0 would just litter the permanent
+  // log (rows are never hard-deleted).
+  const blockNoOp =
+    (kind === 'charge' || kind === 'recover') && amountKg <= 0.0005
   const submitBlocked =
     blockOverdraw ||
     blockSourceOverdraw ||
@@ -1162,6 +1186,7 @@ function QuickLogModal({
     missingReason ||
     missingLeakTest ||
     blockImplausible ||
+    blockNoOp ||
     scaleInvalid
 
   function handleUnitChange(value: string) {
@@ -1300,6 +1325,9 @@ function QuickLogModal({
                 onAddNew={() => setQuickAddBottleOpen(true)}
                 placeholder="Tap to pick a source bottle"
                 modalTitle="Pick source bottle"
+                // Can't recover out of a cylinder that's been returned to
+                // the supplier — it's no longer in our possession.
+                candidateFilter={(b) => b.status !== 'returned'}
               />
             </Field>
           )}
@@ -1683,11 +1711,13 @@ function QuickLogModal({
                   ? 'Amount exceeds bottle contents'
                   : blockImplausible
                     ? 'Amount looks wrong — check it'
-                    : missingReason
-                      ? 'Pick a reason'
-                      : missingLeakTest
-                        ? 'Answer leak test'
-                        : 'Save'}
+                    : blockNoOp
+                      ? 'Enter an amount'
+                      : missingReason
+                        ? 'Pick a reason'
+                        : missingLeakTest
+                          ? 'Answer leak test'
+                          : 'Save'}
           </Button>
           {/* Save, then immediately open the share sheet for the new
               record so the tech can drop it into a job card / email. */}
@@ -1779,17 +1809,20 @@ function BottleQuickAdd({
     tareKgPreview > 0 &&
     grossKgPreview > 0 &&
     tareKgPreview > grossKgPreview + 0.01
-  // Soft duplicate guard — two cylinders sharing a number makes the
-  // audit trail ambiguous. Warn (don't block): re-entering a previously
-  // returned cylinder under the same number can be legitimate.
-  const duplicateNumber = isDuplicateBottleNumber(
+  // Duplicate guards — two cylinders sharing a number makes the audit
+  // trail ambiguous. A duplicate of an ACTIVE bottle is blocked; a
+  // duplicate only of a returned cylinder is allowed (re-using its number
+  // is legitimate) but still warned.
+  const duplicateActive = isDuplicateActiveBottleNumber(
     state.bottles,
     bottleNumber,
   )
+  const duplicateNumber =
+    !duplicateActive && isDuplicateBottleNumber(state.bottles, bottleNumber)
 
   function submit(e: React.FormEvent) {
     e.preventDefault()
-    if (tareExceedsGross) return
+    if (tareExceedsGross || duplicateActive) return
     const tareKg = displayToKg(parseFloat(tare) || 0, displayUnit)
     const grossKg = displayToKg(parseFloat(gross) || 0, displayUnit)
     onCreate({
@@ -1822,11 +1855,19 @@ function BottleQuickAdd({
             />
           </div>
         </Field>
+        {duplicateActive && (
+          <div className="rounded-xl bg-red-50 p-3 text-sm text-red-900 dark:bg-red-900/20 dark:text-red-100">
+            ⛔ An in-service bottle numbered{' '}
+            <strong>{bottleNumber.trim()}</strong> already exists. Two active
+            cylinders can't share a number — it makes every scan and search
+            ambiguous. Use a different number, or return the existing one
+            first.
+          </div>
+        )}
         {duplicateNumber && (
           <div className="rounded-xl bg-amber-50 p-3 text-sm text-amber-900 dark:bg-amber-900/20 dark:text-amber-100">
-            ⚠ A bottle numbered <strong>{bottleNumber.trim()}</strong> already
-            exists. Two cylinders sharing a number makes the audit trail
-            ambiguous — double-check before saving.
+            ⚠ This number matches a cylinder that's been returned. Re-using it
+            is allowed, but double-check it's the right number.
           </div>
         )}
         <Field label="Refrigerant type">
@@ -1866,8 +1907,12 @@ function BottleQuickAdd({
         <p className="text-xs text-slate-500">
           For full details (notes, status, current site) edit the bottle from the Bottles tab after saving.
         </p>
-        <Button type="submit" full disabled={tareExceedsGross}>
-          {tareExceedsGross ? 'Tare exceeds gross' : 'Add bottle'}
+        <Button type="submit" full disabled={tareExceedsGross || duplicateActive}>
+          {tareExceedsGross
+            ? 'Tare exceeds gross'
+            : duplicateActive
+              ? 'Number already in use'
+              : 'Add bottle'}
         </Button>
       </form>
     </Modal>
@@ -2016,13 +2061,17 @@ function BottleForm({
   // be less than tare. Show an inline error and block save.
   const tareExceedsGross =
     tareKgEntered > 0 && grossKgEntered > 0 && tareKgEntered > grossKgEntered + 0.01
-  // Soft duplicate guard (see BottleQuickAdd) — excludes the bottle
-  // being edited so saving it under its own number doesn't warn.
-  const duplicateNumber = isDuplicateBottleNumber(
+  // Duplicate guards (see BottleQuickAdd) — exclude the bottle being
+  // edited so saving it under its own number doesn't flag. A clash with an
+  // ACTIVE bottle is blocked; one only with a returned cylinder is warned.
+  const duplicateActive = isDuplicateActiveBottleNumber(
     state.bottles,
     bottleNumber,
     bottle?.id,
   )
+  const duplicateNumber =
+    !duplicateActive &&
+    isDuplicateBottleNumber(state.bottles, bottleNumber, bottle?.id)
 
   // capacityWeight holds the stamped water capacity (W.C) in display units.
   // Safe fill = W.C × FR(refrigerant) is computed downstream (live check
@@ -2041,7 +2090,8 @@ function BottleForm({
   // ~0; here we block the user from manually marking a bottle empty
   // while the math says it has contents.
   const statusEmptyButHasContent = status === 'empty' && liveNet > 0.01
-  const submitBlocked = tareExceedsGross || statusEmptyButHasContent
+  const submitBlocked =
+    tareExceedsGross || statusEmptyButHasContent || duplicateActive
 
   // W.C is refrigerant-independent, so changing refrigerant doesn't touch
   // the field — the safe fill (W.C × FR) is recomputed live for the
@@ -2145,12 +2195,18 @@ function BottleForm({
             />
           </div>
         </Field>
+        {duplicateActive && (
+          <div className="rounded-xl bg-red-50 p-3 text-sm text-red-900 dark:bg-red-900/20 dark:text-red-100">
+            ⛔ Another in-service bottle is numbered{' '}
+            <strong>{bottleNumber.trim()}</strong>. Two active cylinders can't
+            share a number — it makes every scan and search ambiguous. Use a
+            different number, or return the existing one first.
+          </div>
+        )}
         {duplicateNumber && (
           <div className="rounded-xl bg-amber-50 p-3 text-sm text-amber-900 dark:bg-amber-900/20 dark:text-amber-100">
-            ⚠ Another bottle is already numbered{' '}
-            <strong>{bottleNumber.trim()}</strong>. Two cylinders sharing a
-            number makes the audit trail ambiguous — double-check before
-            saving.
+            ⚠ This number matches a cylinder that's been returned. Re-using it
+            is allowed, but double-check it's the right number.
           </div>
         )}
         <Field label="Bottle type">
@@ -2412,7 +2468,9 @@ function BottleForm({
               ? 'Tare exceeds gross'
               : statusEmptyButHasContent
                 ? 'Bottle isn’t empty'
-                : 'Save'}
+                : duplicateActive
+                  ? 'Number already in use'
+                  : 'Save'}
           </Button>
           {onDelete && (
             <Button type="button" variant="danger" onClick={onDelete}>
@@ -2457,6 +2515,26 @@ function isDuplicateBottleNumber(
   if (!n) return false
   return bottles.some(
     (b) => b.id !== excludeId && b.bottleNumber.trim().toLowerCase() === n,
+  )
+}
+
+// Stronger variant: a duplicate of an ACTIVE (not returned) cylinder. This
+// is the dangerous case — two in-service bottles sharing a number make
+// every scan / search / history lookup ambiguous, so it's blocked rather
+// than warned. Re-using the number of a cylinder that's been returned to
+// the supplier is still allowed (the old one has left our possession).
+function isDuplicateActiveBottleNumber(
+  bottles: readonly Bottle[],
+  bottleNumber: string,
+  excludeId?: string,
+): boolean {
+  const n = bottleNumber.trim().toLowerCase()
+  if (!n) return false
+  return bottles.some(
+    (b) =>
+      b.id !== excludeId &&
+      b.status !== 'returned' &&
+      b.bottleNumber.trim().toLowerCase() === n,
   )
 }
 

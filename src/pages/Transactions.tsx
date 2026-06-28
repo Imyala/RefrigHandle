@@ -819,16 +819,26 @@ function TransactionForm({
   const missingLeakTest = showCompliance && leakTest === null
   // A correction must say why the original was wrong.
   const missingCorrectionReason = !!correcting && !correctionReason.trim()
-  // Plausibility guard on charges — catches gross typos (e.g. 50 kg into
-  // a split). Uses the selected unit's kind + recorded charge when known.
+  // Plausibility guard on charges AND recoveries — catches gross typos
+  // (e.g. 50 kg into / out of a split). Recovery from one unit can't
+  // sensibly exceed the unit's charge by much, so the same thresholds
+  // apply. Uses the selected unit's kind + recorded charge when known.
   const sanity =
-    kind === 'charge'
+    kind === 'charge' || kind === 'recover'
       ? chargeSanity(amountKg, {
           unitKind: selectedUnit?.kind,
           recordedChargeKg: selectedUnit?.refrigerantCharge,
         })
       : { level: 'ok' as const }
   const blockImplausible = sanity.level === 'block'
+  // No-op guard: a charge/recover of 0, or an adjust that changes nothing,
+  // would just litter the permanent log (rows are never hard-deleted).
+  const blockNoOp =
+    kind === 'charge' || kind === 'recover'
+      ? amountKg <= 0.0005
+      : kind === 'adjust'
+        ? Math.abs(amountKg) <= 0.0005
+        : false
   const submitBlocked =
     blockOverdraw ||
     blockAlreadyReturned ||
@@ -836,6 +846,7 @@ function TransactionForm({
     missingLeakTest ||
     missingCorrectionReason ||
     blockImplausible ||
+    blockNoOp ||
     scaleInvalid
 
   // Resolve identity stamps from the picked profile (or the free-text
@@ -1476,15 +1487,19 @@ function TransactionForm({
                 ? 'Amount exceeds bottle contents'
                 : blockImplausible
                   ? 'Amount looks wrong — check it'
-                  : missingCorrectionReason
-                    ? 'Add a correction reason'
-                    : missingReason
-                      ? 'Pick a reason'
-                      : missingLeakTest
-                        ? 'Answer leak test'
-                        : correcting
-                          ? 'Log correction'
-                          : 'Save'}
+                  : blockNoOp
+                    ? kind === 'adjust'
+                      ? 'Enter a non-zero change'
+                      : 'Enter an amount'
+                    : missingCorrectionReason
+                      ? 'Add a correction reason'
+                      : missingReason
+                        ? 'Pick a reason'
+                        : missingLeakTest
+                          ? 'Answer leak test'
+                          : correcting
+                            ? 'Log correction'
+                            : 'Save'}
         </Button>
         {/* Save, then open the share sheet for the new record so it can go
             straight into a job card / email. */}
