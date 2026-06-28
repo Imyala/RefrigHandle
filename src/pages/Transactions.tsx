@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import {
   Button,
   Card,
@@ -313,6 +314,11 @@ export default function Transactions() {
         <EmptyState
           title="No bottles to log against"
           body="Add a bottle first, then come back to record charges, recoveries, transfers and returns."
+          action={
+            <Link to="/bottles">
+              <Button>+ Add a bottle</Button>
+            </Link>
+          }
         />
       ) : sorted.length === 0 ? (
         <EmptyState
