@@ -12,6 +12,7 @@ import {
 } from '../components/ui'
 import { Picker } from '../components/Picker'
 import { useStore } from '../lib/store'
+import { computeLog } from '../lib/logCalc'
 import {
   type Bottle,
   type BottleKind,
@@ -23,7 +24,6 @@ import {
   BOTTLE_KIND_LABELS,
   REFRIGERANT_TYPES,
   REASON_LABELS,
-  chargeSanity,
   fillingRatio,
   hydroStatusFor,
   netWeight,
@@ -1114,107 +1114,68 @@ function QuickLogModal({
   const enteredAmountDisplay = parseFloat(amount) || 0
   const amountKg = displayToKg(enteredAmountDisplay, unit)
   const enteredBottleDisplay = parseFloat(bottleAmount) || 0
-  // Scale mode: the typed reading is the bottle's new gross — the
-  // bottle-side delta is derived from it, and any gap between that and
-  // the equipment amount is recorded as loss automatically.
+  // Scale mode: the typed reading is the bottle's new gross.
   const scaleMode =
     entryMode === 'scale' && showAmount && !isBottleToBottleRecover
   const scaleReadingKg = displayToKg(parseFloat(newGross) || 0, unit)
-  const scaleDelta = scaleMode
-    ? scaleDeltaKg(kind, bottle.grossWeight, scaleReadingKg)
-    : 0
-  const scaleInvalid = scaleMode && (newGross === '' || scaleDelta <= 0)
-  const bottleAmountKg = scaleMode
-    ? Math.max(0, scaleDelta)
-    : showLoss && enteredBottleDisplay > 0
-      ? displayToKg(enteredBottleDisplay, unit)
-      : amountKg
-  const lossKg =
-    showLoss || scaleMode
-      ? kind === 'charge'
-        ? Math.max(0, bottleAmountKg - amountKg)
-        : kind === 'recover'
-          ? Math.max(0, amountKg - bottleAmountKg)
-          : 0
-      : 0
-  const projectedAfter =
-    kind === 'charge'
-      ? bottle.grossWeight - bottleAmountKg
-      : kind === 'recover'
-        ? bottle.grossWeight + bottleAmountKg
-        : bottle.grossWeight
-  const projectedNet = Math.max(0, projectedAfter - bottle.tareWeight)
-  // The destination ending over its safe-fill limit (warn-only, allowed
-  // past). Persisted on the row so the override is visible to a supervisor
-  // afterwards, not just as a transient banner at entry.
-  const projectedOverSafeFill =
-    showAmount && overfillKg(projectedNet, bottle.initialNetWeight) > 0
-  const projectedSourceAfter = sourceBottle
-    ? Math.max(0, sourceBottle.grossWeight - amountKg)
-    : 0
-  const projectedSourceNet = sourceBottle
-    ? Math.max(0, projectedSourceAfter - sourceBottle.tareWeight)
-    : 0
+  const selectedUnit = unitId
+    ? siteUnits.find((u) => u.id === unitId)
+    : undefined
 
-  // Physical-impossibility blocks. You can't take out what isn't there.
-  // Charges of equipment, and bottle-to-bottle recovers from a source,
-  // can't exceed the source bottle's current net refrigerant. Adjust is
-  // a manual correction — left unblocked. Over-fill on a destination
-  // recover is still allowed (just warned), per AS 2030.5 verification
-  // workflows where techs over-fill in practice.
-  const currentNet = netWeight(bottle)
-  const blockOverdraw =
-    kind === 'charge' && bottleAmountKg > currentNet + 0.01
-  const blockSourceOverdraw =
-    isBottleToBottleRecover &&
-    !!sourceBottle &&
-    amountKg > netWeight(sourceBottle) + 0.01
+  // Shared weight math + weight-based guards — identical logic to the full
+  // form on the Refrigerant log (see lib/logCalc). Includes the
+  // bottle-to-bottle source over-draw check when a source is picked.
+  const calc = computeLog({
+    kind,
+    bottleGross: bottle.grossWeight,
+    bottleTare: bottle.tareWeight,
+    bottleSafeFillCap: bottle.initialNetWeight,
+    amountKg,
+    enteredBottleKg: displayToKg(enteredBottleDisplay, unit),
+    scaleReadingKg,
+    scaleMode,
+    showAmount,
+    showLoss,
+    sourceGross: sourceBottle ? sourceBottle.grossWeight : null,
+    sourceTare: sourceBottle?.tareWeight ?? 0,
+    unitKind: selectedUnit?.kind,
+    recordedChargeKg: selectedUnit?.refrigerantCharge,
+  })
+  const {
+    scaleInvalid,
+    bottleAmountKg,
+    lossKg,
+    projectedAfter,
+    projectedNet,
+    projectedOverSafeFill,
+    projectedSourceNet,
+    blockOverdraw,
+    blockSourceOverdraw,
+    blockNoOp,
+    sanity,
+    blockImplausible,
+  } = calc
+  const currentNet = netWeight(bottle) // shown in the over-draw warning
+
   // Source-bottle refrigerant must match the destination — mixing is a
   // contamination event that ruins both bottles for reclamation. Warn
-  // strongly but don't auto-block; some techs may be intentionally
-  // consolidating into a "mixed waste" cylinder.
+  // strongly but don't auto-block (intentional "mixed waste" consolidation).
   const refrigerantMismatch =
     isBottleToBottleRecover &&
     !!sourceBottle &&
     sourceBottle.refrigerantType.toUpperCase() !==
       bottle.refrigerantType.toUpperCase()
-  // Bottle-vs-unit refrigerant mismatch — charging R410A into a unit
-  // labelled R32 (or vice-versa) is almost always a wrong-bottle mistake
-  // and the resulting blend can damage the equipment. Warn loudly but
-  // don't auto-block; the tech may be intentionally retrofitting.
-  const selectedUnit = unitId
-    ? siteUnits.find((u) => u.id === unitId)
-    : undefined
+  // Bottle-vs-unit refrigerant mismatch — wrong-bottle warning (not blocked).
   const unitRefrigerantMismatch =
     (kind === 'charge' || kind === 'recover') &&
     !!selectedUnit?.refrigerantType &&
     selectedUnit.refrigerantType.toUpperCase() !==
       bottle.refrigerantType.toUpperCase()
-  // A bottle that's already been returned can't be returned again. To
-  // log another return the tech needs to first put the bottle back into
-  // service (edit → status: in stock).
+  // Form-specific gates (the weight blocks live in computeLog above).
   const blockAlreadyReturned =
     kind === 'return' && bottle.status === 'returned'
-  // Audit-required fields on equipment work: Purpose/Reason must be
-  // picked and the leak-test question answered Yes or No.
   const missingReason = showCompliance && !reason
   const missingLeakTest = showCompliance && leakTest === null
-  // Plausibility guard on charges AND recoveries — catches gross typos
-  // (e.g. 50 kg into / out of a split). Uses the selected unit's kind +
-  // recorded charge when known (bottle-to-bottle has no unit, so it's a
-  // no-op there).
-  const sanity =
-    kind === 'charge' || kind === 'recover'
-      ? chargeSanity(amountKg, {
-          unitKind: selectedUnit?.kind,
-          recordedChargeKg: selectedUnit?.refrigerantCharge,
-        })
-      : { level: 'ok' as const }
-  const blockImplausible = sanity.level === 'block'
-  // No-op guard: a charge/recover of 0 would just litter the permanent
-  // log (rows are never hard-deleted).
-  const blockNoOp =
-    (kind === 'charge' || kind === 'recover') && amountKg <= 0.0005
   const submitBlocked =
     blockOverdraw ||
     blockSourceOverdraw ||

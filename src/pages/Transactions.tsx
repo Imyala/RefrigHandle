@@ -19,7 +19,6 @@ import {
   REASON_LABELS,
   canCorrectRecords,
   canDeleteRecords,
-  chargeSanity,
   netWeight,
   overfillKg,
   roleInfo,
@@ -27,6 +26,7 @@ import {
   siteLabel,
   transactionLabel,
 } from '../lib/types'
+import { computeLog } from '../lib/logCalc'
 import { useToast } from '../lib/toast'
 import { displayToKg, formatWeight, kgToDisplay } from '../lib/units'
 import { SiteForm, UnitForm } from './Sites'
@@ -750,71 +750,56 @@ function TransactionForm({
   const amountKg = displayToKg(enteredAmount, unit)
   const enteredBottle = parseFloat(bottleAmount) || 0
   // Scale mode (charge / recover / adjust): the typed reading is the
-  // bottle's new gross weight; the moved amount is derived from it. For
-  // charge/recover the derived delta is the bottle side, and any gap to
-  // the equipment amount is recorded as loss automatically. For adjust
-  // the signed delta IS the adjustment (stocktake weigh-in).
+  // bottle's new gross weight; the moved amount is derived from it.
   const scaleKinds =
     kind === 'charge' || kind === 'recover' || kind === 'adjust'
   const scaleMode = entryMode === 'scale' && scaleKinds && !!bottle
   const scaleReadingKg = displayToKg(parseFloat(newGross) || 0, unit)
-  const scaleDelta =
-    scaleMode && bottle ? scaleDeltaKg(kind, bottle.grossWeight, scaleReadingKg) : 0
-  const scaleInvalid =
-    scaleMode && (newGross === '' || (kind !== 'adjust' && scaleDelta <= 0))
-  const bottleAmountKg =
-    scaleMode && kind !== 'adjust'
-      ? Math.max(0, scaleDelta)
-      : showLoss && enteredBottle > 0
-        ? displayToKg(enteredBottle, unit)
-        : amountKg
-  const lossKg =
-    showLoss || scaleMode
-      ? kind === 'charge'
-        ? Math.max(0, bottleAmountKg - amountKg)
-        : kind === 'recover'
-          ? Math.max(0, amountKg - bottleAmountKg)
-          : 0
-      : 0
-  // Bottle-side effect of saving this entry. For a re-statement the
-  // original already moved refrigerant, so only the difference between
-  // the corrected and original bottle amounts hits the bottle (mirrors
-  // the store's addTransaction logic).
-  const restateOriginalBottleKg = restating
-    ? (correcting.bottleAmount ?? correcting.amount)
-    : 0
-  const bottleEffectKg = restating
-    ? bottleAmountKg - restateOriginalBottleKg
-    : bottleAmountKg
-  let projectedAfter = bottle?.grossWeight ?? 0
-  if (bottle) {
-    if (kind === 'charge') projectedAfter = bottle.grossWeight - bottleEffectKg
-    else if (kind === 'recover') projectedAfter = bottle.grossWeight + bottleEffectKg
-    else if (kind === 'adjust') projectedAfter = bottle.grossWeight + amountKg
-  }
 
   const showAmount = kind !== 'transfer' && kind !== 'return'
   const showSite = kind !== 'adjust'
   const showCompliance = kind === 'charge' || kind === 'recover'
   const supportsLoss = kind === 'charge' || kind === 'recover'
-  // Whether the projected move leaves the bottle over its safe-fill limit
-  // (warn-only, allowed past). Persisted on the row so the override shows
-  // up for a supervisor reviewing the log later, not just at entry.
-  const projectedOverSafeFill =
-    !!bottle &&
-    showAmount &&
-    overfillKg(
-      Math.max(0, projectedAfter - bottle.tareWeight),
-      bottle.initialNetWeight,
-    ) > 0
-
-  // Bottle-vs-unit refrigerant mismatch — charging R410A into a unit
-  // labelled R32 (or vice-versa) is almost always a wrong-bottle mistake
-  // and the resulting blend can damage the equipment. Warn loudly but
-  // don't auto-block; the tech may be intentionally retrofitting.
   const selectedUnit = unitId
     ? siteUnits.find((u) => u.id === unitId)
     : undefined
+
+  // Shared weight math + weight-based guards — identical logic to the quick
+  // log on the Bottles tab (see lib/logCalc). For a re-statement only the
+  // delta beyond the original bottle amount moves the bottle.
+  const calc = computeLog({
+    kind,
+    bottleGross: bottle ? bottle.grossWeight : null,
+    bottleTare: bottle?.tareWeight ?? 0,
+    bottleSafeFillCap: bottle?.initialNetWeight ?? 0,
+    amountKg,
+    enteredBottleKg: displayToKg(enteredBottle, unit),
+    scaleReadingKg,
+    scaleMode,
+    showAmount,
+    showLoss,
+    restateOriginalBottleKg: restating
+      ? (correcting.bottleAmount ?? correcting.amount)
+      : 0,
+    unitKind: selectedUnit?.kind,
+    recordedChargeKg: selectedUnit?.refrigerantCharge,
+  })
+  const {
+    scaleInvalid,
+    bottleAmountKg,
+    lossKg,
+    projectedAfter,
+    projectedOverSafeFill,
+    blockOverdraw,
+    blockNoOp,
+    sanity,
+    blockImplausible,
+  } = calc
+  const currentNet = bottle ? netWeight(bottle) : 0
+
+  // Bottle-vs-unit refrigerant mismatch — charging R410A into a unit
+  // labelled R32 (or vice-versa) is almost always a wrong-bottle mistake.
+  // Warn loudly but don't auto-block; the tech may be retrofitting.
   const unitRefrigerantMismatch =
     !!bottle &&
     (kind === 'charge' || kind === 'recover') &&
@@ -822,42 +807,12 @@ function TransactionForm({
     selectedUnit.refrigerantType.toUpperCase() !==
       bottle.refrigerantType.toUpperCase()
 
-  // Block over-draw on charge: can't take more refrigerant than the bottle
-  // currently holds. Adjust is a manual signed correction — left unblocked.
-  // Re-statements only draw the delta beyond what the original already took.
-  const currentNet = bottle ? netWeight(bottle) : 0
-  const blockOverdraw =
-    !!bottle && kind === 'charge' && bottleEffectKg > currentNet + 0.01
-  // Already-returned bottles can't be returned again — they need to be
-  // put back into service first.
+  // Form-specific gates (the weight-based blocks live in computeLog above).
   const blockAlreadyReturned =
     !!bottle && kind === 'return' && bottle.status === 'returned'
-  // Audit-required fields on equipment work: a Purpose/Reason must be
-  // picked, and the leak-test question must be answered Yes or No.
   const missingReason = showCompliance && !reason
   const missingLeakTest = showCompliance && leakTest === null
-  // A correction must say why the original was wrong.
   const missingCorrectionReason = !!correcting && !correctionReason.trim()
-  // Plausibility guard on charges AND recoveries — catches gross typos
-  // (e.g. 50 kg into / out of a split). Recovery from one unit can't
-  // sensibly exceed the unit's charge by much, so the same thresholds
-  // apply. Uses the selected unit's kind + recorded charge when known.
-  const sanity =
-    kind === 'charge' || kind === 'recover'
-      ? chargeSanity(amountKg, {
-          unitKind: selectedUnit?.kind,
-          recordedChargeKg: selectedUnit?.refrigerantCharge,
-        })
-      : { level: 'ok' as const }
-  const blockImplausible = sanity.level === 'block'
-  // No-op guard: a charge/recover of 0, or an adjust that changes nothing,
-  // would just litter the permanent log (rows are never hard-deleted).
-  const blockNoOp =
-    kind === 'charge' || kind === 'recover'
-      ? amountKg <= 0.0005
-      : kind === 'adjust'
-        ? Math.abs(amountKg) <= 0.0005
-        : false
   const submitBlocked =
     blockOverdraw ||
     blockAlreadyReturned ||
