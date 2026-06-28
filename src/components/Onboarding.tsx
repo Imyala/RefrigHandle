@@ -78,12 +78,15 @@ const ONBOARDING_POLICIES: readonly PolicyEntry[] = [
 // device ever sees the screen.
 export function OnboardingGate({ children }: { children: ReactNode }) {
   const { state } = useStore()
-  if (isSetupComplete(state)) return <>{children}</>
+  // Full setup OR "explore with sample data" mode both open the app. Demo
+  // mode runs on seeded sample data behind a persistent banner (see
+  // DemoBanner) until the user commits to real setup.
+  if (isSetupComplete(state) || state.demoStartedAt) return <>{children}</>
   return <OnboardingScreen />
 }
 
 function OnboardingScreen() {
-  const { completeSetup } = useStore()
+  const { completeSetup, startDemo } = useStore()
   const toast = useToast()
 
   // Australia-only product: the jurisdiction is fixed to AU rather than
@@ -619,6 +622,22 @@ function OnboardingScreen() {
               <span className="font-medium">{missing.join(', ')}</span>.
             </p>
           )}
+          {/* Try-before-you-set-up: open the app on sample data so a new
+              user can log a charge and see the compliance scorecard before
+              entering their real business and licence details. */}
+          <div className="mt-2 flex flex-col items-center gap-0.5">
+            <button
+              type="button"
+              onClick={() => startDemo()}
+              disabled={busy}
+              className="text-sm font-medium text-brand-600 hover:underline disabled:opacity-50 dark:text-brand-400"
+            >
+              Just exploring? Try it with sample data →
+            </button>
+            <span className="text-[11px] text-slate-400">
+              No details needed. Nothing is saved as a real record.
+            </span>
+          </div>
         </div>
       </div>
     </div>

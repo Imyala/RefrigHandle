@@ -207,8 +207,12 @@ function normalize(parsed: LegacyState): AppState {
     (parsed.auditLog?.length ?? 0) > 0 ||
     (parsed.businessName ?? '').trim() !== '' ||
     (parsed.arcAuthorisationNumber ?? '').trim() !== ''
+  // ...except an "explore with sample data" session: its seeded bottles
+  // etc. look like prior use, but it must stay in demo mode (unstamped)
+  // until the user does the real setup, which is what sets setupCompletedAt.
   const setupCompletedAt =
-    parsed.setupCompletedAt ?? (hasPriorUse ? new Date().toISOString() : undefined)
+    parsed.setupCompletedAt ??
+    (hasPriorUse && !parsed.demoStartedAt ? new Date().toISOString() : undefined)
 
   return {
     ...EMPTY_STATE,

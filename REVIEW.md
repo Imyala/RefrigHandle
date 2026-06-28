@@ -38,6 +38,20 @@ linted, with the full test suite passing and a clean production build):
 - **U7** — Signature pad survives device rotation.
 - **L1 / L7** — Real maskable PWA icon; clearer `RefrigHandle` short_name.
 
+**New features built for the conference:**
+
+- **Compliance health** — an at-a-glance traffic-light scorecard at the top
+  of the home screen, rolling technician licences, the business RTA,
+  cylinder testing (AS 2030) and backups into one green/amber/red view that
+  deep-links to each fix. (Dashboard also de-cluttered: this is now the
+  single compliance surface on home; the detailed alerts live on the Log
+  page.)
+- **Explore-with-sample-data onboarding** — a new user (or a stage demo) can
+  open the app on seeded sample data and try logging immediately, behind a
+  persistent "sample data" banner, *before* filling in business/licence
+  details. "Set up my business" clears the sample data and starts real
+  setup.
+
 **One finding was withdrawn on inspection (C3, bottle-to-bottle inventory):**
 the source/destination asymmetry is *correct* — it captures hose/decant
 loss, which legitimately reduces total inventory.

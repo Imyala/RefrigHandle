@@ -873,6 +873,13 @@ export interface AppState {
   // blocks everything else. Existing installs are grandfathered in
   // `normalize()` so an upgrade never locks a returning user out.
   setupCompletedAt?: string
+  // Set when the user chose "Explore with sample data" instead of doing the
+  // full compliance setup first. While set (and setup not yet complete) the
+  // app is fully usable on seeded SAMPLE data, behind a persistent banner —
+  // so a new user (or a demo on stage) can try logging before filling in
+  // business/licence details. Leaving demo wipes the sample data and returns
+  // to the setup screen. Never set once setup is complete.
+  demoStartedAt?: string
   // When the Terms & disclaimer were accepted, and which version. Onboarding
   // requires the tick to finish; a later TERMS_VERSION bump re-prompts.
   termsAcceptedAt?: string
@@ -918,6 +925,7 @@ export const EMPTY_STATE: AppState = {
   clock: '24h',
   sync: { enabled: false, teamId: '' },
   setupCompletedAt: undefined,
+  demoStartedAt: undefined,
   tombstones: [],
   settingsUpdatedAt: undefined,
   dataResetAt: undefined,

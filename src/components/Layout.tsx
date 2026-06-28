@@ -1,6 +1,8 @@
 import { NavLink, Outlet } from 'react-router-dom'
 import type { ReactNode } from 'react'
 import { useDevicePrefs } from '../lib/devicePrefs'
+import { useStore } from '../lib/store'
+import { useConfirm } from '../lib/confirm'
 
 // Bottom tab bar — "floating centre button" layout. Bottles is the core
 // entity, so it's promoted to a raised circular button in the middle,
@@ -74,6 +76,8 @@ export function Layout() {
         </div>
       </header>
 
+      <DemoBanner />
+
       <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-4 pb-28">
         <Outlet />
       </main>
@@ -129,6 +133,43 @@ export function Layout() {
           <TabLink to="/settings" label="Settings" icon={<SettingsIcon />} />
         </div>
       </nav>
+    </div>
+  )
+}
+
+// Persistent strip shown while exploring on sample data. Makes the demo
+// state unmistakable and offers the one-tap path to real setup (which wipes
+// the sample data). Renders nothing outside demo mode.
+function DemoBanner() {
+  const { state, exitDemo } = useStore()
+  const confirm = useConfirm()
+  if (!state.demoStartedAt || state.setupCompletedAt) return null
+
+  async function setUp() {
+    const ok = await confirm({
+      title: 'Set up your business?',
+      message:
+        'This clears the sample data and starts your real setup, where you enter your business, licence and authorisation details. Nothing from the demo is kept.',
+      confirmLabel: 'Clear sample data & set up',
+    })
+    if (ok) exitDemo()
+  }
+
+  return (
+    <div className="border-b border-amber-300 bg-amber-50 dark:border-amber-900/50 dark:bg-amber-900/20">
+      <div className="mx-auto flex max-w-3xl items-center justify-between gap-3 px-4 py-2">
+        <p className="text-xs text-amber-900 dark:text-amber-100">
+          <span className="font-semibold">Exploring with sample data.</span>{' '}
+          Nothing here is a real record.
+        </p>
+        <button
+          type="button"
+          onClick={() => void setUp()}
+          className="shrink-0 rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-amber-700"
+        >
+          Set up my business
+        </button>
+      </div>
     </div>
   )
 }

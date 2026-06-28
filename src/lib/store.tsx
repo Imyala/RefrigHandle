@@ -55,6 +55,7 @@ import {
 } from './sync'
 import { mergeStates } from './merge'
 import { rebaseChainHead, sealAuditLog } from './auditChain'
+import { buildDemoState } from './demo'
 import { profileFor } from './compliance'
 import { deviceTimeZone } from './datetime'
 import { useToast } from './toast'
@@ -168,6 +169,11 @@ interface StoreApi {
   // account doesn't linger on screen — the business has already been
   // handed its records ZIP at closure time.
   resetToFreshInstall: () => void
+  // Enter "explore with sample data" mode: seed fictional bottles/sites/
+  // units/transactions and open the app without full setup. Leaving demo
+  // (exitDemo) wipes that sample data and returns to the setup screen.
+  startDemo: () => void
+  exitDemo: () => void
   // Re-accept the Terms after a version bump (see TermsGate).
   acceptTerms: () => void
   setLocation: (l: LocationSettings) => void
@@ -1473,6 +1479,22 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     rebaseChainHead(EMPTY_STATE.auditLog)
   }, [])
 
+  const startDemo: StoreApi['startDemo'] = useCallback(() => {
+    const now = new Date().toISOString()
+    setState(() => ({
+      ...EMPTY_STATE,
+      ...buildDemoState(now),
+      demoStartedAt: now,
+    }))
+  }, [])
+
+  const exitDemo: StoreApi['exitDemo'] = useCallback(() => {
+    // Leaving demo discards the sample data and returns to the setup
+    // screen (setupCompletedAt stays unset, demoStartedAt cleared).
+    setState(() => ({ ...EMPTY_STATE }))
+    rebaseChainHead(EMPTY_STATE.auditLog)
+  }, [])
+
   const setLocation = useCallback(
     (location: LocationSettings) =>
       setState((s) => {
@@ -1736,6 +1758,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setBusinessAbn,
       requestAccountClosure,
       resetToFreshInstall,
+      startDemo,
+      exitDemo,
       acceptTerms,
       setLocation,
       setUnit,
@@ -1783,6 +1807,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setBusinessAbn,
       requestAccountClosure,
       resetToFreshInstall,
+      startDemo,
+      exitDemo,
       acceptTerms,
       setLocation,
       setUnit,
