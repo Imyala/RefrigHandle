@@ -143,25 +143,54 @@ function SignatureCapture({
   const drawingRef = useRef(false)
   const [hasInk, setHasInk] = useState(false)
 
-  // Size the bitmap to the rendered box (device pixels) once mounted.
-  // White background so the PNG stays legible in dark mode, in print
-  // and in exports.
+  // Size the bitmap to the rendered box (device pixels), and KEEP it sized
+  // as the box changes — a phone rotated to landscape to sign, or a
+  // keyboard opening, resizes the canvas; sizing only once on mount left
+  // the bitmap mismatched with the box so strokes landed offset. A
+  // ResizeObserver re-fits on every change and re-paints existing ink so a
+  // half-finished signature survives the rotation. White background so the
+  // PNG stays legible in dark mode, in print and in exports.
   useEffect(() => {
     const canvas = canvasRef.current
     if (!canvas) return
-    const dpr = window.devicePixelRatio || 1
-    const rect = canvas.getBoundingClientRect()
-    canvas.width = Math.max(1, Math.round(rect.width * dpr))
-    canvas.height = Math.max(1, Math.round(rect.height * dpr))
-    const ctx = canvas.getContext('2d')
-    if (!ctx) return
-    ctx.scale(dpr, dpr)
-    ctx.fillStyle = '#ffffff'
-    ctx.fillRect(0, 0, rect.width, rect.height)
-    ctx.strokeStyle = '#1e293b'
-    ctx.lineWidth = 2.5
-    ctx.lineCap = 'round'
-    ctx.lineJoin = 'round'
+
+    const fit = (preserveInk: boolean) => {
+      const dpr = window.devicePixelRatio || 1
+      const rect = canvas.getBoundingClientRect()
+      if (rect.width === 0 || rect.height === 0) return
+      const w = Math.max(1, Math.round(rect.width * dpr))
+      const h = Math.max(1, Math.round(rect.height * dpr))
+      if (canvas.width === w && canvas.height === h) return // no real change
+
+      // Snapshot current ink before the resize wipes the bitmap.
+      let prev: HTMLCanvasElement | null = null
+      if (preserveInk && canvas.width > 0 && canvas.height > 0) {
+        prev = document.createElement('canvas')
+        prev.width = canvas.width
+        prev.height = canvas.height
+        prev.getContext('2d')?.drawImage(canvas, 0, 0)
+      }
+
+      canvas.width = w
+      canvas.height = h
+      const ctx = canvas.getContext('2d')
+      if (!ctx) return
+      ctx.scale(dpr, dpr)
+      ctx.fillStyle = '#ffffff'
+      ctx.fillRect(0, 0, rect.width, rect.height)
+      ctx.strokeStyle = '#1e293b'
+      ctx.lineWidth = 2.5
+      ctx.lineCap = 'round'
+      ctx.lineJoin = 'round'
+      if (prev) {
+        ctx.drawImage(prev, 0, 0, prev.width, prev.height, 0, 0, rect.width, rect.height)
+      }
+    }
+
+    fit(false)
+    const ro = new ResizeObserver(() => fit(true))
+    ro.observe(canvas)
+    return () => ro.disconnect()
   }, [])
 
   function pos(e: React.PointerEvent<HTMLCanvasElement>) {

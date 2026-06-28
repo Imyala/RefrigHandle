@@ -426,8 +426,12 @@ function SiteDetail({
   const [decommissionTarget, setDecommissionTarget] = useState<Unit | null>(null)
   const [showDecommissioned, setShowDecommissioned] = useState(false)
   const [logbookUnit, setLogbookUnit] = useState<Unit | null>(null)
-  const [bottlesOpen, setBottlesOpen] = useState(false)
-  const [unitsOpen, setUnitsOpen] = useState(false)
+  // Default these open: once a site is expanded, the tech almost always
+  // wants its equipment/bottles right there (to open a unit's logbook or
+  // log against it). Starting collapsed buried the most common action two
+  // taps deep. Either can still be collapsed on a long site.
+  const [bottlesOpen, setBottlesOpen] = useState(true)
+  const [unitsOpen, setUnitsOpen] = useState(true)
   const [auditScope, setAuditScope] = useState<'site' | 'bottles' | null>(null)
 
   const siteId = site?.id ?? ''
