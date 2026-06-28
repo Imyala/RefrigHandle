@@ -131,12 +131,19 @@ export default function Bottles() {
       /* ignore quota / privacy-mode errors */
     }
   }, [grouping])
-  // Track which groups are EXPANDED (default: none) so the list opens
-  // fully collapsed and a long inventory doesn't overwhelm the screen —
-  // the tech taps a heading to reveal that group. Persisted in
-  // localStorage so the collapsed/expanded layout the tech leaves behind
-  // is exactly what they come back to — across page navigation and app
-  // restarts, not just the current tab.
+  // Track which groups are EXPANDED. A returning tech gets exactly the
+  // collapsed/expanded layout they left; a first-time visitor with no saved
+  // layout shouldn't land on a wall of collapsed headings hiding every
+  // cylinder, so a small inventory opens all groups by default until they
+  // touch a heading. `hadSavedLayout` (read once) tells the two apart; we
+  // only persist after a real interaction so the default isn't frozen in.
+  const hadSavedLayout = useMemo(() => {
+    try {
+      return localStorage.getItem('bottles.expandedGroups') != null
+    } catch {
+      return false
+    }
+  }, [])
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(() => {
     try {
       const saved = localStorage.getItem('bottles.expandedGroups')
@@ -146,7 +153,12 @@ export default function Bottles() {
     }
     return new Set()
   })
+  // Flips true the first time the tech expands/collapses a group. Until
+  // then a fresh install shows the auto-open default; after, their exact
+  // layout is what's saved and restored.
+  const [groupsTouched, setGroupsTouched] = useState(false)
   useEffect(() => {
+    if (!groupsTouched) return
     try {
       localStorage.setItem(
         'bottles.expandedGroups',
@@ -155,15 +167,7 @@ export default function Bottles() {
     } catch {
       /* ignore quota / privacy-mode errors */
     }
-  }, [expandedGroups])
-  function toggleGroup(key: string) {
-    setExpandedGroups((prev) => {
-      const next = new Set(prev)
-      if (next.has(key)) next.delete(key)
-      else next.add(key)
-      return next
-    })
-  }
+  }, [expandedGroups, groupsTouched])
 
   // Action sheet — primary tap target
   // Track by id so the action sheet always reflects the latest bottle state
@@ -258,6 +262,28 @@ export default function Bottles() {
     })
     return arr
   }, [grouping, visible, sites])
+
+  // First-visit default: with no saved layout, a small inventory shows
+  // every group open so cylinders are visible immediately rather than
+  // hidden behind collapsed headings. A large inventory stays collapsed
+  // (tidier — the original intent). Once the tech touches a heading their
+  // own layout takes over.
+  const autoOpenAll =
+    !hadSavedLayout && !groupsTouched && visible.length <= 25
+  const isGroupOpen = (key: string) =>
+    autoOpenAll || expandedGroups.has(key)
+  function toggleGroup(key: string) {
+    setExpandedGroups((prev) => {
+      // On the first toggle while everything was open-by-default,
+      // materialise that full set so collapsing one keeps the rest open.
+      const base =
+        autoOpenAll && groups ? new Set(groups.map((g) => g.key)) : new Set(prev)
+      if (base.has(key)) base.delete(key)
+      else base.add(key)
+      return base
+    })
+    setGroupsTouched(true)
+  }
 
   const renderBottle = (b: Bottle) => {
     const site = sites.find((j) => j.id === b.currentSiteId)
@@ -465,7 +491,7 @@ export default function Bottles() {
       ) : groups ? (
         <div className="space-y-3">
           {groups.map((g) => {
-            const isOpen = expandedGroups.has(g.key)
+            const isOpen = isGroupOpen(g.key)
             return (
               <div key={g.key}>
                 <BottleGroupHeader
