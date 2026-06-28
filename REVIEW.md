@@ -51,6 +51,16 @@ linted, with the full test suite passing and a clean production build):
   persistent "sample data" banner, *before* filling in business/licence
   details. "Set up my business" clears the sample data and starts real
   setup.
+- **Auditor PDF + integrity stamp** — every printable record (quarterly,
+  equipment logbook, site audit) now carries a self-attesting "Change log
+  verified — no tampering detected, N entries sealed" badge, and a print bug
+  that produced duplicated multi-page PDFs is fixed (now a clean single page).
+- **Store-level test suite** — the trust-critical mutations in `store.tsx`
+  (weight math, corrections, bottle-to-bottle, soft-delete/restore) are now
+  covered by tests driving the real provider (145 tests passing).
+- **First-run polish** — Bottles list auto-opens groups for a small
+  inventory; the empty Log state has an actionable CTA; dark mode + empty
+  states reviewed across the app.
 
 **One finding was withdrawn on inspection (C3, bottle-to-bottle inventory):**
 the source/destination asymmetry is *correct* — it captures hose/decant
