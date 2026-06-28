@@ -4,6 +4,7 @@ import { Button, Card } from '../components/ui'
 import { CollapsibleSection } from '../components/CollapsibleSection'
 import { ShareTxButton } from '../components/ShareSheet'
 import { Alerts } from '../components/Alerts'
+import { ComplianceHealth } from '../components/ComplianceHealth'
 import { useStore } from '../lib/store'
 import {
   REASON_LABELS,
@@ -80,6 +81,8 @@ export default function Dashboard() {
           )}
         </div>
       </Card>
+
+      <ComplianceHealth />
 
       <Alerts />
 
