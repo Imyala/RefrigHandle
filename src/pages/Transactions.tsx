@@ -232,6 +232,19 @@ export default function Transactions() {
         </div>
       </div>
 
+      {/* Disambiguate the two "logs" and give the audit trail a way in from
+          here — it otherwise only lives in Settings. */}
+      <p className="-mt-1 text-xs text-slate-500">
+        Refrigerant movements — charges, recoveries, transfers, returns.
+        Looking for who changed what?{' '}
+        <Link
+          to="/history"
+          className="font-medium text-brand-600 hover:underline"
+        >
+          Change log (audit trail) →
+        </Link>
+      </p>
+
       <Alerts />
 
       {transactions.length > 0 && (
