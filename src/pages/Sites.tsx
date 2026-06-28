@@ -1613,11 +1613,14 @@ function UnitLogbook({
               label="Factory charge"
               v={
                 unit.refrigerantCharge
-                  ? `${unit.refrigerantCharge.toFixed(3)} kg`
+                  ? formatWeight(unit.refrigerantCharge, state.unit, 3)
                   : '—'
               }
             />
-            <Kv label="GWP (AR4, 100yr)" v={gwp != null ? String(gwp) : '—'} />
+            <Kv
+              label="GWP (100-yr, IPCC AR4/AR5)"
+              v={gwp != null ? String(gwp) : '—'}
+            />
             <Kv
               label="Charge CO₂-e"
               v={tCO2e != null ? `${tCO2e.toFixed(3)} t` : '—'}
@@ -1632,20 +1635,26 @@ function UnitLogbook({
           <div className="mt-1 grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
             <Kv
               label="Top-ups (excl. install)"
-              v={`${leak.topUpKg.toFixed(3)} kg${
+              v={`${formatWeight(leak.topUpKg, state.unit, 3)}${
                 unit.refrigerantCharge
                   ? ` (${(leak.fraction * 100).toFixed(1)}% of charge)`
                   : ''
               }`}
             />
             <Kv label="Leak status" v={leakLevelLabel(leak.level)} />
-            <Kv label="Total charged (lifetime)" v={`${totalCharged.toFixed(3)} kg`} />
+            <Kv
+              label="Total charged (lifetime)"
+              v={formatWeight(totalCharged, state.unit, 3)}
+            />
             <Kv
               label="Total recovered (lifetime)"
-              v={`${totalRecovered.toFixed(3)} kg`}
+              v={formatWeight(totalRecovered, state.unit, 3)}
             />
             {totalLoss > 0 && (
-              <Kv label="Total loss (lifetime)" v={`${totalLoss.toFixed(3)} kg`} />
+              <Kv
+                label="Total loss (lifetime)"
+                v={formatWeight(totalLoss, state.unit, 3)}
+              />
             )}
           </div>
         </section>
@@ -1665,9 +1674,9 @@ function UnitLogbook({
                   <tr>
                     <th className="py-1 pr-2">Date</th>
                     <th className="py-1 pr-2">Type</th>
-                    <th className="py-1 pr-2 text-right">Equip kg</th>
-                    <th className="py-1 pr-2 text-right">Bottle kg</th>
-                    <th className="py-1 pr-2 text-right">Loss kg</th>
+                    <th className="py-1 pr-2 text-right">Equip {state.unit}</th>
+                    <th className="py-1 pr-2 text-right">Bottle {state.unit}</th>
+                    <th className="py-1 pr-2 text-right">Loss {state.unit}</th>
                     <th className="py-1 pr-2">Reason</th>
                     <th className="py-1 pr-2">Leak test</th>
                     <th className="py-1 pr-2">Operator</th>
@@ -1790,13 +1799,13 @@ function LogbookRow({
         )}
       </td>
       <td className="py-1 pr-2 text-right tabular-nums">
-        {equipKg ? equipKg.toFixed(3) : ''}
+        {equipKg ? kgToDisplay(equipKg, state.unit).toFixed(3) : ''}
       </td>
       <td className="py-1 pr-2 text-right tabular-nums">
-        {bottleKg ? bottleKg.toFixed(3) : ''}
+        {bottleKg ? kgToDisplay(bottleKg, state.unit).toFixed(3) : ''}
       </td>
       <td className="py-1 pr-2 text-right tabular-nums">
-        {loss > 0 ? loss.toFixed(3) : ''}
+        {loss > 0 ? kgToDisplay(loss, state.unit).toFixed(3) : ''}
       </td>
       <td className="py-1 pr-2">{t.reason ?? ''}</td>
       <td className="py-1 pr-2">
@@ -1866,6 +1875,11 @@ function SiteAuditModal({
 }) {
   const { state } = useStore()
   const profile = profileFor(state.jurisdiction)
+  // Printed audit honours the business's weight-unit setting (kg/lb), like
+  // the rest of the app — `wu` is the unit label, `d3` converts a stored
+  // kg value to the display unit at 3-dp.
+  const wu = state.unit
+  const d3 = (kg: number) => kgToDisplay(kg, wu).toFixed(3)
 
   const bottles = useMemo(
     () =>
@@ -1981,7 +1995,7 @@ function SiteAuditModal({
             <Kv label="Bottles on site" v={String(bottles.length)} />
             <Kv
               label="Refrigerant on site"
-              v={`${totalOnSiteNet.toFixed(3)} kg`}
+              v={formatWeight(totalOnSiteNet, wu, 3)}
             />
           </div>
         </section>
@@ -2001,11 +2015,11 @@ function SiteAuditModal({
                   <tr>
                     <th className="py-1 pr-2">Bottle</th>
                     <th className="py-1 pr-2">Refrigerant</th>
-                    <th className="py-1 pr-2 text-right">Tare kg</th>
-                    <th className="py-1 pr-2 text-right">Gross kg</th>
-                    <th className="py-1 pr-2 text-right">Net kg</th>
-                    <th className="py-1 pr-2 text-right">Safe fill kg</th>
-                    <th className="py-1 pr-2 text-right">Full kg</th>
+                    <th className="py-1 pr-2 text-right">Tare {wu}</th>
+                    <th className="py-1 pr-2 text-right">Gross {wu}</th>
+                    <th className="py-1 pr-2 text-right">Net {wu}</th>
+                    <th className="py-1 pr-2 text-right">Safe fill {wu}</th>
+                    <th className="py-1 pr-2 text-right">Full {wu}</th>
                     <th className="py-1 pr-2">Status</th>
                     <th className="py-1">Next test</th>
                   </tr>
@@ -2019,21 +2033,22 @@ function SiteAuditModal({
                       <td className="py-1 pr-2">{b.bottleNumber}</td>
                       <td className="py-1 pr-2">{b.refrigerantType}</td>
                       <td className="py-1 pr-2 text-right tabular-nums">
-                        {b.tareWeight.toFixed(3)}
+                        {d3(b.tareWeight)}
                       </td>
                       <td className="py-1 pr-2 text-right tabular-nums">
-                        {b.grossWeight.toFixed(3)}
+                        {d3(b.grossWeight)}
                       </td>
                       <td className="py-1 pr-2 text-right tabular-nums">
-                        {netWeight(b).toFixed(3)}
+                        {d3(netWeight(b))}
                       </td>
                       <td className="py-1 pr-2 text-right tabular-nums">
-                        {b.initialNetWeight > 0
-                          ? b.initialNetWeight.toFixed(3)
-                          : '—'}
+                        {b.initialNetWeight > 0 ? d3(b.initialNetWeight) : '—'}
                       </td>
                       <td className="py-1 pr-2 text-right tabular-nums">
-                        {totalSafeWeight(b)?.toFixed(3) ?? '—'}
+                        {(() => {
+                          const sw = totalSafeWeight(b)
+                          return sw != null ? d3(sw) : '—'
+                        })()}
                       </td>
                       <td className="py-1 pr-2">{statusLabel(b.status)}</td>
                       <td className="py-1 whitespace-nowrap">
@@ -2064,7 +2079,7 @@ function SiteAuditModal({
                       <th className="py-1 pr-2">Unit</th>
                       <th className="py-1 pr-2">Type</th>
                       <th className="py-1 pr-2">Refrigerant</th>
-                      <th className="py-1 pr-2 text-right">Charge kg</th>
+                      <th className="py-1 pr-2 text-right">Charge {wu}</th>
                       <th className="py-1">Leak status</th>
                     </tr>
                   </thead>
@@ -2095,7 +2110,7 @@ function SiteAuditModal({
                           </td>
                           <td className="py-1 pr-2 text-right tabular-nums">
                             {u.refrigerantCharge
-                              ? u.refrigerantCharge.toFixed(3)
+                              ? d3(u.refrigerantCharge)
                               : '—'}
                           </td>
                           <td className="py-1">{leakLevelLabel(leak.level)}</td>
@@ -2128,8 +2143,8 @@ function SiteAuditModal({
                     <th className="py-1 pr-2">Type</th>
                     <th className="py-1 pr-2">Bottle</th>
                     <th className="py-1 pr-2">Equipment</th>
-                    <th className="py-1 pr-2 text-right">Refrig kg</th>
-                    <th className="py-1 pr-2 text-right">Loss kg</th>
+                    <th className="py-1 pr-2 text-right">Refrig {wu}</th>
+                    <th className="py-1 pr-2 text-right">Loss {wu}</th>
                     <th className="py-1 pr-2">Reason</th>
                     <th className="py-1 pr-2">Leak test</th>
                     <th className="py-1">Operator</th>
@@ -2155,8 +2170,8 @@ function SiteAuditModal({
           </p>
           {(totalCharged > 0 || totalRecovered > 0) && (
             <p className="mt-2">
-              Lifetime at this site — charged {totalCharged.toFixed(3)} kg,
-              recovered {totalRecovered.toFixed(3)} kg.
+              Lifetime at this site — charged {formatWeight(totalCharged, wu, 3)},
+              recovered {formatWeight(totalRecovered, wu, 3)}.
             </p>
           )}
           <p className="mt-2">Generated {generatedAt}.</p>
@@ -2208,10 +2223,10 @@ function AuditTxRow({
       <td className="py-1 pr-2">{bottle ? bottle.bottleNumber : '—'}</td>
       <td className="py-1 pr-2">{unit?.name ?? t.unitName ?? t.equipment ?? '—'}</td>
       <td className="py-1 pr-2 text-right tabular-nums">
-        {refrigKg ? refrigKg.toFixed(3) : ''}
+        {refrigKg ? kgToDisplay(refrigKg, state.unit).toFixed(3) : ''}
       </td>
       <td className="py-1 pr-2 text-right tabular-nums">
-        {loss > 0 ? loss.toFixed(3) : ''}
+        {loss > 0 ? kgToDisplay(loss, state.unit).toFixed(3) : ''}
       </td>
       <td className="py-1 pr-2">{t.reason ? REASON_LABELS[t.reason] : ''}</td>
       <td className="py-1 pr-2">
