@@ -890,15 +890,39 @@ export interface AppState {
   // Deletion markers consumed by the sync merge — see Tombstone.
   tombstones: Tombstone[]
   // When the scalar settings block (business identity, location, units,
-  // theme…) was last changed. The merge takes the whole block from
-  // whichever side is newer.
+  // theme…) was last changed. A coarse fallback for the merge when the
+  // per-field stamps below are absent (older states).
   settingsUpdatedAt?: string
+  // Per-field last-changed timestamps for the synced settings (keyed by
+  // field name, e.g. 'businessName', 'location'). Lets the sync merge
+  // resolve each settings field independently — two devices editing
+  // DIFFERENT fields offline no longer clobber each other (the old
+  // whole-block last-write-wins dropped the older device's edit). Missing
+  // keys fall back to settingsUpdatedAt. See lib/merge.ts.
+  settingsFieldsUpdatedAt?: Record<string, string>
   // Stamped by "Erase all data" and by a backup import. During a merge,
   // records that exist only on the OTHER side and predate this moment
   // were erased here on purpose — they stay erased instead of being
   // resurrected by the union.
   dataResetAt?: string
 }
+
+// The scalar settings fields that sync between devices and are resolved
+// per-field by the merge (see settingsFieldsUpdatedAt / lib/merge.ts).
+// Per-device choices (sync, activeTechnicianId) are deliberately excluded.
+export const SYNCED_SETTINGS_FIELDS = [
+  'technician',
+  'arcLicenceNumber',
+  'arcAuthorisationNumber',
+  'arcAuthorisationExpiry',
+  'businessName',
+  'businessAbn',
+  'jurisdiction',
+  'location',
+  'unit',
+  'theme',
+  'clock',
+] as const
 
 export const EMPTY_STATE: AppState = {
   bottles: [],
@@ -928,6 +952,7 @@ export const EMPTY_STATE: AppState = {
   demoStartedAt: undefined,
   tombstones: [],
   settingsUpdatedAt: undefined,
+  settingsFieldsUpdatedAt: undefined,
   dataResetAt: undefined,
 }
 

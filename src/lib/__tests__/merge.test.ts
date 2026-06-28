@@ -211,3 +211,55 @@ describe('audit log merge', () => {
     expect(mergeStates(wiped, other).auditLog.map((e) => e.id)).toContain(entry.id)
   })
 })
+
+describe('settings merge — per field', () => {
+  const T2 = '2026-06-02T00:00:00.000Z'
+  const T3 = '2026-06-03T00:00:00.000Z'
+
+  it('keeps concurrent edits to DIFFERENT settings fields (no clobber)', () => {
+    // Device A renamed the business; device B (later overall) changed the
+    // ABN. Whole-block last-write-wins used to drop A's rename.
+    const a = makeState({
+      businessName: 'Acme Cooling',
+      businessAbn: '11111111111',
+      settingsUpdatedAt: T2,
+      settingsFieldsUpdatedAt: { businessName: T2 },
+    })
+    const b = makeState({
+      businessName: 'Stale Name',
+      businessAbn: '99999999999',
+      settingsUpdatedAt: T3,
+      settingsFieldsUpdatedAt: { businessAbn: T3 },
+    })
+    for (const m of [mergeStates(a, b), mergeStates(b, a)]) {
+      expect(m.businessName).toBe('Acme Cooling')
+      expect(m.businessAbn).toBe('99999999999')
+    }
+  })
+
+  it('same field edited on both sides: newer per-field stamp wins', () => {
+    const a = makeState({
+      businessName: 'A name',
+      settingsFieldsUpdatedAt: { businessName: T2 },
+    })
+    const b = makeState({
+      businessName: 'B name',
+      settingsFieldsUpdatedAt: { businessName: T3 },
+    })
+    expect(mergeStates(a, b).businessName).toBe('B name')
+    expect(mergeStates(b, a).businessName).toBe('B name')
+  })
+
+  it('falls back to block-level when per-field stamps are absent (old states)', () => {
+    const a = makeState({ businessName: 'A', settingsUpdatedAt: T2 })
+    const b = makeState({ businessName: 'B', settingsUpdatedAt: T3 })
+    expect(mergeStates(a, b).businessName).toBe('B')
+  })
+
+  it('merged per-field stamps keep the latest of each', () => {
+    const a = makeState({ settingsFieldsUpdatedAt: { businessName: T2, unit: T3 } })
+    const b = makeState({ settingsFieldsUpdatedAt: { businessName: T3 } })
+    const m = mergeStates(a, b)
+    expect(m.settingsFieldsUpdatedAt).toEqual({ businessName: T3, unit: T3 })
+  })
+})

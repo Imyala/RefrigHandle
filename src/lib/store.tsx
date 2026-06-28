@@ -26,6 +26,7 @@ import {
   type Unit,
   type WeightUnit,
   EMPTY_STATE,
+  SYNCED_SETTINGS_FIELDS,
   transactionLabel,
   composeName,
   DEFAULT_TECHNICIAN_ROLE,
@@ -1301,6 +1302,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         termsAcceptedAt: now,
         termsAcceptedVersion: TERMS_VERSION,
         settingsUpdatedAt: now,
+        // First-run writes every settings field at once — stamp them all.
+        settingsFieldsUpdatedAt: Object.fromEntries(
+          SYNCED_SETTINGS_FIELDS.map((f) => [f, now]),
+        ),
         auditLog: [...entries, ...s.auditLog],
       }
     })
@@ -1310,6 +1315,23 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   // a 'settings' audit entry with a before/after — but only when the
   // value actually changed, so opening and closing a form doesn't spam
   // the history.
+  // Bump the block-level stamp AND the per-field stamp for `field`, so the
+  // sync merge can resolve each settings field independently (see
+  // lib/merge.ts). Spread into a settings-setter's new state.
+  function settingsStamp(
+    s: AppState,
+    field: string,
+  ): Pick<AppState, 'settingsUpdatedAt' | 'settingsFieldsUpdatedAt'> {
+    const now = new Date().toISOString()
+    return {
+      settingsUpdatedAt: now,
+      settingsFieldsUpdatedAt: {
+        ...(s.settingsFieldsUpdatedAt ?? {}),
+        [field]: now,
+      },
+    }
+  }
+
   function settingsChange(
     s: AppState,
     label: string,
@@ -1333,7 +1355,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           : {
               ...s,
               technician: name,
-              settingsUpdatedAt: new Date().toISOString(),
+              ...settingsStamp(s, 'technician'),
               auditLog: settingsChange(s, 'Default technician', s.technician, name),
             },
       ),
@@ -1348,7 +1370,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           : {
               ...s,
               arcLicenceNumber: n.trim(),
-              settingsUpdatedAt: new Date().toISOString(),
+              ...settingsStamp(s, 'arcLicenceNumber'),
               auditLog: settingsChange(s, 'RHL licence', s.arcLicenceNumber, n.trim()),
             },
       ),
@@ -1363,7 +1385,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           : {
               ...s,
               arcAuthorisationNumber: n.trim(),
-              settingsUpdatedAt: new Date().toISOString(),
+              ...settingsStamp(s, 'arcAuthorisationNumber'),
               auditLog: settingsChange(
                 s,
                 'ARC authorisation (RTA)',
@@ -1383,7 +1405,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           : {
               ...s,
               arcAuthorisationExpiry: d.trim(),
-              settingsUpdatedAt: new Date().toISOString(),
+              ...settingsStamp(s, 'arcAuthorisationExpiry'),
               auditLog: settingsChange(
                 s,
                 'RTA expiry',
@@ -1403,7 +1425,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           : {
               ...s,
               businessName: n.trim(),
-              settingsUpdatedAt: new Date().toISOString(),
+              ...settingsStamp(s, 'businessName'),
               auditLog: settingsChange(s, 'Business name', s.businessName, n.trim()),
             },
       ),
@@ -1418,7 +1440,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           : {
               ...s,
               businessAbn: n.trim(),
-              settingsUpdatedAt: new Date().toISOString(),
+              ...settingsStamp(s, 'businessAbn'),
               auditLog: settingsChange(s, 'Business ABN', s.businessAbn, n.trim()),
             },
       ),
@@ -1472,7 +1494,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const resetToFreshInstall: StoreApi['resetToFreshInstall'] = useCallback(() => {
     // Replace the whole dataset with a clean slate. With setupCompletedAt
     // cleared (and accountClosure gone) the gates fall back to the
-    // first-run account-creation screen on the next render.
+    // first-run account-creation screen on the next render. This DOES wipe
+    // the on-device change log too (EMPTY_STATE.auditLog is empty) — it's
+    // only reached at account closure, by which point the business has
+    // already been handed its full records ZIP. (The change log is
+    // never-edit/never-delete entry-by-entry; closing the account is the
+    // one all-or-nothing exception, and it's after export.)
     setState(() => ({ ...EMPTY_STATE }))
     // Clear the audit-chain high-water mark — a fresh install starts a
     // new chain, so the old head must not flag the empty log as truncated.
@@ -1506,8 +1533,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         return {
           ...s,
           location,
-          settingsUpdatedAt: new Date().toISOString(),
-              auditLog: settingsChange(s, 'Location', from, to),
+          ...settingsStamp(s, 'location'),
+          auditLog: settingsChange(s, 'Location', from, to),
         }
       }),
     [],
@@ -1518,7 +1545,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setState((s) =>
         s.unit === unit
           ? s
-          : { ...s, unit, settingsUpdatedAt: new Date().toISOString(),
+          : { ...s, unit, ...settingsStamp(s, 'unit'),
               auditLog: settingsChange(s, 'Weight unit', s.unit, unit) },
       ),
     [],
@@ -1529,7 +1556,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setState((s) =>
         s.theme === theme
           ? s
-          : { ...s, theme, settingsUpdatedAt: new Date().toISOString(),
+          : { ...s, theme, ...settingsStamp(s, 'theme'),
               auditLog: settingsChange(s, 'Theme', s.theme, theme) },
       ),
     [],
@@ -1543,7 +1570,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           : {
               ...s,
               clock,
-              settingsUpdatedAt: new Date().toISOString(),
+              ...settingsStamp(s, 'clock'),
               auditLog: settingsChange(s, 'Clock format', s.clock, clock),
             },
       ),

@@ -422,7 +422,9 @@ export default function Settings() {
           who did it and when. It's the audit history owners and supervisors
           use to review the team's activity. Anyone on this device can open and
           read it — no one, not even an owner or supervisor, can edit or
-          permanently delete an entry.
+          permanently delete an individual entry. (Closing the account clears
+          everything on the device at once, but only after you've been handed a
+          full records export.)
         </p>
         <Link to="/history" className="inline-block">
           <Button variant="secondary">Open change log</Button>
@@ -975,7 +977,9 @@ export default function Settings() {
           <div className="space-y-3">
             <p className="text-sm text-slate-600 dark:text-slate-400">
               Devices using the same <strong>Team ID</strong> share the same
-              data in real time. Last write wins.
+              data in real time. Records (bottles, sites, transactions) and
+              individual settings fields merge per item, so two devices
+              working at once don't overwrite each other's changes.
             </p>
             <Field label="Team ID" hint="Pick anything — must match across all devices">
               <div className="flex gap-2">
