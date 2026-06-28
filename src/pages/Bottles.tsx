@@ -1058,6 +1058,16 @@ function QuickLogModal({
     return best
   }, [state.transactions])
 
+  // Whose licence this quick-log will stamp. The quick form has no tech
+  // picker (the full Activity form does), so on a shared device we at
+  // least show who's about to be recorded, so the wrong tech isn't frozen
+  // onto the job silently.
+  const stampTech = state.technicians.find(
+    (t) => t.id === state.activeTechnicianId,
+  )
+  const stampName = stampTech?.name ?? (state.technician || '')
+  const stampRhl = stampTech?.arcLicenceNumber ?? (state.arcLicenceNumber || '')
+
   if (!open || !bottle || !kind) return null
 
   const showAmount = kind === 'charge' || kind === 'recover'
@@ -1600,6 +1610,13 @@ function QuickLogModal({
 
           {showCompliance && (
             <>
+              {stampName && (
+                <div className="rounded-xl bg-slate-100 px-3 py-2 text-xs text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                  Logging as <strong>{stampName}</strong>
+                  {stampRhl ? ` · ${stampRhl}` : ''}. To log as someone else,
+                  switch profile in Activity or Settings.
+                </div>
+              )}
               {!unitId && (
                 <Field
                   label="Equipment (free text)"

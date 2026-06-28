@@ -17,8 +17,10 @@ export default defineConfig({
         name: 'Refrigerant Handling — tracking & audit log',
         // Short name surfaces under the home-screen icon, so keep it
         // tight enough to fit Android/iOS launcher labels (~12 chars
-        // before truncation).
-        short_name: 'Refrigerant',
+        // before truncation). 'RefrigHandle' is the product brand and is
+        // far clearer on a crowded home screen than the generic
+        // 'Refrigerant'.
+        short_name: 'RefrigHandle',
         description:
           'Refrigerant bottle, site, and transaction tracker for HVAC/R technicians — built for compliance and auditing.',
         theme_color: '#0f172a',
