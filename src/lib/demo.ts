@@ -153,12 +153,42 @@ export function buildDemoState(nowISO: string): Partial<AppState> {
     },
   ]
 
+  // A few change-log entries so the printable records show a populated,
+  // verifiable hash chain (the store seals these into the chain on load).
+  const mkAudit = (
+    n: number,
+    action: 'create' | 'settings',
+    entity: 'bottle' | 'site' | 'unit' | 'transaction' | 'settings',
+    target: string,
+    summary: string,
+  ) => ({
+    id: `demo-a${n}`,
+    at: addDays(now, -7 + n).toISOString(),
+    action,
+    entity,
+    target,
+    summary,
+    by: tech.name,
+    byLicence: tech.arcLicenceNumber,
+  })
+  const auditLog = [
+    mkAudit(6, 'create', 'transaction', 'CYL-1003', 'Logged intake of 6.00 kg R134A'),
+    mkAudit(5, 'create', 'transaction', 'CYL-1002', 'Logged charge of 1.20 kg into Rooftop chiller #1'),
+    mkAudit(4, 'create', 'unit', 'Rooftop chiller #1', 'Added unit Rooftop chiller #1'),
+    mkAudit(3, 'create', 'site', 'Harbour View Apartments', 'Added site Harbour View Apartments'),
+    mkAudit(2, 'create', 'bottle', 'CYL-1003', 'Added cylinder CYL-1003'),
+    mkAudit(1, 'create', 'bottle', 'CYL-1002', 'Added cylinder CYL-1002'),
+    mkAudit(0, 'create', 'bottle', 'CYL-1001', 'Added cylinder CYL-1001'),
+  ]
+
   return {
     technicians: [tech],
     activeTechnicianId: tech.id,
+    auditLog,
     technician: tech.name,
     arcLicenceNumber: tech.arcLicenceNumber,
     businessName: 'Demo Refrigeration Co',
+    businessAbn: '51824753556',
     arcAuthorisationNumber: 'RTA-DEMO',
     arcAuthorisationExpiry: ymd(addMonths(now, 9)),
     location: {

@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Button, Card, Field, Modal } from './ui'
 import { Picker, type PickerOption } from './Picker'
+import { IntegrityStamp } from './IntegrityStamp'
 import { useStore } from '../lib/store'
 import {
   quarterKey,
@@ -268,6 +269,7 @@ function QuarterlyReportModal({ onClose }: { onClose: () => void }) {
             retained for the period required by applicable regulations).
           </p>
           <p className="mt-2">Generated {generatedAt}.</p>
+          <IntegrityStamp />
           <div className="mt-4 grid grid-cols-2 gap-6 print:mt-8">
             <div>
               <div className="border-b border-slate-400 dark:border-slate-600">

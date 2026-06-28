@@ -38,6 +38,7 @@ import {
   type UnitKind,
 } from '../lib/types'
 import { RefrigerantSelect } from '../components/RefrigerantSelect'
+import { IntegrityStamp } from '../components/IntegrityStamp'
 import { DateInput } from '../components/DateInput'
 import { formatDate, formatDateTime, formatPlainDate } from '../lib/datetime'
 import { profileFor } from '../lib/compliance'
@@ -1717,6 +1718,7 @@ function UnitLogbook({
         <footer className="border-t border-slate-300 pt-3 text-[11px] text-slate-500 dark:border-slate-700">
           <p>{profile.citation}</p>
           <p className="mt-2">Generated {generatedAt}.</p>
+          <IntegrityStamp />
           <div className="mt-4 grid grid-cols-2 gap-6 print:mt-8">
             <SignatureLine label="Technician signature" />
             <SignatureLine label="Customer signature" />
@@ -2179,6 +2181,7 @@ function SiteAuditModal({
             </p>
           )}
           <p className="mt-2">Generated {generatedAt}.</p>
+          <IntegrityStamp />
           <div className="mt-4 grid grid-cols-2 gap-6 print:mt-8">
             <SignatureLine label="Technician signature" />
             <SignatureLine label="Customer signature" />

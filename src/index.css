@@ -71,8 +71,28 @@ input[type='number'] {
     background: #ffffff !important;
     color: #000000 !important;
   }
-  body * {
-    visibility: hidden;
+  /* Collapse the whole app down to just the report. Anything that is
+     neither the report nor one of its ancestors is removed (display:none,
+     not merely hidden) so it contributes NO height — otherwise the page
+     behind the modal padded the output to several blank pages. */
+  body *:not(:has(.print-region)):not(.print-region):not(.print-region *) {
+    display: none !important;
+  }
+  /* Neutralise the report's ancestors — the modal is position:fixed (which
+     would otherwise repaint the report on every printed page) and its
+     scroll container clips height. Flatten them so the report flows once,
+     top of page, no repeats and no blanks. */
+  body *:has(.print-region) {
+    position: static !important;
+    overflow: visible !important;
+    max-height: none !important;
+    height: auto !important;
+    width: auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    display: block !important;
   }
   .print-region,
   .print-region * {
@@ -81,9 +101,6 @@ input[type='number'] {
     border-color: #1f2937 !important;
   }
   .print-region {
-    position: absolute;
-    inset: 0;
-    width: 100%;
     background: #ffffff !important;
     padding: 0;
     box-shadow: none;
