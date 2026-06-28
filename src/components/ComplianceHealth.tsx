@@ -38,7 +38,7 @@ interface Row {
 
 const ROW_PILL: Record<Level, { tone: 'green' | 'amber' | 'red'; text: string }> = {
   ok: { tone: 'green', text: 'OK' },
-  attention: { tone: 'amber', text: 'Soon' },
+  attention: { tone: 'amber', text: 'Due soon' },
   action: { tone: 'red', text: 'Action' },
 }
 

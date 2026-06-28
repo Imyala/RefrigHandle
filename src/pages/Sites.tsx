@@ -62,10 +62,18 @@ export default function Sites() {
     [sites, openSiteId],
   )
   const [adding, setAdding] = useState(false)
-  // Track which region groups are EXPANDED (default: none) so the Sites
-  // page opens fully collapsed — tap a region heading to reveal it.
-  // Persisted in localStorage so the layout the tech leaves behind is
-  // exactly what they return to, across page navigation and app restarts.
+  // Region groups: a returning tech gets the layout they left; a first-time
+  // visitor with no saved layout and a small list shouldn't land on a wall
+  // of collapsed headings hiding every site (see the auto-open default
+  // below). Only persist after a real interaction so the default isn't
+  // frozen in. Mirrors the Bottles list.
+  const hadSavedLayout = useMemo(() => {
+    try {
+      return localStorage.getItem('sites.expandedGroups') != null
+    } catch {
+      return false
+    }
+  }, [])
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(() => {
     try {
       const saved = localStorage.getItem('sites.expandedGroups')
@@ -75,7 +83,9 @@ export default function Sites() {
     }
     return new Set()
   })
+  const [groupsTouched, setGroupsTouched] = useState(false)
   useEffect(() => {
+    if (!groupsTouched) return
     try {
       localStorage.setItem(
         'sites.expandedGroups',
@@ -84,7 +94,7 @@ export default function Sites() {
     } catch {
       /* ignore quota / privacy-mode errors */
     }
-  }, [expandedGroups])
+  }, [expandedGroups, groupsTouched])
 
   const [query, setQuery] = useState('')
   // Active state filter ('all' or a state code). Persisted like the
@@ -176,13 +186,22 @@ export default function Sites() {
 
   const hasGroups = groups.some((g) => g.key !== '')
 
+  // First-visit default: with no saved layout, a small list shows every
+  // region open so sites are visible immediately rather than hidden behind
+  // collapsed headings. A large list stays collapsed (tidier). Once the
+  // tech touches a heading their own layout takes over.
+  const autoOpenAll =
+    !hadSavedLayout && !groupsTouched && filteredSites.length <= 25
+  const isGroupOpen = (key: string) => autoOpenAll || expandedGroups.has(key)
   function toggleGroup(key: string) {
     setExpandedGroups((prev) => {
-      const next = new Set(prev)
-      if (next.has(key)) next.delete(key)
-      else next.add(key)
-      return next
+      const base =
+        autoOpenAll ? new Set(groups.map((g) => g.key)) : new Set(prev)
+      if (base.has(key)) base.delete(key)
+      else base.add(key)
+      return base
     })
+    setGroupsTouched(true)
   }
 
   return (
@@ -255,7 +274,7 @@ export default function Sites() {
       ) : (
         <div className="space-y-4">
           {groups.map((g) => {
-            const open = expandedGroups.has(g.key)
+            const open = isGroupOpen(g.key)
             return (
               <div key={g.key || '__ungrouped__'}>
                 <SectionHeader

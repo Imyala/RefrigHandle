@@ -532,7 +532,9 @@ export default function Bottles() {
           const result = addTransaction(data)
           if (result) {
             toast.show(
-              `${transactionLabel(data.kind)} logged: ${data.amount > 0 ? `${data.amount.toFixed(2)} kg` : 'OK'}`,
+              data.amount > 0
+                ? `${transactionLabel(data.kind)} logged: ${formatWeight(data.amount, state.unit)}`
+                : `${transactionLabel(data.kind)} logged`,
             )
             setLogKind(null)
             setSheetBottleId(null)
@@ -753,6 +755,46 @@ function BottleActionSheet({
           )}
         </div>
 
+        {/* Primary actions first — opening a bottle, a tech almost always
+            wants to log against it. The test/compliance panel sits below. */}
+        <div className="grid grid-cols-2 gap-2">
+          <Button onClick={() => onLog('charge')} variant="primary">
+            Charge
+          </Button>
+          <Button onClick={() => onLog('recover')} variant="primary">
+            Recover
+          </Button>
+        </div>
+
+        {bottle.status === 'returned' ? (
+          // Correction for a return logged by mistake — brings the bottle
+          // back into stock. The original return stays in the log.
+          <Button
+            variant="secondary"
+            full
+            onClick={async () => {
+              const ok = await confirm({
+                title: 'Return this bottle to stock?',
+                message:
+                  'Use this to correct a return logged by mistake — it brings the bottle back into your stock. The original return stays on the log.',
+                confirmLabel: 'Return to stock',
+              })
+              if (!ok) return
+              updateBottle(bottle.id, {
+                status: net > 0.01 ? 'in_stock' : 'empty',
+              })
+              toast.show('Bottle returned to stock')
+              onClose()
+            }}
+          >
+            Return to stock
+          </Button>
+        ) : (
+          <Button onClick={() => onLog('return')} variant="secondary" full>
+            Return bottle
+          </Button>
+        )}
+
         {/* Cylinder hydrostatic test (AS 2030): dates, overdue alarm,
             sent-for-retest flag, and inline date updating. */}
         <div className="rounded-2xl border border-slate-200 p-3 dark:border-slate-800">
@@ -887,44 +929,6 @@ function BottleActionSheet({
             </div>
           )}
         </div>
-
-        <div className="grid grid-cols-2 gap-2">
-          <Button onClick={() => onLog('charge')} variant="primary">
-            Charge
-          </Button>
-          <Button onClick={() => onLog('recover')} variant="primary">
-            Recover
-          </Button>
-        </div>
-
-        {bottle.status === 'returned' ? (
-          // Correction for a return logged by mistake — brings the bottle
-          // back into stock. The original return stays in the log.
-          <Button
-            variant="secondary"
-            full
-            onClick={async () => {
-              const ok = await confirm({
-                title: 'Return this bottle to stock?',
-                message:
-                  'Use this to correct a return logged by mistake — it brings the bottle back into your stock. The original return stays on the log.',
-                confirmLabel: 'Return to stock',
-              })
-              if (!ok) return
-              updateBottle(bottle.id, {
-                status: net > 0.01 ? 'in_stock' : 'empty',
-              })
-              toast.show('Bottle returned to stock')
-              onClose()
-            }}
-          >
-            Return to stock
-          </Button>
-        ) : (
-          <Button onClick={() => onLog('return')} variant="secondary" full>
-            Return bottle
-          </Button>
-        )}
 
         <Button onClick={onEdit} variant="ghost" full>
           Edit details

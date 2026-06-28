@@ -305,7 +305,25 @@ export default function Transactions() {
 
       {transactions.length > 0 && (
         <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
-          {(['all', 'intake', 'charge', 'recover', 'transfer', 'return', 'adjust'] as const).map(
+          {(() => {
+            // Only offer filters for kinds that actually appear in the log,
+            // so a new account isn't shown chips for things it has none of
+            // (e.g. 'intake', which is created automatically on bottle
+            // entry and can't be logged by hand).
+            const present = new Set(transactions.map((t) => t.kind))
+            const order: TransactionKind[] = [
+              'intake',
+              'charge',
+              'recover',
+              'transfer',
+              'return',
+              'adjust',
+            ]
+            return ['all', ...order.filter((k) => present.has(k))] as (
+              | 'all'
+              | TransactionKind
+            )[]
+          })().map(
             (k) => (
               <button
                 key={k}
