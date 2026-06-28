@@ -72,14 +72,24 @@ const statusTone: Record<
 }
 
 export default function Bottles() {
-  const { state, addBottle, updateBottle, deleteBottle, addTransaction } =
-    useStore()
+  const {
+    state,
+    addBottle,
+    updateBottle,
+    deleteBottle,
+    addTransaction,
+    addCustomRefrigerant,
+  } = useStore()
   const { bottles, sites, customRefrigerants, unit } = state
   const toast = useToast()
   const confirm = useConfirm()
 
   const [editing, setEditing] = useState<Bottle | null>(null)
   const [adding, setAdding] = useState(false)
+  // The "+ Add" button opens the lean quick-add first (number / refrigerant
+  // / tare / gross); full details (W.C, supplier, test dates…) are one tap
+  // away via "More fields" or by editing the bottle afterwards.
+  const [quickAdding, setQuickAdding] = useState(false)
   // Set after a "Save & share" so the share sheet pops for the new record.
   const [shareTx, setShareTx] = useState<Transaction | null>(null)
   // Persist the active status filter across tab navigation. The page
@@ -386,7 +396,7 @@ export default function Bottles() {
         <h2 className="text-xl font-semibold text-slate-900 dark:text-slate-100">
           Bottles
         </h2>
-        <Button onClick={() => setAdding(true)}>+ Add</Button>
+        <Button onClick={() => setQuickAdding(true)}>+ Add</Button>
       </div>
 
       {bottles.length > 0 && (
@@ -484,7 +494,7 @@ export default function Bottles() {
           }
           action={
             bottles.length === 0 ? (
-              <Button onClick={() => setAdding(true)}>+ Add bottle</Button>
+              <Button onClick={() => setQuickAdding(true)}>+ Add bottle</Button>
             ) : undefined
           }
         />
@@ -546,6 +556,24 @@ export default function Bottles() {
       {shareTx && (
         <ShareTxModal t={shareTx} onClose={() => setShareTx(null)} />
       )}
+
+      {/* Quick-add is the default for "+ Add" — the lean path. "More fields"
+          switches to the full form for supplier / W.C / test dates. */}
+      <BottleQuickAdd
+        open={quickAdding}
+        types={allTypes}
+        onClose={() => setQuickAdding(false)}
+        onCreate={(data, customType) => {
+          if (customType) addCustomRefrigerant(customType)
+          addBottle(data)
+          setQuickAdding(false)
+          toast.show('Bottle added')
+        }}
+        onMoreDetails={() => {
+          setQuickAdding(false)
+          setAdding(true)
+        }}
+      />
 
       <BottleForm
         open={adding}
@@ -1784,6 +1812,7 @@ function BottleQuickAdd({
   types,
   onClose,
   onCreate,
+  onMoreDetails,
 }: {
   open: boolean
   types: string[]
@@ -1792,6 +1821,9 @@ function BottleQuickAdd({
     data: Omit<Bottle, 'id' | 'createdAt' | 'updatedAt'>,
     customType?: string,
   ) => void
+  // When provided, shows a "More fields" link that hands off to the full
+  // bottle form (supplier, water capacity, test dates, status…).
+  onMoreDetails?: () => void
 }) {
   const { state } = useStore()
   const displayUnit = state.unit
@@ -1913,7 +1945,20 @@ function BottleQuickAdd({
           </div>
         )}
         <p className="text-xs text-slate-500">
-          For full details (notes, status, current site) edit the bottle from the Bottles tab after saving.
+          Just the essentials — you can add notes, status and current site by
+          editing the bottle afterwards.
+          {onMoreDetails && (
+            <>
+              {' '}
+              <button
+                type="button"
+                onClick={onMoreDetails}
+                className="font-medium text-brand-600 hover:underline dark:text-brand-400"
+              >
+                Need supplier, water capacity or test dates? More fields →
+              </button>
+            </>
+          )}
         </p>
         <Button type="submit" full disabled={tareExceedsGross || duplicateActive}>
           {tareExceedsGross
