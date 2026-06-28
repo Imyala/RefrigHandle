@@ -11,6 +11,45 @@ Reviewed: June 2026 · Codebase: React + TypeScript PWA, ~25k lines · Australia
 
 ---
 
+## 0. Status — what's been fixed since the review
+
+The findings below have been **resolved on this branch** (each typechecked,
+linted, with the full test suite passing and a clean production build):
+
+- **C1** — Record-edit roles now enforced (apprentices can't delete/correct;
+  Restore gated too).
+- **C2** — Audit chain now detects tail-truncation via a per-device
+  high-water mark (with tests); integrity card updated.
+- **H1** — Backup import is now safe: validates shape, warns with record
+  counts, auto-downloads a backup first, and verifies the imported chain.
+- **H2** — Overfill / cross-refrigerant overrides are persisted on the row
+  and shown to supervisors.
+- **H3** — Bottle tare + refrigerant frozen onto rows, so quarterly
+  "returned" survives a bottle deletion.
+- **H4** — Printed logbook & site audit now honour the kg/lb setting
+  (plus L3: accurate "AR4/AR5" GWP label).
+- **M1–M6** — No-op/zero rows blocked; returned bottles excluded as a
+  recovery source; plausibility guard extended to recoveries; manual
+  weight edits now log an `adjust`; active-duplicate bottle numbers
+  blocked; `__attachments` stripped defensively on import.
+- **U2** — Quick-log shows which technician's licence it will stamp.
+- **U4** — A site's equipment/bottles default open (one less tap to the
+  common action).
+- **U7** — Signature pad survives device rotation.
+- **L1 / L7** — Real maskable PWA icon; clearer `RefrigHandle` short_name.
+
+**One finding was withdrawn on inspection (C3, bottle-to-bottle inventory):**
+the source/destination asymmetry is *correct* — it captures hose/decant
+loss, which legitimately reduces total inventory.
+
+**Still open** (larger/architectural or product decisions): M7 (field-level
+settings-sync merge), M8 (local reset wipes the on-device audit log), U1
+(leak-test default — deliberately left as a per-job answer for compliance
+integrity), U3 (unify the two log forms), and the §6 "make it amazing"
+feature roadmap.
+
+---
+
 ## 1. The verdict in one paragraph
 
 This is a genuinely good app — not a prototype. The domain knowledge baked into it
