@@ -66,11 +66,21 @@ linted, with the full test suite passing and a clean production build):
 the source/destination asymmetry is *correct* — it captures hose/decant
 loss, which legitimately reduces total inventory.
 
-**Still open** (larger/architectural or product decisions): M7 (field-level
-settings-sync merge), M8 (local reset wipes the on-device audit log), U1
-(leak-test default — deliberately left as a per-job answer for compliance
-integrity), U3 (unify the two log forms), and the §6 "make it amazing"
-feature roadmap.
+**Tier 2 / Tier 3 (also now done):**
+
+- **M7** — Sync now merges settings PER FIELD (per-field timestamps), so two
+  devices editing different settings fields no longer clobber each other.
+- **M8** — Corrected the misleading "audit log survives any reset" wording
+  (it survives the sync merge; a local account closure wipes it, after the
+  records export) in code and user-facing copy.
+- **IA** — The Change log (audit trail) now has a discoverable link from the
+  Refrigerant log, disambiguating the two "logs".
+- **U3** — The two log forms' weight math + guards are unified into one
+  tested pure function (`lib/logCalc.computeLog`), so they can never drift
+  apart again (the root cause of several earlier bugs). 161 tests passing.
+
+**Only deliberately-left item:** U1 (leak-test stays a per-job answer, for
+compliance integrity). Everything else from this review is resolved.
 
 ---
 
