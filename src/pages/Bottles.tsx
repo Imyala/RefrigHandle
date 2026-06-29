@@ -13,6 +13,7 @@ import {
 import { Picker } from '../components/Picker'
 import { useStore } from '../lib/store'
 import { computeLog } from '../lib/logCalc'
+import { BottleLabels } from '../components/BottleLabels'
 import {
   type Bottle,
   type BottleKind,
@@ -90,6 +91,8 @@ export default function Bottles() {
   // / tare / gross); full details (W.C, supplier, test dates…) are one tap
   // away via "More fields" or by editing the bottle afterwards.
   const [quickAdding, setQuickAdding] = useState(false)
+  // Cylinders to print QR labels for (one bottle, or the visible set).
+  const [labelsFor, setLabelsFor] = useState<Bottle[] | null>(null)
   // Set after a "Save & share" so the share sheet pops for the new record.
   const [shareTx, setShareTx] = useState<Transaction | null>(null)
   // Persist the active status filter across tab navigation. The page
@@ -484,6 +487,18 @@ export default function Bottles() {
         </div>
       )}
 
+      {visible.length > 0 && (
+        <div className="flex justify-end px-1">
+          <button
+            type="button"
+            onClick={() => setLabelsFor(visible)}
+            className="text-xs font-medium text-brand-600 hover:underline dark:text-brand-400"
+          >
+            🏷 Print QR labels ({visible.length})
+          </button>
+        </div>
+      )}
+
       {visible.length === 0 ? (
         <EmptyState
           title={bottles.length === 0 ? 'No bottles yet' : 'No matches'}
@@ -531,7 +546,21 @@ export default function Bottles() {
             setSheetBottleId(null)
           }
         }}
+        onLabel={() => {
+          if (sheetBottle) {
+            setLabelsFor([sheetBottle])
+            setSheetBottleId(null)
+          }
+        }}
       />
+
+      {labelsFor && (
+        <BottleLabels
+          bottles={labelsFor}
+          unit={unit}
+          onClose={() => setLabelsFor(null)}
+        />
+      )}
 
       <QuickLogModal
         open={!!sheetBottle && !!logKind}
@@ -715,11 +744,13 @@ function BottleActionSheet({
   onClose,
   onLog,
   onEdit,
+  onLabel,
 }: {
   bottle: Bottle | null
   onClose: () => void
   onLog: (kind: TransactionKind) => void
   onEdit: () => void
+  onLabel: () => void
 }) {
   const { state, updateBottle } = useStore()
   const toast = useToast()
@@ -958,9 +989,14 @@ function BottleActionSheet({
           )}
         </div>
 
-        <Button onClick={onEdit} variant="ghost" full>
-          Edit details
-        </Button>
+        <div className="grid grid-cols-2 gap-2">
+          <Button onClick={onEdit} variant="ghost" full>
+            Edit details
+          </Button>
+          <Button onClick={onLabel} variant="ghost" full>
+            Print label
+          </Button>
+        </div>
 
         <div>
           <div className="mb-2 px-1 text-xs font-semibold uppercase tracking-wider text-slate-500">
