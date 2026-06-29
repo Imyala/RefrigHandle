@@ -313,6 +313,30 @@ describe('audit logging gaps closed', () => {
     })
   })
 
+  it('removing a photo is recorded on the change log against its bottle', () => {
+    const api = setup()
+    const bottle = addBottle(api.current, { bottleNumber: 'CYL-7' })
+    act(() => api.current.logAttachmentRemoved('bottle', bottle.id, 'photo', 'docket'))
+    const entry = api.current.state.auditLog.find(
+      (e) => e.action === 'delete' && /Photo .* removed/.test(e.summary),
+    )
+    expect(entry).toBeTruthy()
+    expect(entry!.entity).toBe('bottle')
+    expect(entry!.target).toBe('CYL-7')
+    expect(entry!.summary).toContain('docket')
+  })
+
+  it('removing a signature is logged as a customer sign-off removal', () => {
+    const api = setup()
+    const bottle = addBottle(api.current)
+    act(() => api.current.logAttachmentRemoved('bottle', bottle.id, 'signature', 'Jane Smith'))
+    const entry = api.current.state.auditLog.find(
+      (e) => e.action === 'delete' && /Customer signature/.test(e.summary),
+    )
+    expect(entry).toBeTruthy()
+    expect(entry!.summary).toContain('Jane Smith')
+  })
+
   it('updating a technician licence is logged but never the password hash', () => {
     const api = setup()
     let id = ''

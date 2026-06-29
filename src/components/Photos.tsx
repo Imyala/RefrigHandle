@@ -36,6 +36,7 @@ export function PhotoSection({
 }) {
   const toast = useToast()
   const confirm = useConfirm()
+  const { logAttachmentRemoved } = useStore()
   const [photos, setPhotos] = useState<LoadedPhoto[]>([])
   const [viewing, setViewing] = useState<LoadedPhoto | null>(null)
   const [busy, setBusy] = useState(false)
@@ -88,13 +89,19 @@ export function PhotoSection({
   async function onDelete(p: LoadedPhoto) {
     const ok = await confirm({
       title: 'Delete this photo?',
-      message: 'The photo is removed from this device and from future backups.',
+      message:
+        "The photo is removed from this device and from future backups. This can't " +
+        'be undone unless you have a backup that still includes it. The removal is ' +
+        'recorded on the change log.',
       confirmLabel: 'Delete photo',
       danger: true,
     })
     if (!ok) return
     try {
       await deleteAttachment(p.a.id)
+      // Record the removal on the change log so it isn't an off-the-record
+      // delete — only after the blob is actually gone.
+      logAttachmentRemoved(entityType, entityId, 'photo', p.a.caption)
       URL.revokeObjectURL(p.url)
       setPhotos((list) => list.filter((x) => x.a.id !== p.a.id))
       setViewing(null)

@@ -47,6 +47,7 @@ import {
   diffFields,
   rawChanges,
 } from './audit'
+import type { AttachmentEntity, AttachmentKind } from './attachments'
 import {
   loadState,
   normalizeState,
@@ -151,6 +152,19 @@ interface StoreApi {
   // tombstone, and logs a 'restore'. No-op if the bin entry is gone or the
   // record is somehow already present. (Supervisor and above.)
   restoreFromRecycleBin: (binId: string) => void
+  // attachments (photos / signatures)
+  // Record on the change log that a photo or signature was removed. The
+  // blob itself is deleted from IndexedDB by the caller (see Photos /
+  // Signatures); this writes the audit entry — who removed what, from
+  // which record, and when — so attachment removal is no longer a silent,
+  // off-the-record delete. Resolves the affected record's label from
+  // current state so the entry reads in plain English.
+  logAttachmentRemoved: (
+    entityType: AttachmentEntity,
+    entityId: string,
+    kind: AttachmentKind,
+    descriptor?: string,
+  ) => void
   // technician profiles
   addTechnician: (t: Omit<Technician, 'id' | 'createdAt'>) => Technician
   updateTechnician: (id: string, patch: Partial<Technician>) => void
@@ -1300,6 +1314,44 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     [ensureRole],
   )
 
+  const logAttachmentRemoved: StoreApi['logAttachmentRemoved'] = useCallback(
+    (entityType, entityId, kind, descriptor) => {
+      setState((s) => {
+        // Resolve a human label for the parent record so the change log
+        // reads "Photo removed from cylinder ABC-123", not a bare id.
+        let target = entityId
+        if (entityType === 'bottle') {
+          target = s.bottles.find((b) => b.id === entityId)?.bottleNumber ?? target
+        } else if (entityType === 'site') {
+          target = s.sites.find((x) => x.id === entityId)?.name ?? target
+        } else if (entityType === 'unit') {
+          target = s.units.find((u) => u.id === entityId)?.name ?? target
+        } else if (entityType === 'transaction') {
+          const t = s.transactions.find((x) => x.id === entityId)
+          const bottleNo = t && s.bottles.find((b) => b.id === t.bottleId)?.bottleNumber
+          target = t
+            ? `${transactionLabel(t.kind)}${bottleNo ? ` · ${bottleNo}` : ''}`
+            : target
+        }
+        const noun = kind === 'signature' ? 'Customer signature' : 'Photo'
+        const detail = descriptor?.trim() ? ` “${descriptor.trim()}”` : ''
+        return {
+          ...s,
+          // AttachmentEntity ('bottle' | 'site' | 'unit' | 'transaction')
+          // is a subset of AuditEntity, so it maps straight through.
+          auditLog: withAudit(s, {
+            action: 'delete',
+            entity: entityType,
+            entityId,
+            target,
+            summary: `${noun}${detail} removed`,
+          }),
+        }
+      })
+    },
+    [],
+  )
+
   const addTechnician: StoreApi['addTechnician'] = useCallback((t) => {
     const tech: Technician = {
       ...t,
@@ -2147,6 +2199,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       deleteTransaction,
       restoreTransaction,
       restoreFromRecycleBin,
+      logAttachmentRemoved,
       addTechnician,
       updateTechnician,
       deactivateTechnician,
@@ -2197,6 +2250,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       deleteTransaction,
       restoreTransaction,
       restoreFromRecycleBin,
+      logAttachmentRemoved,
       addTechnician,
       updateTechnician,
       deactivateTechnician,

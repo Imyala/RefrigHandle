@@ -31,7 +31,7 @@ export function SignatureSection({
   entityId: string
   onCountChange?: (n: number) => void
 }) {
-  const { state } = useStore()
+  const { state, logAttachmentRemoved } = useStore()
   const toast = useToast()
   const confirm = useConfirm()
   const [signatures, setSignatures] = useState<LoadedSignature[]>([])
@@ -78,13 +78,19 @@ export function SignatureSection({
   async function onDelete(s: LoadedSignature) {
     const ok = await confirm({
       title: 'Delete this sign-off?',
-      message: 'The signature is removed from this device and from future backups.',
+      message:
+        "The signature is removed from this device and from future backups. This can't " +
+        'be undone unless you have a backup that still includes it. The removal is ' +
+        'recorded on the change log.',
       confirmLabel: 'Delete sign-off',
       danger: true,
     })
     if (!ok) return
     try {
       await deleteAttachment(s.a.id)
+      // Record the removal on the change log so a sign-off can't be deleted
+      // off the record — only after the blob is actually gone.
+      logAttachmentRemoved(entityType, entityId, 'signature', s.a.signedBy)
       URL.revokeObjectURL(s.url)
       setSignatures((list) => list.filter((x) => x.a.id !== s.a.id))
     } catch {
