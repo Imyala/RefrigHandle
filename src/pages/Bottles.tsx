@@ -56,6 +56,7 @@ import { ShareTxModal } from '../components/ShareSheet'
 import { useToast } from '../lib/toast'
 import { useConfirm } from '../lib/confirm'
 import { displayToKg, formatWeight, kgToDisplay } from '../lib/units'
+import { autofillLastTest, autofillNextDue } from '../lib/hydroDates'
 import {
   dateTimeInputToIso,
   deviceTimeZone,
@@ -952,14 +953,10 @@ function BottleActionSheet({
                   <MonthInput
                     value={lastYm}
                     onChange={(v) => {
-                      setLastYm(v)
                       // Auto-fill next due 10 years on (AS 2030.5), unless
                       // the tech already set a custom next date.
-                      if (!v) return
-                      const auto = plusYearsYm(v, 10)
-                      const prevAuto =
-                        lastYm && plusYearsYm(lastYm, 10) === nextYm
-                      if (!nextYm || prevAuto) setNextYm(auto)
+                      setNextYm((n) => autofillNextDue(v, lastYm, n))
+                      setLastYm(v)
                     }}
                     ariaLabel="Last hydro test (month and year)"
                   />
@@ -967,7 +964,12 @@ function BottleActionSheet({
                 <Field label="Next due">
                   <MonthInput
                     value={nextYm}
-                    onChange={setNextYm}
+                    onChange={(v) => {
+                      // Mirror the autofill: setting next due back-fills
+                      // the last test 10 years earlier.
+                      setLastYm((l) => autofillLastTest(v, nextYm, l))
+                      setNextYm(v)
+                    }}
                     ariaLabel="Next hydro test due (month and year)"
                   />
                 </Field>
@@ -2565,18 +2567,14 @@ function BottleForm({
               <MonthInput
                 value={lastHydro}
                 onChange={(v) => {
-                  setLastHydro(v)
                   // Auto-fill the 10-year next-test due month when the
                   // last test is set. AS 2030.5 requires periodic
                   // inspection every 10 years for steel refrigerant
                   // recovery cylinders. Don't overwrite a value the tech
                   // has already typed unless it was the previously
                   // auto-derived one.
-                  if (!v) return
-                  const auto = plusYearsYm(v, 10)
-                  const prevAuto =
-                    lastHydro && plusYearsYm(lastHydro, 10) === nextHydro
-                  if (!nextHydro || prevAuto) setNextHydro(auto)
+                  setNextHydro((n) => autofillNextDue(v, lastHydro, n))
+                  setLastHydro(v)
                 }}
                 ariaLabel="Last hydro test (month and year)"
               />
@@ -2584,7 +2582,12 @@ function BottleForm({
             <Field label="Next test due">
               <MonthInput
                 value={nextHydro}
-                onChange={setNextHydro}
+                onChange={(v) => {
+                  // Mirror the autofill: setting next due back-fills the
+                  // last test 10 years earlier.
+                  setLastHydro((l) => autofillLastTest(v, nextHydro, l))
+                  setNextHydro(v)
+                }}
                 ariaLabel="Next hydro test due (month and year)"
               />
             </Field>
@@ -2759,15 +2762,4 @@ function formatYearMonth(s: string): string {
   const m = ym.match(/^(\d{4})-(\d{2})$/)
   if (!m) return ''
   return `${MONTH_LABELS_SHORT[Number(m[2]) - 1] ?? ''} ${m[1]}`
-}
-
-// Add `years` to a YYYY-MM string. Returns '' on bad input so the
-// caller can no-op safely.
-function plusYearsYm(ym: string, years: number): string {
-  if (!ym) return ''
-  const m = ym.match(/^(\d{4})-(\d{2})$/)
-  if (!m) return ''
-  const y = Number(m[1]) + years
-  const mo = Number(m[2])
-  return `${String(y).padStart(4, '0')}-${String(mo).padStart(2, '0')}`
 }
