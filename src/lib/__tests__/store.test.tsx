@@ -333,6 +333,29 @@ describe('audit logging gaps closed', () => {
     expect(entry!.changes!.some((c) => c.field === 'Password lock')).toBe(true)
   })
 
+  it('logs a licence (RHL) lapse automatically, exactly once', async () => {
+    const api = setup()
+    await act(async () => {
+      api.current.addTechnician({
+        name: 'Lapsed',
+        firstName: 'Lapsed',
+        lastName: 'Tech',
+        arcLicenceNumber: 'EXP1',
+        licenceExpiry: '2020-01-01',
+        role: 'technician',
+      })
+    })
+    // The expiry sweep runs in a microtask after the commit — flush it.
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 0))
+    })
+    const expired = api.current.state.auditLog.filter((e) => e.action === 'expire')
+    expect(expired.length).toBe(1)
+    expect(expired[0].summary).toMatch(/expired on 2020-01-01/)
+    // Deduped: the lapse key is recorded so it won't log again.
+    expect(api.current.state.loggedExpiryKeys.some((k) => k.startsWith('rhl:'))).toBe(true)
+  })
+
   it('switching the active profile is recorded on the change log', () => {
     const api = setup()
     addActiveTech(api, 'owner')

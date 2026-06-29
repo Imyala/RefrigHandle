@@ -33,6 +33,7 @@ import {
   composeName,
   roleAtLeast,
   roleInfo,
+  expiryStatus,
   DEFAULT_TECHNICIAN_ROLE,
   TECHNICIAN_PURGE_DAYS,
   TERMS_VERSION,
@@ -377,6 +378,91 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       cancelled = true
     }
   }, [state.technicians])
+
+  // Record a licence (RHL) or authorisation (RTA) crossing its expiry date
+  // onto the change log — a time-driven change nobody "edits", logged once
+  // per lapse so an auditor sees that a credential lapsed and when it was
+  // noticed. Deduped via loggedExpiryKeys (keyed by record + expiry date,
+  // so renewing then lapsing again logs afresh). Best-effort and client-
+  // side, like the purge above: it fires whenever the app is open after a
+  // date passes. Renewal is itself logged by the licence-edit path.
+  useEffect(() => {
+    const nowISO = new Date().toISOString()
+    const logged = new Set(state.loggedExpiryKeys)
+    const prof = profileFor(state.jurisdiction)
+    const pending: {
+      key: string
+      entity: 'technician' | 'settings'
+      entityId?: string
+      target: string
+      summary: string
+    }[] = []
+    for (const t of state.technicians) {
+      if (t.deactivatedAt || !t.licenceExpiry) continue
+      if (expiryStatus(t.licenceExpiry, nowISO).level !== 'expired') continue
+      const key = `rhl:${t.id}:${t.licenceExpiry}`
+      if (logged.has(key)) continue
+      pending.push({
+        key,
+        entity: 'technician',
+        entityId: t.id,
+        target: t.name,
+        summary: `${prof.techLicenceShort} for ${t.name} expired on ${t.licenceExpiry}${
+          t.arcLicenceNumber ? ` · ${prof.techLicenceShort} ${t.arcLicenceNumber}` : ''
+        } — logging work against a lapsed licence is itself a breach`,
+      })
+    }
+    if (
+      state.arcAuthorisationExpiry &&
+      expiryStatus(state.arcAuthorisationExpiry, nowISO).level === 'expired'
+    ) {
+      const key = `rta:${state.arcAuthorisationExpiry}`
+      if (!logged.has(key)) {
+        pending.push({
+          key,
+          entity: 'settings',
+          target: prof.businessAuthShort,
+          summary: `${prof.businessAuthShort} (business authorisation) expired on ${state.arcAuthorisationExpiry}`,
+        })
+      }
+    }
+    if (pending.length === 0) return
+    let cancelled = false
+    void Promise.resolve().then(() => {
+      if (cancelled) return
+      setState((s) => {
+        const have = new Set(s.loggedExpiryKeys)
+        const fresh = pending.filter((p) => !have.has(p.key))
+        if (fresh.length === 0) return s
+        let auditLog = s.auditLog
+        for (const p of fresh) {
+          auditLog = withAudit(
+            { ...s, auditLog },
+            {
+              action: 'expire',
+              entity: p.entity,
+              entityId: p.entityId,
+              target: p.target,
+              summary: p.summary,
+            },
+          )
+        }
+        return {
+          ...s,
+          auditLog,
+          loggedExpiryKeys: [...s.loggedExpiryKeys, ...fresh.map((p) => p.key)],
+        }
+      })
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [
+    state.technicians,
+    state.arcAuthorisationExpiry,
+    state.loggedExpiryKeys,
+    state.jurisdiction,
+  ])
 
   const lastPushedRef = useRef<string>('')
   const remoteApplyRef = useRef(false)
@@ -1257,12 +1343,18 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         const labelled = diffFields(before, patch, TECH_FIELDS, {
           role: (v) => roleInfo(v as TechnicianRole | undefined).label,
         })
-        // Note a password being set/cleared — never the hash itself.
+        // Note a password being set / changed / cleared — never the hash
+        // itself. "Changed" distinguishes a new password over an existing
+        // one (both hashes present but different) from first setting one.
         if ('passwordHash' in patch && patch.passwordHash !== before.passwordHash) {
           labelled.push({
             field: 'Password lock',
             from: before.passwordHash ? 'Set' : 'None',
-            to: patch.passwordHash ? 'Set' : 'None',
+            to: patch.passwordHash
+              ? before.passwordHash
+                ? 'Changed'
+                : 'Set'
+              : 'None',
           })
         }
         // Catch-all for any other changed field, but NEVER the raw

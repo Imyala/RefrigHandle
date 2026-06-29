@@ -398,6 +398,10 @@ export type AuditAction =
   | 'settings'
   | 'reset'
   | 'import'
+  // A licence (RHL) or authorisation (RTA) crossing its expiry date — a
+  // time-driven state change, recorded automatically so a lapse is on the
+  // audit trail even though no one "edited" anything.
+  | 'expire'
 
 export type AuditEntity =
   | 'bottle'
@@ -917,6 +921,11 @@ export interface AppState {
   // Set when the owner has requested account closure. While present the
   // app is locked (AccountClosedGate) and nothing else is reachable.
   accountClosure?: AccountClosure
+  // Keys of licence/RTA expiries already written to the change log, so a
+  // lapse is recorded exactly once (not on every app open). Key encodes
+  // the record and the expiry date, so renewing then lapsing again logs
+  // afresh. Unioned across devices by the sync merge. See store.tsx.
+  loggedExpiryKeys: string[]
   // Deletion markers consumed by the sync merge — see Tombstone.
   tombstones: Tombstone[]
   // Recoverable archive of every deleted record (bottle / site / unit /
@@ -986,6 +995,7 @@ export const EMPTY_STATE: AppState = {
   sync: { enabled: false, teamId: '' },
   setupCompletedAt: undefined,
   demoStartedAt: undefined,
+  loggedExpiryKeys: [],
   tombstones: [],
   recycleBin: [],
   settingsUpdatedAt: undefined,

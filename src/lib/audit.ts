@@ -25,6 +25,7 @@ export const AUDIT_ACTION_LABELS: Record<AuditAction, string> = {
   settings: 'Settings',
   reset: 'Reset',
   import: 'Imported',
+  expire: 'Expired',
 }
 
 export const AUDIT_ENTITY_LABELS: Record<AuditEntity, string> = {
@@ -55,6 +56,7 @@ export const AUDIT_ACTION_TONE: Record<
   settings: 'slate',
   reset: 'red',
   import: 'blue',
+  expire: 'red',
 }
 
 // Field-label maps. ONLY the fields listed here are diffed into the
