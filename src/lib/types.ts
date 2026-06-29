@@ -1101,9 +1101,13 @@ export function presetLabel(p: BottlePreset, unit: WeightUnit): string {
 }
 
 // Filling ratios per refrigerant (kg of refrigerant per L of water capacity).
-// Source: US DOT/CFR 49 173.304a Table 4 — values are nominally aligned with
-// AS 2030.5 (Australia) but should always be verified against the actual
-// cylinder's stamped FR for the refrigerant being recovered.
+// These are CONSERVATIVE REFERENCE values, cross-checked against US DOT/CFR
+// 49 173.304a Table 4 and broadly consistent with AS 2030.5 (the Australian
+// standard governing cylinder filling). They drive the app's safe-fill
+// GUIDE only — the authoritative limit for any given cylinder is the filling
+// density / maximum fill stamped on that cylinder by its manufacturer, which
+// the tech must always defer to. The app surfaces this caveat where safe
+// fill is shown (see the bottle form / SAFE_FILL_NOTE).
 //
 // max safe fill (kg) = water capacity (L) × FR
 export const REFRIGERANT_FR: Record<string, number> = {
@@ -1154,6 +1158,13 @@ export const REFRIGERANT_FR: Record<string, number> = {
 // unknown refrigerant) — assumes water density. Picks 0.80 to match the
 // generic "80 % of water capacity" rule of thumb used in older guidance.
 export const FALLBACK_FR = 0.8
+
+// Shown wherever the app computes a safe fill, so a tech never treats the
+// app's figure as authoritative over the cylinder's own stamp.
+export const SAFE_FILL_NOTE =
+  'Safe fill is a guide (water capacity × a reference filling ratio aligned ' +
+  'with AS 2030.5). Always defer to the filling density / maximum fill ' +
+  'stamped on the cylinder.'
 
 export function fillingRatio(refrigerant?: string): number {
   if (!refrigerant) return FALLBACK_FR

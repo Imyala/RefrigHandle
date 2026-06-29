@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   BACKUP_STALE_DAYS,
+  BACKUP_STALE_DAYS_SYNCED,
   backupStatus,
   getLastBackupAt,
   markBackedUp,
@@ -44,9 +45,24 @@ describe('backupStatus', () => {
     expect(backupStatus(makeState({})).due).toBe(false)
   })
 
-  it('quiet when merge-sync holds a server copy', () => {
-    const s = stateWithData({ sync: { enabled: true, teamId: 'team-1' } })
-    expect(backupStatus(s).due).toBe(false)
+  it('merge-sync relaxes the export cadence but never silences it', () => {
+    const synced = { sync: { enabled: true, teamId: 'team-1' } }
+    // 40-day-old data that would nudge an offline install stays quiet
+    // while synced — the server holds a copy, so the cadence relaxes.
+    expect(backupStatus(stateWithData(synced)).due).toBe(false)
+    // But sync is replication, not an archive: past the longer window an
+    // export is still due, because a periodic off-device copy is the only
+    // thing the user fully controls.
+    const stale = makeState({
+      transactions: [
+        makeTx({
+          loggedAt: daysAgo(BACKUP_STALE_DAYS_SYNCED + 1),
+          date: daysAgo(BACKUP_STALE_DAYS_SYNCED + 1),
+        }),
+      ],
+      ...synced,
+    })
+    expect(backupStatus(stale).due).toBe(true)
   })
 
   it('never backed up: due once the data outlives the grace period', () => {

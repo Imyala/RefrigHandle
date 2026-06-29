@@ -29,6 +29,7 @@ import {
   hydroStatusFor,
   netWeight,
   overfillKg,
+  SAFE_FILL_NOTE,
   safeFillKgFor,
   scaleDeltaKg,
   siteLabel,
@@ -2402,6 +2403,9 @@ function BottleForm({
                   <strong>{formatWeight(safeFillKg, unit)}</strong>
                   {' '}(W.C × FR {fillingRatio(refrigerantType).toFixed(2)})
                 </div>
+              )}
+              {safeFillKg > 0 && (
+                <div className="mt-1 text-xs opacity-80">{SAFE_FILL_NOTE}</div>
               )}
               {safeFillKg > 0 && tareKgEntered > 0 && (
                 <div className="mt-0.5 text-xs">

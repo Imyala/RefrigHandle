@@ -92,6 +92,18 @@ compliance integrity). Everything else from this review is resolved.
     whole fleet, 3-up on A4).
   - **Equipment leak watch** — fleet-wide per-unit leak rate (AIRAH DA19)
     on the home screen, ranked worst-first.
+- *Tier 3 trust/credibility (client-side honesty):*
+  - **Filling-ratio sourcing** — the safe-fill figure now carries an
+    in-form note (`SAFE_FILL_NOTE`) that it's a reference guide aligned
+    with AS 2030.5, and the tech must defer to the cylinder's stamped
+    filling density / max fill. Source comment in `types.ts` made honest.
+  - **Sync isn't an archive** — the backup nudge no longer goes fully
+    silent when cloud sync is on; it relaxes to a 90-day cadence
+    (`BACKUP_STALE_DAYS_SYNCED`) but still asks for periodic off-device
+    exports. The Cloud sync card says so plainly.
+  - **Precise printed integrity qualifier** — the printed `IntegrityStamp`
+    now states it re-derives the hash chain *on this device* and detects
+    edits/deletions/corruption, but is not a third-party notarisation.
 - *Needs a backend (post-launch platform work):* push/email reminders,
   hosted accounts + durable cloud retention, server-anchored audit chain +
   real per-user identity, a job/work-order container. These are the

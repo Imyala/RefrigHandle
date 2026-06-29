@@ -75,6 +75,11 @@ export function IntegrityStamp() {
           Audit trail integrity check for detail.
         </div>
       )}
+      <div className="mt-1 opacity-75">
+        This check re-derives the hash chain on this device. It detects any
+        edit, deletion or corruption of sealed entries — it is not a
+        third-party notarisation or timestamp.
+      </div>
     </div>
   )
 }

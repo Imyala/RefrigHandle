@@ -981,6 +981,11 @@ export default function Settings() {
               individual settings fields merge per item, so two devices
               working at once don't overwrite each other's changes.
             </p>
+            <p className="rounded-lg bg-slate-50 p-2.5 text-xs text-slate-500 dark:bg-slate-800/60 dark:text-slate-400">
+              Sync keeps your devices in step — it is not a long-term archive.
+              Keep taking periodic JSON exports (below) as your own off-device
+              copy of the record.
+            </p>
             <Field label="Team ID" hint="Pick anything — must match across all devices">
               <div className="flex gap-2">
                 <TextInput

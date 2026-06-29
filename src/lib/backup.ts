@@ -22,6 +22,13 @@ const SNOOZE_KEY = 'refrighandle.backupSnoozeUntil.v1'
 
 // Nudge when the newest full backup is older than this.
 export const BACKUP_STALE_DAYS = 30
+// With merge-sync on, a copy lives on the team server, so the export
+// nudge relaxes to a longer interval — but it does NOT go away. Sync
+// replicates between devices; it is not a durable, independent archive
+// (a deleted project, an account loss, or a never-delivered record all
+// leave no off-device copy). A periodic export is still the only thing
+// the user fully controls, so we keep reminding, just less often.
+export const BACKUP_STALE_DAYS_SYNCED = 90
 // A never-backed-up install gets this much grace before the first
 // nudge, so a brand-new user isn't nagged during their first jobs.
 export const FIRST_BACKUP_GRACE_DAYS = 7
@@ -280,8 +287,10 @@ export interface BackupStatus {
 }
 
 // Whether the overdue-backup nudge should show. Quiet when there's
-// nothing worth losing, while a recent backup exists, while snoozed,
-// or when merge-sync is on (the team backend then holds a copy).
+// nothing worth losing, while a recent backup exists, or while snoozed.
+// Merge-sync relaxes the cadence (the team server holds a copy) but
+// never silences it — sync is replication, not an independent archive,
+// so a periodic export is still warranted.
 export function backupStatus(state: AppState): BackupStatus {
   const lastBackupAt = getLastBackupAt()
   const now = Date.now()
@@ -295,14 +304,17 @@ export function backupStatus(state: AppState): BackupStatus {
     daysSinceBackup,
   })
 
-  if (state.sync.enabled) return status(false)
   if (state.transactions.length === 0) return status(false)
 
   const snooze = snoozedUntil()
   if (snooze && new Date(snooze).getTime() > now) return status(false)
 
+  const staleDays = state.sync.enabled
+    ? BACKUP_STALE_DAYS_SYNCED
+    : BACKUP_STALE_DAYS
+
   if (lastBackupAt) {
-    return status((daysSinceBackup ?? 0) >= BACKUP_STALE_DAYS)
+    return status((daysSinceBackup ?? 0) >= staleDays)
   }
   // Never backed up: give a fresh install a grace period, measured
   // from the oldest record so pre-existing data trips the nudge
@@ -314,5 +326,11 @@ export function backupStatus(state: AppState): BackupStatus {
     if (Number.isFinite(created) && created < oldest) oldest = created
   }
   const dataAgeDays = (now - oldest) / 86400000
-  return status(dataAgeDays >= FIRST_BACKUP_GRACE_DAYS)
+  // Synced installs get the longer relaxed grace before the first export
+  // nudge; an offline-only install is nudged after the short grace since
+  // nothing else protects its records.
+  const grace = state.sync.enabled
+    ? BACKUP_STALE_DAYS_SYNCED
+    : FIRST_BACKUP_GRACE_DAYS
+  return status(dataAgeDays >= grace)
 }
