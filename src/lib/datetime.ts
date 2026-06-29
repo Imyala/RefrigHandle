@@ -99,25 +99,65 @@ export function formatDateTime(
   withZone = false,
 ): string {
   if (!iso) return ''
-  // "Show times in UTC" device pref overrides the display zone and always
-  // labels the time so it can't be misread as local.
-  const utc = getDevicePrefs().displayUtc
-  const effTz = utc ? 'UTC' : tz
-  const showZone = withZone || utc
+  // The "Time display" device pref decides the zone(s) shown. Records are
+  // always stored in UTC regardless.
+  const mode = getDevicePrefs().timeDisplay
+  if (mode === 'utc') return renderInZone(iso, 'UTC', clock, true)
+  // 'local' and 'both' both lead with the local / stamped zone; 'both' adds
+  // the UTC time alongside so cross-timezone readers don't have to convert.
+  const local = renderInZone(iso, tz, clock, withZone || mode === 'both')
+  if (mode === 'both') return `${local} (${utcCompanion(iso, tz, clock)})`
+  return local
+}
+
+// Raw render of an instant in a specific zone — no device-pref logic.
+function renderInZone(
+  iso: string,
+  tz: string | undefined,
+  clock: '12h' | '24h' | undefined,
+  showZone: boolean,
+): string {
   const d = new Date(iso)
   const opts: Intl.DateTimeFormatOptions = {
     dateStyle: 'medium',
     timeStyle: 'short',
   }
-  if (effTz && isTzSupported(effTz)) opts.timeZone = effTz
+  if (tz && isTzSupported(tz)) opts.timeZone = tz
   if (clock === '12h') opts.hour12 = true
   else if (clock === '24h') opts.hour12 = false
   let out = d.toLocaleString(undefined, opts)
   if (showZone) {
-    const ab = tzAbbrev(iso, effTz)
+    const ab = tzAbbrev(iso, tz)
     if (ab) out += ` ${ab}`
   }
   return out
+}
+
+// The UTC half of a 'both'-mode timestamp. Normally just "HH:MM UTC", but
+// when the UTC calendar date differs from the local one (a record near
+// midnight that crosses the date line) the UTC date is included too, so the
+// pairing can never be misread.
+function utcCompanion(
+  iso: string,
+  localTz: string | undefined,
+  clock: '12h' | '24h' | undefined,
+): string {
+  const d = new Date(iso)
+  const localParts = ymdHmInTz(d, localTz)
+  const utcParts = ymdHmInTz(d, 'UTC')
+  const sameDate =
+    !!localParts &&
+    !!utcParts &&
+    localParts.y === utcParts.y &&
+    localParts.mo === utcParts.mo &&
+    localParts.d === utcParts.d
+  const opts: Intl.DateTimeFormatOptions = sameDate
+    ? { timeStyle: 'short' }
+    : { dateStyle: 'medium', timeStyle: 'short' }
+  opts.timeZone = 'UTC'
+  if (clock === '12h') opts.hour12 = true
+  else if (clock === '24h') opts.hour12 = false
+  return `${d.toLocaleString(undefined, opts)} UTC`
 }
 
 // The device's current IANA timezone — where this person physically is.
@@ -170,7 +210,9 @@ export function formatStampedTime(
 // early-morning job onto the previous calendar day.
 export function formatDate(iso: string, tz?: string): string {
   if (!iso) return ''
-  const effTz = getDevicePrefs().displayUtc ? 'UTC' : tz
+  // UTC mode shows the UTC date; local/both both use the local/stamped zone
+  // (a date-only field has no time to pair a UTC companion with).
+  const effTz = getDevicePrefs().timeDisplay === 'utc' ? 'UTC' : tz
   const d = new Date(iso)
   const opts: Intl.DateTimeFormatOptions = { dateStyle: 'medium' }
   if (effTz && isTzSupported(effTz)) opts.timeZone = effTz

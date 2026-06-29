@@ -54,7 +54,11 @@ import { profileFor } from '../lib/compliance'
 import { formatDateTime, formatPlainDate } from '../lib/datetime'
 import { useToast } from '../lib/toast'
 import { useConfirm } from '../lib/confirm'
-import { useDevicePrefs, setDevicePref } from '../lib/devicePrefs'
+import {
+  useDevicePrefs,
+  setDevicePref,
+  type TimeDisplay,
+} from '../lib/devicePrefs'
 import { hashPassword, MIN_PASSWORD_LENGTH } from '../lib/auth'
 import { screenNewPassword } from '../lib/passwordStrength'
 import { PasswordPromptModal } from '../components/PasswordPromptModal'
@@ -963,21 +967,49 @@ export default function Settings() {
               }
             />
           </label>
-          <label className="flex items-start justify-between gap-3">
-            <span className="text-sm text-slate-700 dark:text-slate-200">
-              <span className="font-medium">Show times in UTC</span>
-              <span className="mt-0.5 block text-xs text-slate-500">
-                Display all times in UTC instead of local time. Records are
-                always stored in UTC regardless of this setting.
-              </span>
-            </span>
-            <input
-              type="checkbox"
-              className="mt-0.5 h-4 w-4 shrink-0 accent-brand-600"
-              checked={devicePrefs.displayUtc}
-              onChange={(e) => setDevicePref('displayUtc', e.target.checked)}
-            />
-          </label>
+          <div>
+            <div className="text-sm font-medium text-slate-700 dark:text-slate-200">
+              Time display
+            </div>
+            <p className="mt-0.5 mb-2 text-xs text-slate-500">
+              How times are shown on the log, audit trail and reports. Records
+              are always stored in UTC regardless of this setting.{' '}
+              <strong>Local + UTC</strong> shows each entry in the zone it was
+              logged in plus the UTC time — handy when techs are in different
+              timezones or travelling.
+            </p>
+            <div className="grid grid-cols-3 gap-2">
+              {(
+                [
+                  ['local', 'Local'],
+                  ['utc', 'UTC'],
+                  ['both', 'Local + UTC'],
+                ] as [TimeDisplay, string][]
+              ).map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => {
+                    setDevicePref('timeDisplay', value)
+                    toast.show(
+                      value === 'local'
+                        ? 'Showing local time'
+                        : value === 'utc'
+                          ? 'Showing UTC'
+                          : 'Showing local + UTC',
+                    )
+                  }}
+                  className={`rounded-xl px-3 py-3 text-sm font-medium transition ${
+                    devicePrefs.timeDisplay === value
+                      ? 'bg-brand-600 text-white'
+                      : 'bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-200'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
       </Card>
 

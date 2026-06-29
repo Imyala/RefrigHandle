@@ -7,6 +7,7 @@ import {
   localDateTimeInput,
   tzAbbrev,
 } from '../datetime'
+import { setDevicePref } from '../devicePrefs'
 
 // The timezone bugs these guard against were real: the quick-log form
 // once stamped UTC wall-clock as if it were local (10-11 h wrong for
@@ -101,6 +102,45 @@ describe('multi-timezone logging', () => {
     expect(
       formatStampedTime(iso, undefined, 'Australia/Brisbane', '24h'),
     ).toMatch(/14:00/)
+  })
+
+  it('time-display modes: local, utc, and both', () => {
+    // 06:00 UTC = 16:00 Brisbane (AEST, same calendar date).
+    const iso = '2026-06-15T06:00:00.000Z'
+    try {
+      setDevicePref('timeDisplay', 'local')
+      const local = formatStampedTime(iso, 'Australia/Brisbane', 'Australia/Brisbane', '24h')
+      expect(local).toMatch(/16:00/)
+      expect(local).not.toMatch(/UTC/)
+
+      setDevicePref('timeDisplay', 'utc')
+      const utc = formatStampedTime(iso, 'Australia/Brisbane', 'Australia/Brisbane', '24h')
+      expect(utc).toMatch(/06:00/)
+      expect(utc).toMatch(/UTC/)
+
+      setDevicePref('timeDisplay', 'both')
+      const both = formatStampedTime(iso, 'Australia/Brisbane', 'Australia/Brisbane', '24h')
+      // Local zone time AND the UTC companion together.
+      expect(both).toMatch(/16:00/)
+      expect(both).toMatch(/06:00 UTC/)
+    } finally {
+      setDevicePref('timeDisplay', 'local')
+    }
+  })
+
+  it('both mode includes the UTC date when it crosses the date line', () => {
+    // 23:00 UTC on 14 Jun = 09:00 Brisbane on 15 Jun — different dates.
+    const iso = '2026-06-14T23:00:00.000Z'
+    try {
+      setDevicePref('timeDisplay', 'both')
+      const both = formatStampedTime(iso, 'Australia/Brisbane', 'Australia/Brisbane', '24h')
+      expect(both).toMatch(/09:00/) // local
+      expect(both).toMatch(/23:00 UTC/) // utc time
+      // UTC companion carries its own (different) date, not just a time.
+      expect(both).toMatch(/14 Jun.*23:00 UTC|Jun 14.*23:00 UTC/)
+    } finally {
+      setDevicePref('timeDisplay', 'local')
+    }
   })
 
   it('tzAbbrev distinguishes DST (Sydney summer vs winter)', () => {
