@@ -356,6 +356,21 @@ describe('audit logging gaps closed', () => {
     expect(api.current.state.loggedExpiryKeys.some((k) => k.startsWith('rhl:'))).toBe(true)
   })
 
+  it('logs a cylinder hydro-test (AS 2030) lapse automatically, once', async () => {
+    const api = setup()
+    await act(async () => {
+      api.current.addBottle({ ...BOTTLE, bottleNumber: 'HYD1', nextHydroTestDate: '2020-01-01' })
+    })
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 0))
+    })
+    const exp = api.current.state.auditLog.filter(
+      (e) => e.action === 'expire' && e.entity === 'bottle',
+    )
+    expect(exp.length).toBe(1)
+    expect(exp[0].summary).toMatch(/overdue on 2020-01-01/)
+  })
+
   it('switching the active profile is recorded on the change log', () => {
     const api = setup()
     addActiveTech(api, 'owner')

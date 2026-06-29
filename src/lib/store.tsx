@@ -392,7 +392,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     const prof = profileFor(state.jurisdiction)
     const pending: {
       key: string
-      entity: 'technician' | 'settings'
+      entity: 'technician' | 'settings' | 'bottle'
       entityId?: string
       target: string
       summary: string
@@ -410,6 +410,19 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         summary: `${prof.techLicenceShort} for ${t.name} expired on ${t.licenceExpiry}${
           t.arcLicenceNumber ? ` · ${prof.techLicenceShort} ${t.arcLicenceNumber}` : ''
         } — logging work against a lapsed licence is itself a breach`,
+      })
+    }
+    for (const b of state.bottles) {
+      if (!b.nextHydroTestDate) continue
+      if (expiryStatus(b.nextHydroTestDate, nowISO).level !== 'expired') continue
+      const key = `hydro:${b.id}:${b.nextHydroTestDate}`
+      if (logged.has(key)) continue
+      pending.push({
+        key,
+        entity: 'bottle',
+        entityId: b.id,
+        target: b.bottleNumber,
+        summary: `Cylinder ${b.bottleNumber} hydrostatic test (AS 2030) became overdue on ${b.nextHydroTestDate}`,
       })
     }
     if (
@@ -459,6 +472,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     }
   }, [
     state.technicians,
+    state.bottles,
     state.arcAuthorisationExpiry,
     state.loggedExpiryKeys,
     state.jurisdiction,
