@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
   Button,
   Card,
@@ -38,7 +39,6 @@ import {
   type UnitKind,
 } from '../lib/types'
 import { RefrigerantSelect } from '../components/RefrigerantSelect'
-import { IntegrityStamp } from '../components/IntegrityStamp'
 import { DateInput } from '../components/DateInput'
 import { formatDate, formatDateTime, formatPlainDate } from '../lib/datetime'
 import { profileFor } from '../lib/compliance'
@@ -222,7 +222,7 @@ export default function Sites() {
       )}
 
       {stateChips.length > 0 && (
-        <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
+        <div className="no-scrollbar -mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
           <button
             onClick={() => setStateFilter('all')}
             className={`shrink-0 rounded-full px-3 py-1.5 text-sm font-medium transition ${
@@ -436,6 +436,7 @@ function SiteDetail({
     updateBottle,
     addTransaction,
   } = useStore()
+  const navigate = useNavigate()
   const toast = useToast()
   const confirm = useConfirm()
 
@@ -561,8 +562,19 @@ function SiteDetail({
               <div className="space-y-2">
                 {bottlesOnSite.map((b) => (
                   <Card key={b.id} className="!p-3">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0 flex-1">
+                    <div className="flex items-center justify-between gap-3">
+                      {/* Tap the bottle to open it — jumps to the Bottles
+                          page, which reads focusBottle from nav state and
+                          opens that cylinder's action sheet. */}
+                      <button
+                        type="button"
+                        onClick={() =>
+                          navigate('/bottles', {
+                            state: { focusBottle: b.id },
+                          })
+                        }
+                        className="-m-1 min-w-0 flex-1 rounded-lg p-1 text-left transition hover:bg-slate-100 dark:hover:bg-slate-800"
+                      >
                         <div className="font-semibold text-slate-900 dark:text-slate-100">
                           {b.bottleNumber}
                         </div>
@@ -571,7 +583,7 @@ function SiteDetail({
                           {formatWeight(netWeight(b), state.unit)} ·{' '}
                           {statusLabel(b.status)}
                         </div>
-                      </div>
+                      </button>
                       <Button
                         variant="secondary"
                         onClick={async () => {
@@ -1755,7 +1767,6 @@ function UnitLogbook({
         <footer className="border-t border-slate-300 pt-3 text-[11px] text-slate-500 dark:border-slate-700">
           <p>{profile.citation}</p>
           <p className="mt-2">Generated {generatedAt}.</p>
-          <IntegrityStamp />
           <div className="mt-4 grid grid-cols-2 gap-6 print:mt-8">
             <SignatureLine label="Technician signature" />
             <SignatureLine label="Customer signature" />
@@ -2218,7 +2229,6 @@ function SiteAuditModal({
             </p>
           )}
           <p className="mt-2">Generated {generatedAt}.</p>
-          <IntegrityStamp />
           <div className="mt-4 grid grid-cols-2 gap-6 print:mt-8">
             <SignatureLine label="Technician signature" />
             <SignatureLine label="Customer signature" />

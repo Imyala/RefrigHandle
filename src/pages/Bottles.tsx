@@ -438,7 +438,7 @@ export default function Bottles() {
         </div>
       )}
 
-      <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
+      <div className="no-scrollbar -mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
         {(['all', 'in_stock', 'on_site', 'returned', 'empty'] as const).map(
           (f) => {
             const count =

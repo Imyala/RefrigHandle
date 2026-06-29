@@ -6,9 +6,11 @@
 // another's.
 
 const PREFIX = 'refrighandle.alertSnooze.'
-// How long a dismissed alert stays hidden before it re-alerts.
+// Default window a dismissed alert stays hidden before it re-alerts.
 export const ALERT_SNOOZE_HOURS = 24
-const SNOOZE_MS = ALERT_SNOOZE_HOURS * 60 * 60 * 1000
+// Cylinder hydrostatic test is a slower-moving, less day-to-day concern
+// than a licence expiry, so its alert stays hidden longer once dismissed.
+export const HYDRO_SNOOZE_HOURS = 72
 
 export function snoozeAlert(key: string): void {
   try {
@@ -18,13 +20,19 @@ export function snoozeAlert(key: string): void {
   }
 }
 
-export function isAlertSnoozed(key: string): boolean {
+// The snooze window is decided at check time (the stored value is just
+// when it was dismissed), so different alerts can hide for different
+// durations off the same timestamp.
+export function isAlertSnoozed(
+  key: string,
+  hours: number = ALERT_SNOOZE_HOURS,
+): boolean {
   try {
     const raw = localStorage.getItem(PREFIX + key)
     if (!raw) return false
     const at = Number(raw)
     if (!Number.isFinite(at)) return false
-    return Date.now() - at < SNOOZE_MS
+    return Date.now() - at < hours * 60 * 60 * 1000
   } catch {
     return false
   }

@@ -12,7 +12,11 @@ import {
   snoozeBackupReminder,
 } from '../lib/backup'
 import { isStoragePersisted, requestPersistentStorage } from '../lib/storage'
-import { isAlertSnoozed, snoozeAlert } from '../lib/alertSnooze'
+import {
+  HYDRO_SNOOZE_HOURS,
+  isAlertSnoozed,
+  snoozeAlert,
+} from '../lib/alertSnooze'
 import { useToast } from '../lib/toast'
 
 // Shared alert panel surfaced on both the Home and Log pages so a tech
@@ -228,8 +232,10 @@ function LicenceAlerts() {
 function HydroAlerts() {
   const { state } = useStore()
   const { bottles } = state
-  // Hidden for 24h once dismissed, then it re-alerts (see alertSnooze).
-  const [snoozed, setSnoozed] = useState(() => isAlertSnoozed('hydro'))
+  // Hidden for HYDRO_SNOOZE_HOURS once dismissed, then it re-alerts.
+  const [snoozed, setSnoozed] = useState(() =>
+    isAlertSnoozed('hydro', HYDRO_SNOOZE_HOURS),
+  )
 
   const hydroAlerts = bottles
     .map((b) => ({ b, h: hydroStatusFor(b) }))
@@ -238,24 +244,37 @@ function HydroAlerts() {
 
   if (hydroAlerts.length === 0 || snoozed) return null
 
+  const overdue = hydroAlerts.filter((x) => x.h.status === 'overdue').length
+  const dueSoon = hydroAlerts.length - overdue
+  // A plain-language summary of the worst case, so the tech understands
+  // the panel at a glance without reading every row.
+  const summary = [
+    overdue > 0 ? `${overdue} overdue` : '',
+    dueSoon > 0 ? `${dueSoon} due soon` : '',
+  ]
+    .filter(Boolean)
+    .join(' · ')
+
   return (
     <Card className="!border-red-300 !bg-red-50 dark:!border-red-900/50 dark:!bg-red-900/20">
-      <div className="flex items-center justify-between gap-2">
-        <div className="text-sm font-semibold text-red-900 dark:text-red-200">
-          Cylinder hydrostatic test (AS 2030)
-        </div>
-        <Link
-          to="/bottles"
-          className="text-xs font-medium text-red-900 hover:underline dark:text-red-200"
+      <div className="flex items-start gap-3">
+        <div
+          aria-hidden
+          className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-red-100 text-lg dark:bg-red-900/40"
         >
-          View bottles
-        </Link>
+          🛢️
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="text-sm font-semibold text-red-900 dark:text-red-200">
+            Cylinder test due
+          </div>
+          <div className="text-xs font-medium text-red-900/80 dark:text-red-100/80">
+            {summary} · hydrostatic test (AS 2030)
+          </div>
+        </div>
       </div>
-      <p className="mt-1 text-xs text-red-900/80 dark:text-red-100/80">
-        Don't take a non-compliant cylinder to a job — periodic test is
-        mandatory under AS 2030.
-      </p>
-      <ul className="mt-2 space-y-1 text-sm">
+
+      <ul className="mt-3 space-y-1.5">
         {hydroAlerts.slice(0, 6).map(({ b, h }) => (
           <li key={b.id}>
             {/* Tap a row to jump straight to that cylinder — the Bottles
@@ -265,10 +284,14 @@ function HydroAlerts() {
             <Link
               to="/bottles"
               state={{ focusBottle: b.id }}
-              className="-mx-1 flex items-center justify-between gap-2 rounded-lg px-1 py-1 text-red-900 transition hover:bg-red-100/70 dark:text-red-100 dark:hover:bg-red-900/30"
+              className="flex items-center justify-between gap-2 rounded-xl bg-white/70 px-3 py-2 text-sm text-red-900 shadow-sm transition hover:bg-white dark:bg-red-950/30 dark:text-red-100 dark:hover:bg-red-950/50"
             >
-              <span>
-                <strong>{b.bottleNumber}</strong> · {b.refrigerantType}
+              <span className="min-w-0 truncate">
+                <strong>{b.bottleNumber}</strong>
+                <span className="text-red-900/70 dark:text-red-100/70">
+                  {' '}
+                  · {b.refrigerantType}
+                </span>
               </span>
               {h.status === 'overdue' ? (
                 <Pill tone="red">
@@ -283,12 +306,24 @@ function HydroAlerts() {
           </li>
         ))}
         {hydroAlerts.length > 6 && (
-          <li className="text-xs text-red-900/70 dark:text-red-100/70">
+          <li className="px-1 pt-0.5 text-xs text-red-900/70 dark:text-red-100/70">
             +{hydroAlerts.length - 6} more
           </li>
         )}
       </ul>
-      <div className="mt-3 flex items-center justify-between gap-2">
+
+      <p className="mt-3 text-[11px] text-red-900/70 dark:text-red-100/70">
+        Don't take a non-compliant cylinder to a job — periodic test is
+        mandatory under AS 2030.
+      </p>
+
+      <div className="mt-2 flex items-center justify-between gap-2">
+        <Link
+          to="/bottles"
+          className="text-xs font-semibold text-red-900 hover:underline dark:text-red-200"
+        >
+          View bottles →
+        </Link>
         <Button
           variant="ghost"
           onClick={() => {
@@ -296,11 +331,8 @@ function HydroAlerts() {
             setSnoozed(true)
           }}
         >
-          Hide
+          Hide for 3 days
         </Button>
-        <span className="text-[11px] text-red-900/60 dark:text-red-100/60">
-          Reappears in 24 hours.
-        </span>
       </div>
     </Card>
   )

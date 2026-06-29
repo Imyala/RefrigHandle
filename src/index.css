@@ -40,6 +40,19 @@ button {
   font: inherit;
 }
 
+/* Horizontal chip/scroll rows: keep the swipe-to-scroll, drop the
+   scrollbar. On desktop/Android the overlay bar sits on top of the chips
+   and looks messy; this hides it across engines while leaving the row
+   fully scrollable (and momentum-scrolling on iOS). */
+.no-scrollbar {
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* old Edge */
+  -webkit-overflow-scrolling: touch;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none; /* Chrome / Safari / WebKit */
+}
+
 /* Hide number-input spinners — we want plain weight entry */
 input[type='number']::-webkit-outer-spin-button,
 input[type='number']::-webkit-inner-spin-button {

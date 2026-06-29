@@ -216,7 +216,7 @@ export default function AuditLog() {
       )}
 
       {auditLog.length > 0 && (
-        <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
+        <div className="no-scrollbar -mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
           {ENTITY_FILTERS.map((f) => (
             <button
               key={f}
