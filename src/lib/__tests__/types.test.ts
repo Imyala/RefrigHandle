@@ -9,8 +9,13 @@ import {
   netWeight,
   overfillKg,
   canAssignRole,
+  canBeNonHandling,
+  canDeactivateTech,
+  canLogHandling,
   canManageTech,
   canManageTechnicians,
+  licenceRequired,
+  techAdminAccess,
   composeName,
   daysUntilPurge,
   formatBuildVersion,
@@ -98,6 +103,63 @@ describe('role assignment guard (canAssignRole / canManageTech)', () => {
     expect(canManageTech('supervisor', 'owner')).toBe(false)
     expect(canManageTech('owner', 'supervisor')).toBe(true)
     expect(canManageTech('technician', 'apprentice')).toBe(false)
+  })
+})
+
+describe('non-handling (no-RHL) management accounts', () => {
+  it('only owner/supervisor may be non-handling', () => {
+    expect(canBeNonHandling('owner')).toBe(true)
+    expect(canBeNonHandling('supervisor')).toBe(true)
+    expect(canBeNonHandling('lead_tech')).toBe(false)
+    expect(canBeNonHandling('technician')).toBe(false)
+    expect(canBeNonHandling('apprentice')).toBe(false)
+  })
+
+  it('a licence is required unless a management account is flagged non-handling', () => {
+    expect(licenceRequired({ role: 'technician', nonHandling: true })).toBe(true)
+    expect(licenceRequired({ role: 'supervisor', nonHandling: false })).toBe(true)
+    expect(licenceRequired({ role: 'supervisor', nonHandling: true })).toBe(false)
+    expect(licenceRequired({ role: 'owner', nonHandling: true })).toBe(false)
+  })
+
+  it('non-handling accounts (or those with no RHL) cannot log handling work', () => {
+    expect(canLogHandling({ nonHandling: true, arcLicenceNumber: 'L1' })).toBe(false)
+    expect(canLogHandling({ nonHandling: false, arcLicenceNumber: '' })).toBe(false)
+    expect(canLogHandling({ nonHandling: false, arcLicenceNumber: 'L1' })).toBe(true)
+  })
+})
+
+describe('senior-account administration (techAdminAccess / canDeactivateTech)', () => {
+  it('a strict senior has full control of a subordinate', () => {
+    expect(techAdminAccess('owner', 'supervisor', false)).toBe('full')
+    expect(techAdminAccess('supervisor', 'lead_tech', false)).toBe('full')
+  })
+
+  it('same-tier senior peers get limited control of each other', () => {
+    expect(techAdminAccess('supervisor', 'supervisor', false)).toBe('limited')
+    expect(techAdminAccess('owner', 'owner', false)).toBe('limited')
+    // but not lower tiers — a lead tech is not a senior peer
+    expect(techAdminAccess('lead_tech', 'lead_tech', false)).toBe('none')
+  })
+
+  it('editing your own profile is always self access', () => {
+    expect(techAdminAccess('supervisor', 'supervisor', true)).toBe('self')
+    expect(techAdminAccess('owner', 'owner', true)).toBe('self')
+  })
+
+  it('a supervisor/owner can never deactivate themselves', () => {
+    expect(canDeactivateTech('supervisor', 'supervisor', true)).toBe(false)
+    expect(canDeactivateTech('owner', 'owner', true)).toBe(false)
+    // a lower role may still self-deactivate via self-manage
+    expect(canDeactivateTech('lead_tech', 'lead_tech', true)).toBe(true)
+  })
+
+  it('a peer of equal-or-higher tier can deactivate a senior', () => {
+    expect(canDeactivateTech('supervisor', 'supervisor', false)).toBe(true)
+    expect(canDeactivateTech('owner', 'supervisor', false)).toBe(true)
+    expect(canDeactivateTech('owner', 'owner', false)).toBe(true)
+    // a subordinate can't deactivate a senior
+    expect(canDeactivateTech('lead_tech', 'supervisor', false)).toBe(false)
   })
 })
 

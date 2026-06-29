@@ -114,6 +114,7 @@ export const TECH_FIELDS: FieldLabels<Technician> = {
   role: 'Role',
   arcLicenceNumber: 'RHL',
   licenceExpiry: 'RHL expiry',
+  nonHandling: 'Non-handling (no RHL)',
 }
 
 function formatValue(v: unknown): string {

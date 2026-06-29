@@ -6,6 +6,7 @@ import { useStore } from '../lib/store'
 import { useToast } from '../lib/toast'
 import { useConfirm } from '../lib/confirm'
 import { profileFor } from '../lib/compliance'
+import { canEditCompanyIdentity, roleInfo } from '../lib/types'
 
 // Common reasons, offered as a picker so the request is quick to fill and
 // the responses stay consistent. "Other" reveals the free-text box.
@@ -103,6 +104,28 @@ export default function AccountDeletion() {
     toast.show('Account closed', 'info')
     // The AccountClosedGate takes over on the next render and replaces the
     // whole app, so there's nothing more to do here.
+  }
+
+  // Closing the whole business account is reserved for owner / supervisor —
+  // the people who hold the regulatory relationship. The store enforces this
+  // too; this guard keeps a lower role from ever seeing the form.
+  if (!canEditCompanyIdentity(activeTech?.role)) {
+    return (
+      <div className="space-y-4">
+        <BackLink>← Back to Settings</BackLink>
+        <Card className="!border-amber-300 !bg-amber-50 dark:!border-amber-900/50 dark:!bg-amber-900/20">
+          <div className="text-sm font-semibold text-amber-900 dark:text-amber-200">
+            Owner or supervisor only
+          </div>
+          <p className="mt-1 text-sm text-amber-900/80 dark:text-amber-100/80">
+            Closing the business account can only be requested by a business
+            owner or supervisor. You’re signed in as{' '}
+            {roleInfo(activeTech?.role).label}. Ask an owner or supervisor to
+            make this request.
+          </p>
+        </Card>
+      </div>
+    )
   }
 
   return (

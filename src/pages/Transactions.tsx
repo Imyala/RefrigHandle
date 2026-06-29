@@ -19,6 +19,7 @@ import {
   REASON_LABELS,
   canCorrectRecords,
   canDeleteRecords,
+  canLogHandling,
   netWeight,
   overfillKg,
   roleInfo,
@@ -831,6 +832,16 @@ function TransactionForm({
   const missingReason = showCompliance && !reason
   const missingLeakTest = showCompliance && leakTest === null
   const missingCorrectionReason = !!correcting && !correctionReason.trim()
+  // Handling work (charge / recover) must be logged under a licensed
+  // technician. A non-handling management account (no RHL) can record
+  // admin-only moves (transfer / return / adjust) but not handling — a
+  // handling record with no licence is itself a compliance breach.
+  const guardedTech =
+    techId !== '__other__'
+      ? state.technicians.find((t) => t.id === techId)
+      : null
+  const blockUnlicensedHandling =
+    showCompliance && !!guardedTech && !canLogHandling(guardedTech)
   const submitBlocked =
     blockOverdraw ||
     blockAlreadyReturned ||
@@ -839,6 +850,7 @@ function TransactionForm({
     missingCorrectionReason ||
     blockImplausible ||
     blockNoOp ||
+    blockUnlicensedHandling ||
     scaleInvalid
 
   // Resolve identity stamps from the picked profile (or the free-text
@@ -1412,6 +1424,16 @@ function TransactionForm({
               placeholder="One-off name (no RHL stamped)"
             />
           </Field>
+        )}
+
+        {blockUnlicensedHandling && guardedTech && (
+          <div className="rounded-xl bg-red-50 p-3 text-sm text-red-900 dark:bg-red-900/20 dark:text-red-100">
+            ⛔ {guardedTech.name} is a management account with no{' '}
+            {profileFor(state.jurisdiction).techLicenceShort} on record, so it
+            can’t log {kind === 'charge' ? 'a charge' : 'a recovery'} — handling
+            refrigerant needs a licensed technician. Pick a licensed tech (or
+            use Other) to record this work.
+          </div>
         )}
 
         {addingTech && (

@@ -750,6 +750,78 @@ export function canAssignRole(
   return roleInfo(target).level < roleInfo(actor).level
 }
 
+// --- Licence / handling gates ----------------------------------------
+
+// Whether a role is even allowed to be a non-handling (no-RHL) account.
+// Only the management tiers — owner and supervisor — may run the app
+// without holding a personal RHL; every hands-on role must be licensed.
+export function canBeNonHandling(role: TechnicianRole | undefined): boolean {
+  return roleAtLeast(role, 'supervisor')
+}
+
+// Whether a profile must carry an RHL (number + expiry). Required for
+// everyone EXCEPT a management account explicitly flagged non-handling.
+export function licenceRequired(
+  t: Pick<Technician, 'role' | 'nonHandling'>,
+): boolean {
+  return !(t.nonHandling && canBeNonHandling(t.role))
+}
+
+// Whether this profile may LOG refrigerant-handling work (charge /
+// recover). A non-handling account, or one with no RHL on record, cannot —
+// stamping a handling record with no licence is itself a breach. Admin-only
+// moves (transfer / return / adjust) are allowed regardless.
+export function canLogHandling(
+  t: Pick<Technician, 'nonHandling' | 'arcLicenceNumber'>,
+): boolean {
+  if (t.nonHandling) return false
+  return !!(t.arcLicenceNumber ?? '').trim()
+}
+
+// --- Senior-account administration -----------------------------------
+// How much one profile may administer another. Layered on top of
+// canManageTech so a same-tier senior peer (supervisor↔supervisor,
+// owner↔owner) gets LIMITED control — flip the account active/inactive and
+// change its role, and request (not set) a password reset — without being
+// able to edit the peer's identity or silently take over their login.
+//   'self'    — editing your own profile
+//   'full'    — a strict senior over a subordinate: edit everything
+//   'limited' — a same-tier senior peer: role + activation + reset request
+//   'none'    — not permitted
+export type TechAdminAccess = 'self' | 'full' | 'limited' | 'none'
+
+export function techAdminAccess(
+  actor: TechnicianRole | undefined,
+  target: TechnicianRole | undefined,
+  isSelf: boolean,
+): TechAdminAccess {
+  if (isSelf) return 'self'
+  if (!canManageTechnicians(actor)) return 'none'
+  const a = roleInfo(actor).level
+  const t = roleInfo(target).level
+  // A strictly-senior manager has full control of a subordinate.
+  if (t < a) return 'full'
+  // Same-tier senior peers (supervisor or owner) get limited control of
+  // each other — enough to cover for an absent colleague, not enough to
+  // hijack the account.
+  if (t === a && a >= roleInfo('supervisor').level) return 'limited'
+  return 'none'
+}
+
+// Whether `actor` may deactivate / reactivate `target`. A supervisor or
+// owner can never deactivate THEMSELVES (that could orphan the business or
+// lock everyone out) — it must be done by a peer of the same tier or
+// higher. Lower roles may still deactivate themselves through self-manage.
+export function canDeactivateTech(
+  actor: TechnicianRole | undefined,
+  target: TechnicianRole | undefined,
+  isSelf: boolean,
+): boolean {
+  if (isSelf) return !roleAtLeast(target, 'supervisor')
+  const access = techAdminAccess(actor, target, false)
+  return access === 'full' || access === 'limited'
+}
+
 // --- Deactivation lifecycle ------------------------------------------
 // A technician who leaves is first deactivated (account disabled but
 // kept), then fully purged after this many days. Their logged work is
@@ -835,6 +907,19 @@ export interface Technician {
   // into until a manager lifts the suspension. Distinct from deactivatedAt
   // (a leaver with a purge countdown); a suspension never purges.
   suspendedAt?: string
+  // Management / non-handling account: an owner or supervisor who runs the
+  // crew and reviews the audit trail but does NOT physically handle
+  // refrigerant, so holds no RHL. Only owner/supervisor may be marked this
+  // (see canBeNonHandling). When set, the RHL number + expiry are optional,
+  // and the account is barred from logging handling work (charge / recover)
+  // since that would stamp a record with no licence — itself a breach.
+  nonHandling?: boolean
+  // Set when a manager of equal or higher tier has requested this account's
+  // password be reset (a same-tier peer can ask for a reset but cannot set
+  // the new password themselves — that would be a silent takeover). Cleared
+  // the moment a new password is set. Informational: an owner can set a new
+  // password, or the account holder can change it after signing in.
+  passwordResetRequested?: string
   arcLicenceNumber: string // ARC RHL — personal licence, per tech
   // RHL expiry date (YYYY-MM-DD). RHLs run for two years; logging work
   // against a lapsed licence is itself a breach, so the app alerts as

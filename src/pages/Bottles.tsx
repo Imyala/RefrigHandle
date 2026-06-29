@@ -26,6 +26,7 @@ import {
   BOTTLE_KIND_LABELS,
   REFRIGERANT_TYPES,
   REASON_LABELS,
+  canLogHandling,
   fillingRatio,
   hydroStatusFor,
   netWeight,
@@ -1273,6 +1274,10 @@ function QuickLogModal({
     kind === 'return' && bottle.status === 'returned'
   const missingReason = showCompliance && !reason
   const missingLeakTest = showCompliance && leakTest === null
+  // Charge / recover is refrigerant handling — it can't be logged under a
+  // non-handling management account (no RHL). Switch to a licensed profile.
+  const blockUnlicensedHandling =
+    showCompliance && !!stampTech && !canLogHandling(stampTech)
   const submitBlocked =
     blockOverdraw ||
     blockSourceOverdraw ||
@@ -1281,6 +1286,7 @@ function QuickLogModal({
     missingLeakTest ||
     blockImplausible ||
     blockNoOp ||
+    blockUnlicensedHandling ||
     scaleInvalid
 
   function handleUnitChange(value: string) {
@@ -1778,6 +1784,17 @@ function QuickLogModal({
                       })}
                     </div>
                   )}
+                </div>
+              )}
+              {blockUnlicensedHandling && stampTech && (
+                <div className="rounded-xl bg-red-50 p-3 text-sm text-red-900 dark:bg-red-900/20 dark:text-red-100">
+                  ⛔ {stampTech.name} is a management account with no{' '}
+                  {profileFor(state.jurisdiction).techLicenceShort} on record —
+                  handling refrigerant must be logged under a licensed
+                  technician.{' '}
+                  {switchableTechs.some((t) => t.id !== stampTech.id)
+                    ? 'Use “Change” above to switch to a licensed profile.'
+                    : 'Add a licensed technician profile to record this work.'}
                 </div>
               )}
               {!unitId && (

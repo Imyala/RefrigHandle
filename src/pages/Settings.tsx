@@ -27,10 +27,14 @@ import {
   TECHNICIAN_ROLES,
   DEFAULT_TECHNICIAN_ROLE,
   TECHNICIAN_PURGE_DAYS,
+  type TechAdminAccess,
   roleInfo,
   roleAtLeast,
   canAssignRole,
-  canManageTech,
+  canBeNonHandling,
+  canDeactivateTech,
+  licenceRequired,
+  techAdminAccess,
   daysUntilPurge,
   isTechnicianActive,
   canEditCompanyIdentity,
@@ -88,7 +92,7 @@ export default function Settings() {
     reactivateTechnician,
     suspendTechnician,
     unsuspendTechnician,
-    deleteTechnician,
+    requestPasswordReset,
     setActiveTechnicianId,
     setArcAuthorisationNumber,
     setArcAuthorisationExpiry,
@@ -243,22 +247,6 @@ export default function Settings() {
     } else {
       setActiveTechnicianId(t.id)
       toast.show(`Active tech: ${t.name}`)
-    }
-  }
-
-  // Skip the rest of the 90-day retention and purge the profile now.
-  // Their logged work is kept regardless (frozen on each transaction).
-  async function requestDeleteNow(t: Technician) {
-    const ok = await confirm({
-      title: `Delete ${t.name} now?`,
-      message:
-        'Removes this profile immediately instead of waiting out the retention window. Everything they logged stays in the records for audit. This cannot be undone.',
-      confirmLabel: 'Delete',
-      danger: true,
-    })
-    if (ok) {
-      deleteTechnician(t.id)
-      toast.show(`${t.name} deleted`)
     }
   }
 
@@ -542,11 +530,12 @@ export default function Settings() {
               const active = isTechnicianActive(t)
               const untilPurge = active ? null : daysUntilPurge(t, new Date())
               // Only owners/supervisors get the Manage button. They can
-              // manage people strictly below their own tier, plus their own
-              // profile (the role picker still blocks self-promotion).
+              // manage people below their own tier, a same-tier senior peer
+              // (limited control), plus their own profile (the role picker
+              // still blocks self-promotion).
               const canManageThis =
                 canManage &&
-                (canManageTech(activeTech?.role, t.role) || isActive)
+                techAdminAccess(activeTech?.role, t.role, isActive) !== 'none'
               return (
                 <div
                   key={t.id}
@@ -574,6 +563,10 @@ export default function Settings() {
                       {active && t.suspendedAt && (
                         <Pill tone="red">Suspended</Pill>
                       )}
+                      {active && t.passwordResetRequested && (
+                        <Pill tone="amber">Password reset requested</Pill>
+                      )}
+                      {t.nonHandling && <Pill tone="slate">No RHL</Pill>}
                       <Pill tone={roleInfo(t.role).level >= 3 ? 'blue' : 'slate'}>
                         {roleInfo(t.role).label}
                       </Pill>
@@ -635,12 +628,6 @@ export default function Settings() {
                             onClick={() => requestReactivate(t)}
                           >
                             Reactivate
-                          </Button>
-                          <Button
-                            variant="danger"
-                            onClick={() => requestDeleteNow(t)}
-                          >
-                            Delete now
                           </Button>
                         </>
                       )
@@ -1070,25 +1057,31 @@ export default function Settings() {
         </div>
       </Card>
 
-      <div className="text-center">
-        <Link
-          to="/account-deletion"
-          onClick={() => {
-            // Hand the user their records the moment they start the closure
-            // flow — best effort; saving and keeping it is their
-            // responsibility (the deletion page says as much).
-            void downloadRecordsZip(state).catch(() => {
-              toast.show(
-                'Could not auto-export your records — use Settings → export a backup before closing.',
-                'error',
-              )
-            })
-          }}
-          className="text-xs text-slate-400 underline-offset-2 hover:text-slate-600 hover:underline dark:hover:text-slate-300"
-        >
-          Request deletion of account
-        </Link>
-      </div>
+      {/* Closing the whole business account is reserved for the people who
+          own the regulatory relationship — owner or supervisor. Hidden for
+          everyone below so a technician can't start the closure flow (the
+          store also enforces this). */}
+      {canEditCompany && (
+        <div className="text-center">
+          <Link
+            to="/account-deletion"
+            onClick={() => {
+              // Hand the user their records the moment they start the closure
+              // flow — best effort; saving and keeping it is their
+              // responsibility (the deletion page says as much).
+              void downloadRecordsZip(state).catch(() => {
+                toast.show(
+                  'Could not auto-export your records — use Settings → export a backup before closing.',
+                  'error',
+                )
+              })
+            }}
+            className="text-xs text-slate-400 underline-offset-2 hover:text-slate-600 hover:underline dark:hover:text-slate-300"
+          >
+            Request deletion of account
+          </Link>
+        </div>
+      )}
 
       {/* App version, injected at build time and bumped on every deploy
           (see APP_VERSION). Kept tiny and last so it's available for
@@ -1119,7 +1112,8 @@ export default function Settings() {
               name: data.name,
               role: data.role,
               arcLicenceNumber: data.arcLicenceNumber,
-              licenceExpiry: data.licenceExpiry,
+              licenceExpiry: data.licenceExpiry || undefined,
+              nonHandling: data.nonHandling || undefined,
               ...passwordHashPatch,
             })
             toast.show('Tech updated')
@@ -1131,7 +1125,8 @@ export default function Settings() {
               name: data.name,
               role: data.role,
               arcLicenceNumber: data.arcLicenceNumber,
-              licenceExpiry: data.licenceExpiry,
+              licenceExpiry: data.licenceExpiry || undefined,
+              nonHandling: data.nonHandling || undefined,
               // The modal requires the licence self-declaration before
               // onSave fires, so stamp when it was made.
               licenceDeclaredAt: new Date().toISOString(),
@@ -1147,7 +1142,17 @@ export default function Settings() {
           setTechModalOpen(false)
         }}
         onDelete={
-          editingTech
+          // Deactivate (reversible; 90-day auto-purge). Gated by
+          // canDeactivateTech: a supervisor/owner can't deactivate THEMSELVES
+          // — a peer of equal-or-higher tier must — and only active accounts
+          // can be deactivated.
+          editingTech &&
+          isTechnicianActive(editingTech) &&
+          canDeactivateTech(
+            activeTech?.role,
+            editingTech.role,
+            editingTech.id === state.activeTechnicianId,
+          )
             ? async () => {
                 const ok = await confirm({
                   title: `Deactivate ${editingTech.name}?`,
@@ -1163,31 +1168,37 @@ export default function Settings() {
               }
             : undefined
         }
-        onDeleteForever={
-          // Permanent delete — offered only for someone other than the
-          // signed-in profile (you can't delete the account you're using).
-          // The tech's logged work stays frozen on the record for audit.
-          editingTech && editingTech.id !== state.activeTechnicianId
+        onRequestPasswordReset={
+          // A same-tier senior peer may REQUEST a reset (flag it) but can't
+          // set the new password — that would be a silent takeover. Only
+          // offered in the 'limited' (peer) relationship.
+          editingTech &&
+          techAdminAccess(
+            activeTech?.role,
+            editingTech.role,
+            editingTech.id === state.activeTechnicianId,
+          ) === 'limited'
             ? async () => {
                 const ok = await confirm({
-                  title: `Delete ${editingTech.name} permanently?`,
+                  title: `Request a password reset for ${editingTech.name}?`,
                   message:
-                    'This removes the account immediately and can’t be undone. Everything they have logged stays frozen on the record for audit. To keep the account recoverable, use Deactivate instead.',
-                  confirmLabel: 'Delete permanently',
-                  danger: true,
+                    'Flags this account so the person knows to set a new password. You can’t set it for them — they can change it after signing in, or an owner can set a new one.',
+                  confirmLabel: 'Request reset',
                 })
                 if (ok) {
-                  deleteTechnician(editingTech.id)
-                  toast.show('Tech deleted', 'info')
+                  requestPasswordReset(editingTech.id)
+                  toast.show('Password reset requested', 'info')
                   setTechModalOpen(false)
                 }
               }
             : undefined
         }
         onToggleSuspend={
-          // Lock / unlock — offered only for someone other than the
-          // signed-in profile (you can't suspend the account you're using).
-          editingTech && editingTech.id !== state.activeTechnicianId
+          // Lock / unlock — offered to a manager with control over this
+          // account, but never on the profile you're signed into.
+          editingTech &&
+          editingTech.id !== state.activeTechnicianId &&
+          techAdminAccess(activeTech?.role, editingTech.role, false) !== 'none'
             ? async () => {
                 if (editingTech.suspendedAt) {
                   const ok = await confirm({
@@ -1241,7 +1252,9 @@ type TechSavePayload = {
   name: string // composed from the parts above
   role: TechnicianRole
   arcLicenceNumber: string
-  licenceExpiry: string // required on every account
+  licenceExpiry: string // required unless nonHandling (may be '')
+  // Management account with no personal RHL (owner/supervisor only).
+  nonHandling: boolean
   // 'set' = replace the hash; undefined = leave the existing password
   // unchanged. There is deliberately no "remove": a password can never be
   // cleared, so no one can strip protection off another tech's profile and
@@ -1257,8 +1270,8 @@ function TechnicianModal({
   onClose,
   onSave,
   onDelete,
-  onDeleteForever,
   onToggleSuspend,
+  onRequestPasswordReset,
 }: {
   open: boolean
   editing: Technician | null
@@ -1268,13 +1281,15 @@ function TechnicianModal({
   ownerExists: boolean
   onClose: () => void
   onSave: (data: TechSavePayload) => void
-  // Suspend (deactivate, reversible) and permanent delete — only wired for
-  // a manager editing someone other than their own active profile.
+  // Deactivate (reversible, with a 90-day purge) — wired only when the
+  // actor is allowed to deactivate this person (see canDeactivateTech).
   onDelete?: () => void
-  onDeleteForever?: () => void
   // Lock / unlock the account (manager suspension). Label flips on the
   // editing tech's current suspended state.
   onToggleSuspend?: () => void
+  // Request (not set) a password reset — wired for a same-tier senior peer
+  // who may flag a reset but must not choose the new password themselves.
+  onRequestPasswordReset?: () => void
 }) {
   const { state } = useStore()
   const profile = profileFor(state.jurisdiction)
@@ -1284,6 +1299,9 @@ function TechnicianModal({
   const [role, setRole] = useState<TechnicianRole>(DEFAULT_TECHNICIAN_ROLE)
   const [rhl, setRhl] = useState('')
   const [licenceExpiry, setLicenceExpiry] = useState('')
+  // Management / non-handling account — no personal RHL (owner/supervisor
+  // only). See Technician.nonHandling.
+  const [nonHandling, setNonHandling] = useState(false)
   const [password, setPassword] = useState('')
   const [confirmPw, setConfirmPw] = useState('')
   // Licence self-declaration — required when creating a new account. Places
@@ -1312,6 +1330,7 @@ function TechnicianModal({
     setRole(editing?.role ?? DEFAULT_TECHNICIAN_ROLE)
     setRhl(editing?.arcLicenceNumber ?? '')
     setLicenceExpiry(editing?.licenceExpiry ?? '')
+    setNonHandling(!!editing?.nonHandling)
     setPassword('')
     setConfirmPw('')
     setLicenceDeclared(false)
@@ -1339,11 +1358,28 @@ function TechnicianModal({
       canAssignRole(actorRole, r.value, ownerExists) || r.value === editing?.role,
   )
 
+  // How much control the seated profile has over the one being edited.
+  // 'limited' is a same-tier senior peer: they may change the role and
+  // activation but not the peer's identity or password (see techAdminAccess).
+  const isSelf = !!editing && editing.id === state.activeTechnicianId
+  const access: TechAdminAccess = editing
+    ? techAdminAccess(actorRole, editing.role, isSelf)
+    : 'full'
+  const limited = access === 'limited'
+
+  // Non-handling (no-RHL) is only meaningful for management tiers. If the
+  // chosen role can't be non-handling, the flag is forced off so a
+  // hands-on tech is always required to be licensed.
+  const effectiveNonHandling = nonHandling && canBeNonHandling(role)
+  const licenceNeeded = licenceRequired({ role, nonHandling: effectiveNonHandling })
+
   // Field-level validation, surfaced after the first save attempt.
   const firstErr = attempted && !firstName.trim() ? 'First name is required.' : undefined
   const lastErr = attempted && !lastName.trim() ? 'Surname is required.' : undefined
+  // A peer (limited) can't touch the licence fields, so never block them on
+  // licence validation — only the editor who can actually set the licence.
   const expiryErr =
-    attempted && !licenceExpiry
+    attempted && !limited && licenceNeeded && !licenceExpiry
       ? `${profile.techLicenceShort} expiry date is required.`
       : undefined
 
@@ -1353,9 +1389,11 @@ function TechnicianModal({
     setAttempted(true)
     setPwError('')
 
-    // Block on the required identity/compliance fields first. New accounts
-    // also require the licence self-declaration.
-    if (!firstName.trim() || !lastName.trim() || !licenceExpiry) return
+    // Block on the required identity/compliance fields first. A licence
+    // expiry is required unless this is a non-handling management account.
+    // New accounts also require the licence (or non-handling) declaration.
+    if (!firstName.trim() || !lastName.trim()) return
+    if (!limited && licenceNeeded && !licenceExpiry) return
     if (!editing && !licenceDeclared) return
 
     let passwordChange: TechSavePayload['passwordChange']
@@ -1396,12 +1434,16 @@ function TechnicianModal({
       canAssignRole(actorRole, role, ownerExists) || role === editing?.role
         ? role
         : editing?.role ?? DEFAULT_TECHNICIAN_ROLE
+    // Non-handling only sticks for a management role; a hands-on role is
+    // always licensed. When non-handling, the RHL fields are left blank.
+    const savedNonHandling = nonHandling && canBeNonHandling(safeRole)
     onSave({
       ...parts,
       name: composeName(parts),
       role: safeRole,
-      arcLicenceNumber: rhl.trim(),
-      licenceExpiry,
+      arcLicenceNumber: savedNonHandling ? '' : rhl.trim(),
+      licenceExpiry: savedNonHandling ? '' : licenceExpiry,
+      nonHandling: savedNonHandling,
       passwordChange,
     })
   }
@@ -1411,9 +1453,10 @@ function TechnicianModal({
       <form onSubmit={submit} className="space-y-3">
         <Field label="First name *" error={firstErr}>
           <TextInput
-            autoFocus
+            autoFocus={!limited}
             value={firstName}
             invalid={!!firstErr}
+            disabled={limited}
             onChange={(e) => setFirstName(e.target.value)}
             placeholder="e.g. Jane"
           />
@@ -1421,6 +1464,7 @@ function TechnicianModal({
         <Field label="Middle name" hint="Optional.">
           <TextInput
             value={middleName}
+            disabled={limited}
             onChange={(e) => setMiddleName(e.target.value)}
             placeholder="e.g. Quinn"
           />
@@ -1429,10 +1473,19 @@ function TechnicianModal({
           <TextInput
             value={lastName}
             invalid={!!lastErr}
+            disabled={limited}
             onChange={(e) => setLastName(e.target.value)}
             placeholder="e.g. Smith"
           />
         </Field>
+        {limited && (
+          <p className="rounded-xl bg-slate-50 px-3 py-2 text-xs text-slate-500 dark:bg-slate-800/50">
+            You’re a peer of the same tier as {editing?.name || 'this account'}.
+            You can change their role, activate or deactivate the account, and
+            request a password reset — but not edit their details or set their
+            password.
+          </p>
+        )}
         <Field
           label="Role"
           hint={
@@ -1458,29 +1511,75 @@ function TechnicianModal({
             }))}
           />
         </Field>
-        <Field
-          label={profile.techLicenceLabel}
-          hint="Personal licence — stamped onto every transaction this tech logs."
-        >
-          <TextInput
-            value={rhl}
-            onChange={(e) => setRhl(e.target.value)}
-            placeholder="e.g. L000000"
-          />
-        </Field>
-        <Field
-          label={`${profile.techLicenceShort} expiry *`}
-          error={expiryErr}
-          hint="The app warns before this lapses, since logging work on an expired licence is a breach."
-        >
-          <DateInput
-            value={licenceExpiry}
-            onChange={setLicenceExpiry}
-            invalid={!!expiryErr}
-            ariaLabel="Licence expiry date"
-          />
-        </Field>
+        {/* Non-handling (no-RHL) management account — only for owner /
+            supervisor. Hides the licence fields when ticked. */}
+        {canBeNonHandling(role) && (
+          <label className="flex items-start gap-2 rounded-xl border border-slate-200 p-3 text-sm text-slate-700 dark:border-slate-800 dark:text-slate-200">
+            <input
+              type="checkbox"
+              className="mt-0.5 h-4 w-4 accent-brand-600"
+              checked={nonHandling}
+              disabled={limited}
+              onChange={(e) => setNonHandling(e.target.checked)}
+            />
+            <span>
+              Management account — does <strong>not</strong> handle refrigerant
+              and holds no {profile.techLicenceShort}. They can manage techs and
+              review the audit trail, but can’t log charge/recover work.
+            </span>
+          </label>
+        )}
+        {!effectiveNonHandling && (
+          <>
+            <Field
+              label={profile.techLicenceLabel}
+              hint="Personal licence — stamped onto every transaction this tech logs."
+            >
+              <TextInput
+                value={rhl}
+                disabled={limited}
+                onChange={(e) => setRhl(e.target.value)}
+                placeholder="e.g. L000000"
+              />
+            </Field>
+            <Field
+              label={`${profile.techLicenceShort} expiry *`}
+              error={expiryErr}
+              hint="The app warns before this lapses, since logging work on an expired licence is a breach."
+            >
+              <DateInput
+                value={licenceExpiry}
+                onChange={setLicenceExpiry}
+                invalid={!!expiryErr}
+                ariaLabel="Licence expiry date"
+              />
+            </Field>
+          </>
+        )}
 
+        {limited ? (
+          <div className="rounded-xl border border-slate-200 p-3 dark:border-slate-800">
+            <div className="mb-1 text-sm font-semibold text-slate-700 dark:text-slate-200">
+              Password
+            </div>
+            <p className="mb-3 text-xs text-slate-500">
+              You can’t set a password for a peer of your own tier. Request a
+              reset instead — they set the new password themselves.
+            </p>
+            {onRequestPasswordReset && (
+              <Button
+                type="button"
+                variant="secondary"
+                full
+                onClick={onRequestPasswordReset}
+              >
+                {editing?.passwordResetRequested
+                  ? 'Reset already requested — request again'
+                  : 'Request password reset'}
+              </Button>
+            )}
+          </div>
+        ) : (
         <div className="rounded-xl border border-slate-200 p-3 dark:border-slate-800">
           <div className="mb-1 text-sm font-semibold text-slate-700 dark:text-slate-200">
             {hasExistingPassword
@@ -1526,6 +1625,7 @@ function TechnicianModal({
             )}
           </div>
         </div>
+        )}
 
         {!editing && (
           <div className="rounded-xl border border-slate-200 p-3 dark:border-slate-800">
@@ -1543,14 +1643,14 @@ function TechnicianModal({
                     : ''
                 }
               >
-                I confirm that this technician holds a current ARC Refrigerant
-                Handling Licence (RHL) appropriate for the work they perform, and
-                that the licence details entered are accurate and current. *
+                {effectiveNonHandling
+                  ? 'I confirm that this is a management / supervisory account that does not perform refrigerant handling work, and therefore holds no ARC Refrigerant Handling Licence (RHL). *'
+                  : 'I confirm that this technician holds a current ARC Refrigerant Handling Licence (RHL) appropriate for the work they perform, and that the licence details entered are accurate and current. *'}
               </span>
             </label>
             {attempted && !licenceDeclared && (
               <p className="mt-1 text-xs font-medium text-red-600 dark:text-red-400">
-                Please confirm the licence declaration to add this account.
+                Please confirm the declaration to add this account.
               </p>
             )}
           </div>
@@ -1578,13 +1678,6 @@ function TechnicianModal({
             onClick={onToggleSuspend}
           >
             {editing.suspendedAt ? 'Lift suspension' : 'Suspend account'}
-          </Button>
-        )}
-        {onDeleteForever && (
-          <Button type="button" variant="ghost" full onClick={onDeleteForever}>
-            <span className="text-red-600 dark:text-red-400">
-              Delete account permanently
-            </span>
           </Button>
         )}
       </form>

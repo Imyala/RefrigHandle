@@ -16,6 +16,7 @@ import { useToast } from '../lib/toast'
 import { hashPassword, MIN_PASSWORD_LENGTH } from '../lib/auth'
 import { screenNewPassword } from '../lib/passwordStrength'
 import {
+  canBeNonHandling,
   isLocationComplete,
   isSetupComplete,
   roleInfo,
@@ -106,6 +107,9 @@ function OnboardingScreen() {
   const [techLast, setTechLast] = useState('')
   const [techRhl, setTechRhl] = useState('')
   const [techExpiry, setTechExpiry] = useState('')
+  // Management (non-handling) first account — an owner / supervisor who runs
+  // the business and reviews the audit trail but holds no personal RHL.
+  const [nonHandling, setNonHandling] = useState(false)
   const [password, setPassword] = useState('')
   const [confirmPw, setConfirmPw] = useState('')
   // Licence self-declaration — confirms a current RHL and accurate details.
@@ -147,13 +151,17 @@ function OnboardingScreen() {
   // setup so the app can warn before the authorisation runs out.
   const arcExpiryOk = !profile.hasBusinessAuthorisation || arcExpiry !== ''
   const nameOk = techFirst.trim() !== '' && techLast.trim() !== ''
-  const expiryOk = techExpiry !== ''
+  // A non-handling management account holds no RHL, so the licence number
+  // and expiry aren't required for it.
+  const licenceNeeded = !(nonHandling && canBeNonHandling(role))
+  const expiryOk = !licenceNeeded || techExpiry !== ''
+  const rhlOk = !licenceNeeded || techRhl.trim() !== ''
   // Every account gets a password — it secures profile switching today
   // and becomes the sign-in once team accounts land.
   const passwordOk =
     password.length >= MIN_PASSWORD_LENGTH && password === confirmPw
   const techOk =
-    nameOk && techRhl.trim() !== '' && expiryOk && passwordOk && licenceDeclared
+    nameOk && rhlOk && expiryOk && passwordOk && licenceDeclared
   const locOk = isLocationComplete(loc)
   const canFinish =
     businessOk &&
@@ -181,7 +189,7 @@ function OnboardingScreen() {
   if (!arcExpiryOk) missing.push(`${profile.businessAuthShort} expiry`)
   if (techFirst.trim() === '') missing.push('first name')
   if (techLast.trim() === '') missing.push('surname')
-  if (techRhl.trim() === '') missing.push(profile.techLicenceShort)
+  if (!rhlOk) missing.push(profile.techLicenceShort)
   if (!expiryOk) missing.push(`${profile.techLicenceShort} expiry`)
   if (!passwordOk) missing.push('password')
   if (!licenceDeclared) missing.push('the licence declaration')
@@ -209,10 +217,7 @@ function OnboardingScreen() {
   )
   const techFirstErr = err(techFirst.trim() === '', 'Enter your first name.')
   const techLastErr = err(techLast.trim() === '', 'Enter your surname.')
-  const techRhlErr = err(
-    techRhl.trim() === '',
-    `Enter your ${profile.techLicenceShort}.`,
-  )
+  const techRhlErr = err(!rhlOk, `Enter your ${profile.techLicenceShort}.`)
   const techExpiryErr = err(
     !expiryOk,
     `Enter your ${profile.techLicenceShort} expiry date.`,
@@ -263,9 +268,10 @@ function OnboardingScreen() {
         firstName: techFirst,
         middleName: techMiddle,
         lastName: techLast,
-        arcLicenceNumber: techRhl,
-        licenceExpiry: techExpiry,
+        arcLicenceNumber: licenceNeeded ? techRhl : '',
+        licenceExpiry: licenceNeeded ? techExpiry : '',
         role,
+        nonHandling: !licenceNeeded,
         passwordHash,
       },
       location: loc,
@@ -482,30 +488,50 @@ function OnboardingScreen() {
                   placeholder="e.g. Smith"
                 />
               </Field>
-              <Field
-                label={`${profile.techLicenceLabel} *`}
-                error={techRhlErr}
-                hint="The technician's personal licence number."
-              >
-                <TextInput
-                  value={techRhl}
-                  invalid={!!techRhlErr}
-                  onChange={(e) => setTechRhl(e.target.value)}
-                  placeholder="e.g. L000000"
-                />
-              </Field>
-              <Field
-                label={`${profile.techLicenceShort} expiry *`}
-                error={techExpiryErr}
-                hint="RHLs run for two years; the app warns before this lapses."
-              >
-                <DateInput
-                  value={techExpiry}
-                  onChange={setTechExpiry}
-                  invalid={!!techExpiryErr}
-                  ariaLabel="Licence expiry date"
-                />
-              </Field>
+              {canBeNonHandling(role) && (
+                <label className="flex items-start gap-2 rounded-xl border border-slate-200 p-3 text-sm text-slate-700 dark:border-slate-800 dark:text-slate-200">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5 h-4 w-4 accent-brand-600"
+                    checked={nonHandling}
+                    onChange={(e) => setNonHandling(e.target.checked)}
+                  />
+                  <span>
+                    I don’t handle refrigerant myself — this is a management
+                    account with no {profile.techLicenceShort}. (You can still
+                    add licensed technicians afterwards; handling work is logged
+                    under them.)
+                  </span>
+                </label>
+              )}
+              {licenceNeeded && (
+                <>
+                  <Field
+                    label={`${profile.techLicenceLabel} *`}
+                    error={techRhlErr}
+                    hint="The technician's personal licence number."
+                  >
+                    <TextInput
+                      value={techRhl}
+                      invalid={!!techRhlErr}
+                      onChange={(e) => setTechRhl(e.target.value)}
+                      placeholder="e.g. L000000"
+                    />
+                  </Field>
+                  <Field
+                    label={`${profile.techLicenceShort} expiry *`}
+                    error={techExpiryErr}
+                    hint="RHLs run for two years; the app warns before this lapses."
+                  >
+                    <DateInput
+                      value={techExpiry}
+                      onChange={setTechExpiry}
+                      invalid={!!techExpiryErr}
+                      ariaLabel="Licence expiry date"
+                    />
+                  </Field>
+                </>
+              )}
               <Field
                 label="Password *"
                 error={pwErr ?? pwBlock ?? undefined}
@@ -548,10 +574,9 @@ function OnboardingScreen() {
                         : ''
                     }
                   >
-                    I confirm that I hold a current ARC Refrigerant Handling
-                    Licence (RHL) appropriate for the work I perform, and that
-                    the licence details I have entered are accurate and current.
-                    *
+                    {licenceNeeded
+                      ? 'I confirm that I hold a current ARC Refrigerant Handling Licence (RHL) appropriate for the work I perform, and that the licence details I have entered are accurate and current. *'
+                      : 'I confirm that this is a management account that does not perform refrigerant handling work, and therefore holds no ARC Refrigerant Handling Licence (RHL). *'}
                   </span>
                 </label>
                 {attempted && !licenceDeclared && (

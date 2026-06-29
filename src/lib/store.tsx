@@ -162,6 +162,9 @@ interface StoreApi {
   // lifted. Separate from deactivate (a leaver, with a purge countdown).
   suspendTechnician: (id: string) => void
   unsuspendTechnician: (id: string) => void
+  // Flag that an account's password should be reset. Used by a same-tier
+  // senior peer who may request — but not set — another manager's password.
+  requestPasswordReset: (id: string) => void
   deleteTechnician: (id: string) => void
   setActiveTechnicianId: (id: string | undefined) => void
   // first-run onboarding — writes business identity, ARC RTA, the first
@@ -180,6 +183,8 @@ interface StoreApi {
       licenceExpiry: string
       // owner or supervisor — chosen at setup (SETUP_ROLE_CHOICES).
       role: TechnicianRole
+      // Management account with no personal RHL (see Technician.nonHandling).
+      nonHandling?: boolean
       passwordHash?: string
     }
     location: LocationSettings
@@ -1347,6 +1352,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
                 arcLicenceNumber: (
                   patch.arcLicenceNumber ?? t.arcLicenceNumber
                 ).trim(),
+                // Setting a new password clears any outstanding reset
+                // request — the account holder is back in control.
+                passwordResetRequested:
+                  'passwordHash' in patch &&
+                  patch.passwordHash !== t.passwordHash
+                    ? undefined
+                    : patch.passwordResetRequested ?? t.passwordResetRequested,
                 updatedAt: new Date().toISOString(),
               }
             : t,
@@ -1541,6 +1553,33 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     [ensureRole],
   )
 
+  const requestPasswordReset: StoreApi['requestPasswordReset'] = useCallback(
+    (id) => {
+      if (!ensureRole('supervisor', 'Requesting a password reset')) return
+      setState((s) => {
+        const target = s.technicians.find((t) => t.id === id)
+        if (!target) return s
+        const now = new Date().toISOString()
+        return {
+          ...s,
+          technicians: s.technicians.map((t) =>
+            t.id === id
+              ? { ...t, passwordResetRequested: now, updatedAt: now }
+              : t,
+          ),
+          auditLog: withAudit(s, {
+            action: 'update',
+            entity: 'technician',
+            entityId: id,
+            target: target.name,
+            summary: `Requested a password reset for technician ${target.name} — they (or an owner) must set a new password`,
+          }),
+        }
+      })
+    },
+    [ensureRole],
+  )
+
   // Switching the active profile on a shared device is itself an audited
   // event — on a multi-tech crew it's the record of who was in the seat,
   // and so who every later transaction/change is attributed to. The
@@ -1582,6 +1621,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         name: composeName(data.technician),
         arcLicenceNumber: data.technician.arcLicenceNumber.trim(),
         licenceExpiry: data.technician.licenceExpiry || undefined,
+        nonHandling: data.technician.nonHandling || undefined,
         // Setup requires the licence self-declaration before completeSetup
         // is called, so stamp when it was made.
         licenceDeclaredAt: now,
@@ -1825,7 +1865,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const requestAccountClosure: StoreApi['requestAccountClosure'] = useCallback(
     (req) => {
-      if (!ensureRole('owner', 'Closing the account')) return
+      if (!ensureRole('supervisor', 'Closing the account')) return
       setState((s) => {
         if (s.accountClosure) return s // already closed
         const now = new Date().toISOString()
@@ -2153,6 +2193,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       reactivateTechnician,
       suspendTechnician,
       unsuspendTechnician,
+      requestPasswordReset,
       deleteTechnician,
       setActiveTechnicianId,
       completeSetup,
@@ -2203,6 +2244,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       reactivateTechnician,
       suspendTechnician,
       unsuspendTechnician,
+      requestPasswordReset,
       deleteTechnician,
       setActiveTechnicianId,
       completeSetup,
