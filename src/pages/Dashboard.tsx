@@ -4,6 +4,7 @@ import { Button, Card } from '../components/ui'
 import { CollapsibleSection } from '../components/CollapsibleSection'
 import { ShareTxButton } from '../components/ShareSheet'
 import { ComplianceHealth } from '../components/ComplianceHealth'
+import { FleetLeakWatch } from '../components/FleetLeakWatch'
 import { useStore } from '../lib/store'
 import {
   REASON_LABELS,
@@ -82,6 +83,8 @@ export default function Dashboard() {
       </Card>
 
       <ComplianceHealth />
+
+      <FleetLeakWatch />
 
       <div className="grid grid-cols-2 gap-3">
         <Link to="/bottles" className="block">
