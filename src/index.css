@@ -40,6 +40,27 @@ button {
   font: inherit;
 }
 
+/* Keyboard-focus ring for interactive elements that don't already carry
+   one. Form fields (input/select/textarea) keep their own brand ring via
+   their utility classes; this covers buttons, links and tappable rows,
+   which previously showed no visible focus for keyboard / switch-access
+   users. :focus-visible keeps it off mouse / touch interactions. */
+button:focus-visible,
+a:focus-visible,
+summary:focus-visible,
+[role='button']:focus-visible,
+[role='switch']:focus-visible {
+  outline: 2px solid #2563eb; /* brand-600 */
+  outline-offset: 2px;
+}
+html.dark button:focus-visible,
+html.dark a:focus-visible,
+html.dark summary:focus-visible,
+html.dark [role='button']:focus-visible,
+html.dark [role='switch']:focus-visible {
+  outline-color: #60a5fa; /* brand-400 */
+}
+
 /* Hide number-input spinners — we want plain weight entry */
 input[type='number']::-webkit-outer-spin-button,
 input[type='number']::-webkit-inner-spin-button {

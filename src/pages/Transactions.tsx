@@ -345,6 +345,28 @@ export default function Transactions() {
               to record any change.
             </p>
           )}
+          {/* Make a narrowed list obvious (and one tap to undo) so an entry
+              that's filtered out doesn't read as missing. */}
+          {hasFilter && (
+            <div className="flex items-center justify-between gap-2 px-1 text-xs text-slate-500 dark:text-slate-400">
+              <span>
+                Showing {sorted.length} of{' '}
+                {transactions.filter((t) => !t.deletedAt).length} entries
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  setFilterKind('all')
+                  setQuery('')
+                  setFromDate('')
+                  setToDate('')
+                }}
+                className="shrink-0 font-medium text-brand-600 hover:underline dark:text-brand-400"
+              >
+                Clear filters
+              </button>
+            </div>
+          )}
           {visible.map((t) => {
             // Correction linkage: the entry this one corrects (if it's a
             // correction), and the live correction that supersedes this

@@ -474,6 +474,28 @@ export default function Bottles() {
         </div>
       )}
 
+      {/* When a filter/search is narrowing the list, say so explicitly so a
+          tech doesn't think cylinders went missing — and offer one tap back
+          to the full list. */}
+      {bottles.length > 0 && (filter !== 'all' || query.trim() !== '') && (
+        <div className="flex items-center justify-between gap-2 px-1 text-xs text-slate-500 dark:text-slate-400">
+          <span>
+            Showing {visible.length} of {bottles.length}{' '}
+            {bottles.length === 1 ? 'bottle' : 'bottles'}
+          </span>
+          <button
+            type="button"
+            onClick={() => {
+              setFilter('all')
+              setQuery('')
+            }}
+            className="shrink-0 font-medium text-brand-600 hover:underline dark:text-brand-400"
+          >
+            Clear filter
+          </button>
+        </div>
+      )}
+
       {visible.length > 0 && (
         <div className="flex justify-end px-1">
           <button
