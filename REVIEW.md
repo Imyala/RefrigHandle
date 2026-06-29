@@ -82,6 +82,22 @@ loss, which legitimately reduces total inventory.
 **Only deliberately-left item:** U1 (leak-test stays a per-job answer, for
 compliance integrity). Everything else from this review is resolved.
 
+**Best-in-class pass (later):**
+
+- *Tier 1 friction/clarity:* action sheet actions-first, Sites auto-expand,
+  "+ Add" → lean quick-add, leak detail inline on mobile, refrigerant
+  type-to-search, "Intake" chip only when present, copy cleanups.
+- *Tier 2 differentiators (client-side, lock-in):*
+  - **QR cylinder labels** — printable scan-to-open stickers (one or the
+    whole fleet, 3-up on A4).
+  - **Equipment leak watch** — fleet-wide per-unit leak rate (AIRAH DA19)
+    on the home screen, ranked worst-first.
+- *Needs a backend (post-launch platform work):* push/email reminders,
+  hosted accounts + durable cloud retention, server-anchored audit chain +
+  real per-user identity, a job/work-order container. These are the
+  remaining bets to make the system-of-record claim provable and own the
+  whole job, not just the gas.
+
 ---
 
 ## 1. The verdict in one paragraph
