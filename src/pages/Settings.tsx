@@ -15,6 +15,11 @@ import { InstallAppButton } from '../components/InstallAppButton'
 import { QuarterlyReportCard } from '../components/QuarterlyReport'
 import { useStore } from '../lib/store'
 import {
+  MIN_HYDRO_INTERVAL_YEARS,
+  MAX_HYDRO_INTERVAL_YEARS,
+  clampHydroInterval,
+} from '../lib/hydroDates'
+import {
   expiryStatus,
   REFRIGERANT_TYPES,
   type AppState,
@@ -98,6 +103,7 @@ export default function Settings() {
     setUnit,
     setTheme,
     setClock,
+    setHydroTestIntervalYears,
     setSyncSettings,
     addCustomRefrigerant,
     removeCustomRefrigerant,
@@ -838,6 +844,62 @@ export default function Settings() {
                 {c === '24h' ? '24-hour (13:30)' : '12-hour (1:30 PM)'}
               </button>
             ))}
+          </div>
+        </Field>
+      </Card>
+
+      <Card>
+        <Field
+          label="Cylinder test interval"
+          hint="Default gap between hydrostatic tests. Used to auto-fill a cylinder's next-due date from its last test (and vice versa). AS 2030.5 is 10 years; you can still override either date on any individual bottle."
+        >
+          <div className="flex items-center gap-3">
+            <div className="flex items-stretch overflow-hidden rounded-xl border border-slate-300 dark:border-slate-700">
+              <button
+                type="button"
+                aria-label="Decrease interval"
+                disabled={state.hydroTestIntervalYears <= MIN_HYDRO_INTERVAL_YEARS}
+                onClick={() => {
+                  const next = clampHydroInterval(state.hydroTestIntervalYears - 1)
+                  setHydroTestIntervalYears(next)
+                  toast.show(`Test interval set to ${next} years`)
+                }}
+                className="flex w-12 items-center justify-center bg-slate-100 text-xl font-semibold text-slate-700 transition hover:bg-slate-200 disabled:opacity-40 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+              >
+                −
+              </button>
+              <div className="flex min-w-[5rem] items-center justify-center px-4 text-base font-semibold tabular-nums text-slate-900 dark:text-slate-100">
+                {state.hydroTestIntervalYears}
+                <span className="ml-1 text-sm font-normal text-slate-500">
+                  {state.hydroTestIntervalYears === 1 ? 'year' : 'years'}
+                </span>
+              </div>
+              <button
+                type="button"
+                aria-label="Increase interval"
+                disabled={state.hydroTestIntervalYears >= MAX_HYDRO_INTERVAL_YEARS}
+                onClick={() => {
+                  const next = clampHydroInterval(state.hydroTestIntervalYears + 1)
+                  setHydroTestIntervalYears(next)
+                  toast.show(`Test interval set to ${next} years`)
+                }}
+                className="flex w-12 items-center justify-center bg-slate-100 text-xl font-semibold text-slate-700 transition hover:bg-slate-200 disabled:opacity-40 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+              >
+                +
+              </button>
+            </div>
+            {state.hydroTestIntervalYears !== 10 && (
+              <button
+                type="button"
+                onClick={() => {
+                  setHydroTestIntervalYears(10)
+                  toast.show('Test interval reset to 10 years')
+                }}
+                className="text-xs font-semibold text-brand-600 hover:underline"
+              >
+                Reset to 10 (AS 2030.5)
+              </button>
+            )}
           </div>
         </Field>
       </Card>

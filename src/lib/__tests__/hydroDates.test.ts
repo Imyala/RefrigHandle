@@ -3,6 +3,10 @@ import {
   plusYearsYm,
   autofillNextDue,
   autofillLastTest,
+  clampHydroInterval,
+  DEFAULT_HYDRO_INTERVAL_YEARS,
+  MIN_HYDRO_INTERVAL_YEARS,
+  MAX_HYDRO_INTERVAL_YEARS,
 } from '../hydroDates'
 
 describe('plusYearsYm', () => {
@@ -68,5 +72,38 @@ describe('autofillLastTest (editing "next due")', () => {
 
   it('leaves last test alone when next due is cleared', () => {
     expect(autofillLastTest('', '2034-01', '2024-01')).toBe('2024-01')
+  })
+})
+
+describe('configurable interval', () => {
+  it('uses a custom period when deriving next due', () => {
+    expect(autofillNextDue('2024-03', '', '', 5)).toBe('2029-03')
+  })
+
+  it('uses a custom period when back-filling last test', () => {
+    expect(autofillLastTest('2029-03', '', '', 5)).toBe('2024-03')
+  })
+
+  it('defaults to 10 years when no period is given', () => {
+    expect(DEFAULT_HYDRO_INTERVAL_YEARS).toBe(10)
+    expect(autofillNextDue('2024-03', '', '')).toBe('2034-03')
+  })
+})
+
+describe('clampHydroInterval', () => {
+  it('rounds to a whole number of years', () => {
+    expect(clampHydroInterval(7.4)).toBe(7)
+    expect(clampHydroInterval(7.6)).toBe(8)
+  })
+
+  it('clamps to the supported range', () => {
+    expect(clampHydroInterval(0)).toBe(MIN_HYDRO_INTERVAL_YEARS)
+    expect(clampHydroInterval(999)).toBe(MAX_HYDRO_INTERVAL_YEARS)
+  })
+
+  it('falls back to the default for junk input', () => {
+    expect(clampHydroInterval(undefined)).toBe(DEFAULT_HYDRO_INTERVAL_YEARS)
+    expect(clampHydroInterval(NaN)).toBe(DEFAULT_HYDRO_INTERVAL_YEARS)
+    expect(clampHydroInterval('abc')).toBe(DEFAULT_HYDRO_INTERVAL_YEARS)
   })
 })

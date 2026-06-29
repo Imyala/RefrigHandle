@@ -61,6 +61,7 @@ import {
   subscribeToState,
 } from './sync'
 import { mergeStates } from './merge'
+import { clampHydroInterval } from './hydroDates'
 import { rebaseChainHead, sealAuditLog } from './auditChain'
 import { buildDemoState } from './demo'
 import { profileFor } from './compliance'
@@ -218,6 +219,9 @@ interface StoreApi {
   setUnit: (u: WeightUnit) => void
   setTheme: (t: Theme) => void
   setClock: (c: ClockFormat) => void
+  // Default cylinder test interval in whole years (clamped to a sane
+  // range). Drives the test-date autofill.
+  setHydroTestIntervalYears: (years: number) => void
   setSyncSettings: (s: SyncSettings) => void
   addCustomRefrigerant: (name: string) => void
   removeCustomRefrigerant: (name: string) => void
@@ -1944,6 +1948,27 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     [],
   )
 
+  const setHydroTestIntervalYears = useCallback(
+    (years: number) =>
+      setState((s) => {
+        const next = clampHydroInterval(years)
+        return s.hydroTestIntervalYears === next
+          ? s
+          : {
+              ...s,
+              hydroTestIntervalYears: next,
+              ...settingsStamp(s, 'hydroTestIntervalYears'),
+              auditLog: settingsChange(
+                s,
+                'Cylinder test interval',
+                `${s.hydroTestIntervalYears} years`,
+                `${next} years`,
+              ),
+            }
+      }),
+    [],
+  )
+
   const setSyncSettings = useCallback(
     (sync: SyncSettings) =>
       setState((s) => {
@@ -2171,6 +2196,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setUnit,
       setTheme,
       setClock,
+      setHydroTestIntervalYears,
       setSyncSettings,
       addCustomRefrigerant,
       removeCustomRefrigerant,
@@ -2221,6 +2247,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setUnit,
       setTheme,
       setClock,
+      setHydroTestIntervalYears,
       setSyncSettings,
       addCustomRefrigerant,
       removeCustomRefrigerant,

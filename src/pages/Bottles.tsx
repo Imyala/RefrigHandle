@@ -953,9 +953,12 @@ function BottleActionSheet({
                   <MonthInput
                     value={lastYm}
                     onChange={(v) => {
-                      // Auto-fill next due 10 years on (AS 2030.5), unless
-                      // the tech already set a custom next date.
-                      setNextYm((n) => autofillNextDue(v, lastYm, n))
+                      // Auto-fill next due by the configured interval
+                      // (default 10 years, AS 2030.5), unless the tech
+                      // already set a custom next date.
+                      setNextYm((n) =>
+                        autofillNextDue(v, lastYm, n, state.hydroTestIntervalYears),
+                      )
                       setLastYm(v)
                     }}
                     ariaLabel="Last hydro test (month and year)"
@@ -966,8 +969,10 @@ function BottleActionSheet({
                     value={nextYm}
                     onChange={(v) => {
                       // Mirror the autofill: setting next due back-fills
-                      // the last test 10 years earlier.
-                      setLastYm((l) => autofillLastTest(v, nextYm, l))
+                      // the last test the same interval earlier.
+                      setLastYm((l) =>
+                        autofillLastTest(v, nextYm, l, state.hydroTestIntervalYears),
+                      )
                       setNextYm(v)
                     }}
                     ariaLabel="Next hydro test due (month and year)"
@@ -2567,13 +2572,16 @@ function BottleForm({
               <MonthInput
                 value={lastHydro}
                 onChange={(v) => {
-                  // Auto-fill the 10-year next-test due month when the
-                  // last test is set. AS 2030.5 requires periodic
-                  // inspection every 10 years for steel refrigerant
-                  // recovery cylinders. Don't overwrite a value the tech
-                  // has already typed unless it was the previously
-                  // auto-derived one.
-                  setNextHydro((n) => autofillNextDue(v, lastHydro, n))
+                  // Auto-fill the next-test due month from the configured
+                  // interval when the last test is set. AS 2030.5 requires
+                  // periodic inspection every 10 years for steel
+                  // refrigerant recovery cylinders (the default), but the
+                  // tech can change the interval in Settings. Don't
+                  // overwrite a value the tech has already typed unless it
+                  // was the previously auto-derived one.
+                  setNextHydro((n) =>
+                    autofillNextDue(v, lastHydro, n, state.hydroTestIntervalYears),
+                  )
                   setLastHydro(v)
                 }}
                 ariaLabel="Last hydro test (month and year)"
@@ -2584,8 +2592,10 @@ function BottleForm({
                 value={nextHydro}
                 onChange={(v) => {
                   // Mirror the autofill: setting next due back-fills the
-                  // last test 10 years earlier.
-                  setLastHydro((l) => autofillLastTest(v, nextHydro, l))
+                  // last test the same interval earlier.
+                  setLastHydro((l) =>
+                    autofillLastTest(v, nextHydro, l, state.hydroTestIntervalYears),
+                  )
                   setNextHydro(v)
                 }}
                 ariaLabel="Next hydro test due (month and year)"
@@ -2593,8 +2603,11 @@ function BottleForm({
             </Field>
           </div>
           <p className="mt-2 text-xs text-slate-500">
-            Next test auto-fills to 10 years after the last test (AS
-            2030.5). Edit it if your cylinder has a different stamp.
+            Next test auto-fills to {state.hydroTestIntervalYears} years
+            after the last test
+            {state.hydroTestIntervalYears === 10 ? ' (AS 2030.5)' : ''}.
+            Edit either date if your cylinder has a different stamp, or
+            change the default interval in Settings.
           </p>
         </div>
 

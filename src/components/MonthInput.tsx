@@ -179,6 +179,10 @@ function MonthPopover({
   const today = todayYm()
   const initialY = selected ? Number(selected.slice(0, 4)) : today.y
   const [viewY, setViewY] = useState(initialY)
+  // Two views: the 12-month grid, and a 12-year grid for jumping years
+  // quickly (cylinder test dates can sit a decade out, so stepping one
+  // year at a time is painful).
+  const [mode, setMode] = useState<'months' | 'years'>('months')
 
   // Styles written straight to the node — see CalendarPopover in
   // DateInput.tsx for the rationale.
@@ -228,6 +232,13 @@ function MonthPopover({
   const selY = selected ? Number(selected.slice(0, 4)) : null
   const selM = selected ? Number(selected.slice(5, 7)) : null
 
+  // Year grid: a 12-year page centred on the current view year. A year
+  // is out of range only if EVERY month in it falls outside min/max.
+  const YEAR_PAGE = 12
+  const yearPageStart = viewY - 5
+  const minYear = minYm ? Number(minYm.slice(0, 4)) : -Infinity
+  const maxYear = maxYm ? Number(maxYm.slice(0, 4)) : Infinity
+
   return createPortal(
     <div
       ref={ref}
@@ -239,47 +250,108 @@ function MonthPopover({
       <div className="flex items-center justify-between gap-1 border-b border-slate-100 px-2 py-2 dark:border-slate-800">
         <button
           type="button"
+          onClick={() =>
+            setViewY((y) => (mode === 'years' ? y - YEAR_PAGE : y - 10))
+          }
+          aria-label={mode === 'years' ? 'Previous years' : 'Back ten years'}
+          className="flex h-9 w-9 items-center justify-center rounded-full text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"
+        >
+          «
+        </button>
+        <button
+          type="button"
           onClick={() => setViewY((y) => y - 1)}
           aria-label="Previous year"
-          className="flex h-9 w-9 items-center justify-center rounded-full text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"
+          disabled={mode === 'years'}
+          className="flex h-9 w-9 items-center justify-center rounded-full text-slate-500 hover:bg-slate-100 disabled:opacity-30 disabled:hover:bg-transparent dark:hover:bg-slate-800"
         >
           ‹
         </button>
-        <div className="min-w-0 flex-1 text-center text-sm font-semibold text-slate-800 dark:text-slate-100">
-          {viewY}
-        </div>
+        <button
+          type="button"
+          onClick={() => setMode((m) => (m === 'years' ? 'months' : 'years'))}
+          aria-label={mode === 'years' ? 'Back to months' : 'Pick a year'}
+          aria-expanded={mode === 'years'}
+          className="min-w-0 flex-1 rounded-md px-2 py-1 text-center text-sm font-semibold text-slate-800 hover:bg-slate-100 dark:text-slate-100 dark:hover:bg-slate-800"
+        >
+          {mode === 'years'
+            ? `${yearPageStart} – ${yearPageStart + YEAR_PAGE - 1}`
+            : viewY}
+        </button>
         <button
           type="button"
           onClick={() => setViewY((y) => y + 1)}
           aria-label="Next year"
-          className="flex h-9 w-9 items-center justify-center rounded-full text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"
+          disabled={mode === 'years'}
+          className="flex h-9 w-9 items-center justify-center rounded-full text-slate-500 hover:bg-slate-100 disabled:opacity-30 disabled:hover:bg-transparent dark:hover:bg-slate-800"
         >
           ›
         </button>
+        <button
+          type="button"
+          onClick={() =>
+            setViewY((y) => (mode === 'years' ? y + YEAR_PAGE : y + 10))
+          }
+          aria-label={mode === 'years' ? 'Next years' : 'Forward ten years'}
+          className="flex h-9 w-9 items-center justify-center rounded-full text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"
+        >
+          »
+        </button>
       </div>
-      <div className="grid grid-cols-3 gap-1 px-2 py-3">
-        {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => {
-          const ym = `${pad4(viewY)}-${pad2(m)}`
-          const isSelected = viewY === selY && m === selM
-          const isThisMonth = viewY === today.y && m === today.m
-          const disabled =
-            (minYm && ym < minYm) || (maxYm && ym > maxYm)
-          return (
-            <button
-              key={m}
-              type="button"
-              disabled={!!disabled}
-              onClick={() => {
-                if (disabled) return
-                onPick(ym)
-              }}
-              className={monthCellClass(isSelected, isThisMonth, !!disabled)}
-            >
-              {SHORT_MONTH_NAMES[m - 1]}
-            </button>
-          )
-        })}
-      </div>
+      {mode === 'years' ? (
+        <div className="grid grid-cols-4 gap-1 px-2 py-3">
+          {Array.from({ length: YEAR_PAGE }, (_, i) => yearPageStart + i).map(
+            (y) => {
+              const yDisabled = y < minYear || y > maxYear
+              const isViewYear = y === viewY
+              const isSelectedYear = y === selY
+              const isThisYear = y === today.y
+              return (
+                <button
+                  key={y}
+                  type="button"
+                  disabled={yDisabled}
+                  onClick={() => {
+                    setViewY(y)
+                    setMode('months')
+                  }}
+                  className={yearCellClass(
+                    isSelectedYear,
+                    isViewYear,
+                    isThisYear,
+                    yDisabled,
+                  )}
+                >
+                  {y}
+                </button>
+              )
+            },
+          )}
+        </div>
+      ) : (
+        <div className="grid grid-cols-3 gap-1 px-2 py-3">
+          {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => {
+            const ym = `${pad4(viewY)}-${pad2(m)}`
+            const isSelected = viewY === selY && m === selM
+            const isThisMonth = viewY === today.y && m === today.m
+            const disabled = (minYm && ym < minYm) || (maxYm && ym > maxYm)
+            return (
+              <button
+                key={m}
+                type="button"
+                disabled={!!disabled}
+                onClick={() => {
+                  if (disabled) return
+                  onPick(ym)
+                }}
+                className={monthCellClass(isSelected, isThisMonth, !!disabled)}
+              >
+                {SHORT_MONTH_NAMES[m - 1]}
+              </button>
+            )
+          })}
+        </div>
+      )}
       <div className="flex items-center justify-between gap-2 border-t border-slate-100 px-3 py-2 dark:border-slate-800">
         <button
           type="button"
@@ -313,6 +385,24 @@ function monthCellClass(
   if (selected) return `${base} bg-brand-600 font-semibold text-white shadow`
   if (thisMonth)
     return `${base} font-semibold text-brand-700 ring-1 ring-inset ring-brand-500 hover:bg-brand-50 dark:text-brand-300 dark:hover:bg-brand-900/30`
+  return `${base} text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800`
+}
+
+function yearCellClass(
+  selected: boolean,
+  viewYear: boolean,
+  thisYear: boolean,
+  disabled: boolean,
+): string {
+  const base =
+    'flex h-10 items-center justify-center rounded-lg text-sm font-medium tabular-nums transition'
+  if (disabled)
+    return `${base} cursor-not-allowed text-slate-300 dark:text-slate-700`
+  if (selected) return `${base} bg-brand-600 font-semibold text-white shadow`
+  if (viewYear)
+    return `${base} font-semibold text-brand-700 ring-1 ring-inset ring-brand-500 hover:bg-brand-50 dark:text-brand-300 dark:hover:bg-brand-900/30`
+  if (thisYear)
+    return `${base} font-semibold text-brand-700 hover:bg-slate-100 dark:text-brand-300 dark:hover:bg-slate-800`
   return `${base} text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800`
 }
 

@@ -900,6 +900,12 @@ export interface AppState {
   unit: WeightUnit
   theme: Theme
   clock: ClockFormat
+  // Default cylinder hydrostatic-test interval, in whole years. Used to
+  // auto-fill the "next due" date from the "last test" date (and vice
+  // versa) in the cylinder test editors. AS 2030.5 is 10 years; the tech
+  // can change it for other cylinder types and still override any
+  // individual date. See lib/hydroDates.ts.
+  hydroTestIntervalYears: number
   sync: SyncSettings
   // ISO timestamp set once the one-time first-run setup is finished
   // (business identity, ARC RTA, first technician and location all
@@ -967,6 +973,7 @@ export const SYNCED_SETTINGS_FIELDS = [
   'unit',
   'theme',
   'clock',
+  'hydroTestIntervalYears',
 ] as const
 
 export const EMPTY_STATE: AppState = {
@@ -992,6 +999,9 @@ export const EMPTY_STATE: AppState = {
   unit: 'kg',
   theme: 'light',
   clock: '24h',
+  // 10 years — AS 2030.5. Keep in sync with DEFAULT_HYDRO_INTERVAL_YEARS
+  // in lib/hydroDates.ts.
+  hydroTestIntervalYears: 10,
   sync: { enabled: false, teamId: '' },
   setupCompletedAt: undefined,
   demoStartedAt: undefined,

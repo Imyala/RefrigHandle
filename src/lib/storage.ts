@@ -8,6 +8,7 @@ import {
   type Technician,
   type Transaction,
 } from './types'
+import { clampHydroInterval } from './hydroDates'
 
 const KEY = 'refrighandle.v1'
 const CORRUPTED_PREFIX = 'refrighandle.v1.corrupted.'
@@ -34,6 +35,7 @@ interface LegacyState
     | 'unit'
     | 'sync'
     | 'theme'
+    | 'hydroTestIntervalYears'
     | 'customBottlePresets'
     | 'favoriteBottlePresets'
     | 'arcLicenceNumber'
@@ -62,6 +64,7 @@ interface LegacyState
   units?: AppState['units']
   unit?: string
   theme?: string
+  hydroTestIntervalYears?: number
   sync?: Partial<AppState['sync']>
   customBottlePresets?: AppState['customBottlePresets']
   favoriteBottlePresets?: AppState['favoriteBottlePresets']
@@ -264,6 +267,9 @@ function normalize(parsed: LegacyState): AppState {
         ? parsed.theme
         : 'light',
     clock: parsed.clock === '12h' ? '12h' : '24h',
+    // Whole-year cylinder test interval; old installs default to 10 (AS
+    // 2030.5) and out-of-range values are clamped.
+    hydroTestIntervalYears: clampHydroInterval(parsed.hydroTestIntervalYears),
     sync: {
       enabled: parsed.sync?.enabled ?? false,
       teamId: parsed.sync?.teamId ?? '',
