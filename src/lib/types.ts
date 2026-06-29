@@ -105,7 +105,7 @@ export interface Bottle {
 export interface Site {
   id: string
   // The site's identifier — its functional location (e.g. an FLOC code
-  // like "BN-ASAC-ATSC"). Optional: many businesses don't use FLOC codes,
+  // like "SITE-01-PLANT-A"). Optional: many businesses don't use FLOC codes,
   // so this may be blank — use siteLabel() to display a site, which falls
   // back to the address / town when there's no functional location.
   name: string

@@ -1212,7 +1212,7 @@ export function SiteForm({
           <TextInput
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="e.g. BN-ASAC-ATSC"
+            placeholder="e.g. SITE-01-PLANT-A"
           />
         </Field>
         <Field label="Address">
