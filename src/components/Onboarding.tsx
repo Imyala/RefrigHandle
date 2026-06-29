@@ -92,6 +92,11 @@ function OnboardingScreen() {
   // Australia-only product: the jurisdiction is fixed to AU rather than
   // picked, so every install runs on the ARC (RHL/RTA) profile.
   const jurisdiction: Jurisdiction = 'AU'
+  // Lead with a choice, not a 15-field wall: a fresh launch shows a welcome
+  // screen where "Explore now" opens the app on sample data in one tap and
+  // "Set up my business" reveals the setup form. Value first, setup when
+  // they're ready to keep real records.
+  const [view, setView] = useState<'welcome' | 'setup'>('welcome')
   const [businessName, setBusinessName] = useState('')
   const [abn, setAbn] = useState('')
   const [arcAuth, setArcAuth] = useState('')
@@ -269,13 +274,66 @@ function OnboardingScreen() {
     toast.show('Setup complete — welcome aboard', 'success')
   }
 
+  // Welcome screen — the very first thing a new user sees. One tap to a
+  // working app (sample data), or start real setup when ready.
+  if (view === 'welcome') {
+    return (
+      <div className="flex min-h-svh flex-col bg-slate-50 dark:bg-slate-950">
+        <main className="mx-auto flex w-full max-w-md flex-1 flex-col justify-center px-5 py-10">
+          <div className="text-center">
+            <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
+              RefrigHandle
+            </h1>
+            <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
+              Refrigerant tracking and ARC-ready compliance records, filled in
+              on your phone at the job. Scan a cylinder, read the scale, and
+              walk away with an audit-proof log.
+            </p>
+          </div>
+
+          <div className="mt-8 space-y-3">
+            <Button full onClick={() => startDemo()}>
+              Explore now — no sign-up
+            </Button>
+            <p className="text-center text-[11px] text-slate-400">
+              Opens the app on sample data so you can log a charge and see the
+              compliance scorecard. Nothing is saved as a real record.
+            </p>
+            <div className="flex items-center gap-3 py-1">
+              <span className="h-px flex-1 bg-slate-200 dark:bg-slate-800" />
+              <span className="text-[11px] uppercase tracking-wider text-slate-400">
+                or
+              </span>
+              <span className="h-px flex-1 bg-slate-200 dark:bg-slate-800" />
+            </div>
+            <Button full variant="secondary" onClick={() => setView('setup')}>
+              Set up my business
+            </Button>
+            <p className="text-center text-[11px] text-slate-400">
+              Enter your business, licence and authorisation details to start
+              keeping real records.
+            </p>
+          </div>
+        </main>
+      </div>
+    )
+  }
+
   return (
     <div className="flex min-h-svh flex-col bg-slate-50 dark:bg-slate-950">
       <header
         className="border-b border-slate-200 bg-white/90 px-4 py-3 backdrop-blur dark:border-slate-800 dark:bg-slate-950/90"
         style={{ paddingTop: 'calc(env(safe-area-inset-top) + 0.75rem)' }}
       >
-        <div className="mx-auto flex max-w-2xl flex-col items-center text-center">
+        <div className="relative mx-auto flex max-w-2xl flex-col items-center text-center">
+          <button
+            type="button"
+            onClick={() => setView('welcome')}
+            className="absolute left-0 top-1/2 -translate-y-1/2 rounded-lg px-2 py-1 text-sm font-medium text-brand-600 hover:underline dark:text-brand-400"
+            aria-label="Back to welcome"
+          >
+            ← Back
+          </button>
           <h1 className="text-xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
             Refrigerant Handling
           </h1>

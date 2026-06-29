@@ -1466,6 +1466,23 @@ function QuickLogModal({
                 onChange={(e) => setAmount(e.target.value)}
                 placeholder="e.g. 3.00"
               />
+              {/* One-tap common amounts so a routine top-up needs no typing
+                  with gloves on. Manual-entry only — in scale mode the amount
+                  is derived from the weighed reading. */}
+              {!scaleMode && (
+                <div className="mt-1.5 flex flex-wrap gap-1.5">
+                  {(unit === 'lb' ? [1, 2, 5, 10] : [0.5, 1, 2, 5]).map((n) => (
+                    <button
+                      key={n}
+                      type="button"
+                      onClick={() => setAmount(String(n))}
+                      className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700 transition hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+                    >
+                      {n} {unit}
+                    </button>
+                  ))}
+                </div>
+              )}
             </Field>
           )}
 

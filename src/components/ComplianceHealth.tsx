@@ -265,11 +265,27 @@ export function ComplianceHealth() {
   const overall = worst(rows.map((r) => r.level))
   const o = OVERALL[overall]
 
+  // At-a-glance counts so the header is scannable before the rows are read.
+  const actionCount = rows.filter((r) => r.level === 'action').length
+  const attentionCount = rows.filter((r) => r.level === 'attention').length
+  const countLine =
+    actionCount || attentionCount
+      ? joinParts([
+          actionCount && `${actionCount} need${actionCount === 1 ? 's' : ''} action`,
+          attentionCount && `${attentionCount} due soon`,
+        ])
+      : `All ${rows.length} checks clear`
+
   return (
     <Card className={o.card}>
       <div className="flex items-center justify-between gap-2">
-        <div className={`text-sm font-semibold ${o.title}`}>
-          Compliance health
+        <div className="min-w-0">
+          <div className={`text-sm font-semibold ${o.title}`}>
+            Compliance health
+          </div>
+          <div className="truncate text-xs text-slate-500 dark:text-slate-400">
+            {countLine}
+          </div>
         </div>
         <Pill tone={o.tone}>{o.label}</Pill>
       </div>
