@@ -44,6 +44,7 @@ interface LegacyState
     | 'jurisdiction'
     | 'businessName'
     | 'businessAbn'
+    | 'businessId'
     | 'location'
     | 'clock'
     | 'technicians'
@@ -74,6 +75,7 @@ interface LegacyState
   jurisdiction?: string
   businessName?: string
   businessAbn?: string
+  businessId?: string
   termsAcceptedAt?: string
   // Was a number in the first release; now a lettered string. An old
   // numeric value simply fails the string equality check in TermsGate and
@@ -243,6 +245,7 @@ function normalize(parsed: LegacyState): AppState {
     jurisdiction: 'AU',
     businessName: parsed.businessName ?? '',
     businessAbn: parsed.businessAbn ?? '',
+    businessId: parsed.businessId ?? '',
     termsAcceptedAt: parsed.termsAcceptedAt,
     // Drop a legacy numeric version to undefined — it can't match the new
     // string TERMS_VERSION, so the user re-accepts once (the right call).

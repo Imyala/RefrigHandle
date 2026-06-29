@@ -758,6 +758,36 @@ export default function Settings() {
         </div>
       </Card>
 
+      {state.businessId && (
+        <Card>
+          <div className="mb-1 text-sm font-semibold text-slate-700 dark:text-slate-200">
+            Business account
+          </div>
+          <p className="mb-3 text-xs text-slate-500">
+            Your Business ID. Share it with your technicians so they can sign
+            in to this business on their own devices.
+          </p>
+          <div className="flex items-center gap-2">
+            <code className="flex-1 rounded-xl bg-slate-100 px-3 py-2.5 text-center text-base font-semibold tracking-wider tabular-nums text-slate-900 dark:bg-slate-800 dark:text-slate-100">
+              {state.businessId}
+            </code>
+            <Button
+              variant="secondary"
+              onClick={async () => {
+                try {
+                  await navigator.clipboard.writeText(state.businessId)
+                  toast.show('Business ID copied')
+                } catch {
+                  toast.show('Couldn’t copy — select and copy it manually', 'error')
+                }
+              }}
+            >
+              Copy
+            </Button>
+          </div>
+        </Card>
+      )}
+
       </CollapsibleSection>
 
       <CollapsibleSection title="App settings" storageKey="app">

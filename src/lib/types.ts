@@ -894,6 +894,11 @@ export interface AppState {
   // free-form VAT / registration number. Field name kept for backward
   // compatibility with stored data and exports.
   businessAbn: string
+  // Auto-generated, shareable business account ID (format "RH-XXXX-XXXX",
+  // see lib/businessId.ts). Created once at account setup and used to sign
+  // in across devices once the cloud backend is enabled. Empty on installs
+  // that predate accounts. Synced so every device of a business agrees.
+  businessId: string
   // Regulatory regime — see Jurisdiction / lib/compliance.ts.
   jurisdiction: Jurisdiction
   location: LocationSettings
@@ -968,6 +973,7 @@ export const SYNCED_SETTINGS_FIELDS = [
   'arcAuthorisationExpiry',
   'businessName',
   'businessAbn',
+  'businessId',
   'jurisdiction',
   'location',
   'unit',
@@ -994,6 +1000,7 @@ export const EMPTY_STATE: AppState = {
   arcAuthorisationExpiry: '',
   businessName: '',
   businessAbn: '',
+  businessId: '',
   jurisdiction: 'AU',
   location: { country: '', region: '', city: '', timezone: '' },
   unit: 'kg',

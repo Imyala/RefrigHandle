@@ -62,6 +62,7 @@ import {
 } from './sync'
 import { mergeStates } from './merge'
 import { clampHydroInterval } from './hydroDates'
+import { generateBusinessId } from './businessId'
 import { rebaseChainHead, sealAuditLog } from './auditChain'
 import { buildDemoState } from './demo'
 import { profileFor } from './compliance'
@@ -1599,6 +1600,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       // them to the *previous* active tech (none, on a fresh install).
       // The tech we're creating right now is the one in the seat, so we
       // stamp the trail with them.
+      // Auto-generate the shareable Business ID at account creation (kept
+      // if one somehow already exists, e.g. a re-run after a partial sync).
+      const businessId = s.businessId || generateBusinessId()
       const by = tech.name || undefined
       const byLicence = tech.arcLicenceNumber || undefined
       const mk = (
@@ -1646,6 +1650,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         ...s,
         businessName: data.businessName.trim(),
         businessAbn: data.businessAbn.trim(),
+        businessId,
         arcAuthorisationNumber: data.arcAuthorisationNumber.trim(),
         arcAuthorisationExpiry: data.arcAuthorisationExpiry.trim(),
         jurisdiction: data.jurisdiction,

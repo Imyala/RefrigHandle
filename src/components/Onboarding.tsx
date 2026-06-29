@@ -14,6 +14,11 @@ import { CopyrightContent } from './Copyright'
 import { useStore } from '../lib/store'
 import { useToast } from '../lib/toast'
 import { hashPassword, MIN_PASSWORD_LENGTH } from '../lib/auth'
+import {
+  signIn,
+  signInErrorMessage,
+  type SignInResult,
+} from '../lib/cloudAuth'
 import { screenNewPassword } from '../lib/passwordStrength'
 import {
   isLocationComplete,
@@ -96,7 +101,7 @@ function OnboardingScreen() {
   // screen where "Explore now" opens the app on sample data in one tap and
   // "Set up my business" reveals the setup form. Value first, setup when
   // they're ready to keep real records.
-  const [view, setView] = useState<'welcome' | 'setup'>('welcome')
+  const [view, setView] = useState<'welcome' | 'setup' | 'signin'>('welcome')
   const [businessName, setBusinessName] = useState('')
   const [abn, setAbn] = useState('')
   const [arcAuth, setArcAuth] = useState('')
@@ -292,12 +297,12 @@ function OnboardingScreen() {
           </div>
 
           <div className="mt-8 space-y-3">
-            <Button full onClick={() => startDemo()}>
-              Explore now — no sign-up
+            <Button full onClick={() => setView('signin')}>
+              Sign in
             </Button>
             <p className="text-center text-[11px] text-slate-400">
-              Opens the app on sample data so you can log a charge and see the
-              compliance scorecard. Nothing is saved as a real record.
+              Already have an account? Sign in with your Business ID, username
+              and password.
             </p>
             <div className="flex items-center gap-3 py-1">
               <span className="h-px flex-1 bg-slate-200 dark:bg-slate-800" />
@@ -307,16 +312,27 @@ function OnboardingScreen() {
               <span className="h-px flex-1 bg-slate-200 dark:bg-slate-800" />
             </div>
             <Button full variant="secondary" onClick={() => setView('setup')}>
-              Set up my business
+              Create account
             </Button>
             <p className="text-center text-[11px] text-slate-400">
-              Enter your business, licence and authorisation details to start
-              keeping real records.
+              Set up your business, licence and authorisation details. You'll
+              get a Business ID to share with your team.
+            </p>
+            <Button full variant="ghost" onClick={() => startDemo()}>
+              Explore now — no sign-up
+            </Button>
+            <p className="text-center text-[11px] text-slate-400">
+              Opens the app on sample data so you can log a charge and see the
+              compliance scorecard. Nothing is saved as a real record.
             </p>
           </div>
         </main>
       </div>
     )
+  }
+
+  if (view === 'signin') {
+    return <SignInView onBack={() => setView('welcome')} />
   }
 
   return (
@@ -724,5 +740,105 @@ function PolicyRef({
     >
       {children}
     </button>
+  )
+}
+
+// Cloud sign-in screen — Business ID + username + password. The actual
+// authentication lives behind lib/cloudAuth, which today reports that the
+// backend isn't enabled yet; the screen renders that state honestly rather
+// than pretending to log in. Wired and ready for the Supabase slice.
+function SignInView({ onBack }: { onBack: () => void }) {
+  const [businessId, setBusinessId] = useState('')
+  const [username, setUsername] = useState('')
+  const [password, setPassword] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [result, setResult] = useState<SignInResult | null>(null)
+
+  const error = result && !result.ok ? signInErrorMessage(result) : ''
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    setBusy(true)
+    const r = await signIn({ businessId, username, password })
+    setBusy(false)
+    setResult(r)
+    // On success the backend slice will hand off to the app (and prompt a
+    // password change on first sign-in); nothing to do until then.
+  }
+
+  return (
+    <div className="flex min-h-svh flex-col bg-slate-50 dark:bg-slate-950">
+      <main className="mx-auto flex w-full max-w-md flex-1 flex-col justify-center px-5 py-10">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
+            Sign in
+          </h1>
+          <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
+            Use the Business ID your administrator shared, plus your own
+            username and password.
+          </p>
+        </div>
+
+        <Card className="mt-6">
+          <form onSubmit={handleSubmit} className="space-y-3">
+            <Field label="Business ID">
+              <TextInput
+                value={businessId}
+                onChange={(e) => {
+                  setBusinessId(e.target.value)
+                  setResult(null)
+                }}
+                placeholder="RH-XXXX-XXXX"
+                autoCapitalize="characters"
+                autoComplete="off"
+                spellCheck={false}
+              />
+            </Field>
+            <Field label="Username">
+              <TextInput
+                value={username}
+                onChange={(e) => {
+                  setUsername(e.target.value)
+                  setResult(null)
+                }}
+                placeholder="e.g. jsmith"
+                autoCapitalize="none"
+                autoComplete="username"
+                spellCheck={false}
+              />
+            </Field>
+            <Field label="Password">
+              <TextInput
+                type="password"
+                value={password}
+                onChange={(e) => {
+                  setPassword(e.target.value)
+                  setResult(null)
+                }}
+                autoComplete="current-password"
+              />
+            </Field>
+
+            {error && (
+              <div className="rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-900 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-100">
+                {error}
+              </div>
+            )}
+
+            <Button type="submit" full disabled={busy}>
+              {busy ? 'Signing in…' : 'Sign in'}
+            </Button>
+          </form>
+        </Card>
+
+        <button
+          type="button"
+          onClick={onBack}
+          className="mx-auto mt-6 rounded-lg px-3 py-2 text-sm font-medium text-brand-600 hover:underline dark:text-brand-400"
+        >
+          ← Back
+        </button>
+      </main>
+    </div>
   )
 }
