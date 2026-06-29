@@ -18,6 +18,7 @@ import {
   type Bottle,
   type BottleKind,
   type BottleStatus,
+  type Technician,
   type Transaction,
   type TransactionKind,
   type TransactionReason,
@@ -40,6 +41,7 @@ import {
 } from '../lib/types'
 import { RefrigerantSelect } from '../components/RefrigerantSelect'
 import { BottleSelect } from '../components/BottleSelect'
+import { PasswordPromptModal } from '../components/PasswordPromptModal'
 import { MonthInput } from '../components/MonthInput'
 import { DateTimeInput } from '../components/DateTimeInput'
 import { ScanButton } from '../components/ScanButton'
@@ -1070,8 +1072,14 @@ function QuickLogModal({
     refrigerantContamination?: { sourceType: string; destType: string }
   }, share?: boolean) => void
 }) {
-  const { state, addBottle, addSite, addUnit, addCustomRefrigerant } =
-    useStore()
+  const {
+    state,
+    addBottle,
+    addSite,
+    addUnit,
+    addCustomRefrigerant,
+    setActiveTechnicianId,
+  } = useStore()
   const unit = state.unit
   // Enter / default the time in this device's own timezone so each tech
   // logs in their local time; the zone is stamped on the row (Transaction.tz).
@@ -1117,6 +1125,10 @@ function QuickLogModal({
   const [quickAddBottleOpen, setQuickAddBottleOpen] = useState(false)
   const [quickAddSiteOpen, setQuickAddSiteOpen] = useState(false)
   const [quickAddUnitOpen, setQuickAddUnitOpen] = useState(false)
+  // Inline active-profile switch (shared device): expand the list, and the
+  // password prompt when the picked profile is locked.
+  const [switchOpen, setSwitchOpen] = useState(false)
+  const [pwPromptTech, setPwPromptTech] = useState<Technician | null>(null)
 
   const lastKey = `${bottle?.id}-${kind}-${open}`
   const [seenKey, setSeenKey] = useState('')
@@ -1138,6 +1150,7 @@ function QuickLogModal({
     setSourceBottleId('')
     setReturnDestination('')
     setDocketNumber('')
+    setSwitchOpen(false)
   }
 
   // Most recent live job with a site — offered as a one-tap prefill,
@@ -1153,15 +1166,19 @@ function QuickLogModal({
     return best
   }, [state.transactions])
 
-  // Whose licence this quick-log will stamp. The quick form has no tech
-  // picker (the full Activity form does), so on a shared device we at
-  // least show who's about to be recorded, so the wrong tech isn't frozen
-  // onto the job silently.
+  // Whose licence this quick-log will stamp. The quick form now lets the
+  // tech switch the active profile inline (with the password lock honoured)
+  // so the right licence is one tap away on a shared device — no detour to
+  // Activity/Settings, and the wrong tech is never frozen onto a job.
   const stampTech = state.technicians.find(
     (t) => t.id === state.activeTechnicianId,
   )
   const stampName = stampTech?.name ?? (state.technician || '')
   const stampRhl = stampTech?.arcLicenceNumber ?? (state.arcLicenceNumber || '')
+  // Profiles you can switch into: active, not suspended.
+  const switchableTechs = state.technicians.filter(
+    (t) => !t.deactivatedAt && !t.suspendedAt,
+  )
 
   if (!open || !bottle || !kind) return null
 
@@ -1685,9 +1702,71 @@ function QuickLogModal({
             <>
               {stampName && (
                 <div className="rounded-xl bg-slate-100 px-3 py-2 text-xs text-slate-600 dark:bg-slate-800 dark:text-slate-300">
-                  Logging as <strong>{stampName}</strong>
-                  {stampRhl ? ` · ${stampRhl}` : ''}. To log as someone else,
-                  switch profile in Activity or Settings.
+                  <div className="flex items-center justify-between gap-2">
+                    <span>
+                      Logging as <strong>{stampName}</strong>
+                      {stampRhl ? ` · ${stampRhl}` : ''}
+                    </span>
+                    {switchableTechs.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => setSwitchOpen((v) => !v)}
+                        className="shrink-0 font-medium text-brand-600 hover:underline dark:text-brand-400"
+                        aria-expanded={switchOpen}
+                      >
+                        {switchOpen ? 'Cancel' : 'Change'}
+                      </button>
+                    )}
+                  </div>
+                  {switchOpen && (
+                    <div className="mt-2 flex flex-col gap-1">
+                      {switchableTechs.map((t) => {
+                        const isActive = t.id === state.activeTechnicianId
+                        return (
+                          <button
+                            key={t.id}
+                            type="button"
+                            disabled={isActive}
+                            onClick={() => {
+                              if (isActive) return
+                              // Honour the soft lock: a password-protected
+                              // profile prompts; an unlocked one switches now.
+                              if (t.passwordHash) {
+                                setPwPromptTech(t)
+                              } else {
+                                setActiveTechnicianId(t.id)
+                                setSwitchOpen(false)
+                              }
+                            }}
+                            className={`flex items-center justify-between gap-2 rounded-lg px-2.5 py-2 text-left transition ${
+                              isActive
+                                ? 'bg-brand-50 text-brand-700 dark:bg-brand-900/30 dark:text-brand-300'
+                                : 'bg-white hover:bg-slate-200 dark:bg-slate-900/40 dark:hover:bg-slate-700'
+                            }`}
+                          >
+                            <span className="min-w-0 truncate font-medium">
+                              {t.name}
+                              {t.arcLicenceNumber ? (
+                                <span className="font-normal text-slate-500 dark:text-slate-400">
+                                  {' · '}
+                                  {t.arcLicenceNumber}
+                                </span>
+                              ) : null}
+                            </span>
+                            {isActive ? (
+                              <span className="shrink-0 text-[11px] uppercase tracking-wide">
+                                Current
+                              </span>
+                            ) : t.passwordHash ? (
+                              <span aria-hidden className="shrink-0 text-slate-400">
+                                🔒
+                              </span>
+                            ) : null}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  )}
                 </div>
               )}
               {!unitId && (
@@ -1855,6 +1934,17 @@ function QuickLogModal({
           setSiteId(created.id)
           setUnitId('')
           setQuickAddSiteOpen(false)
+        }}
+      />
+
+      {/* Password lock for switching into a protected profile inline. */}
+      <PasswordPromptModal
+        tech={pwPromptTech}
+        onClose={() => setPwPromptTech(null)}
+        onVerified={(t) => {
+          setActiveTechnicianId(t.id)
+          setPwPromptTech(null)
+          setSwitchOpen(false)
         }}
       />
     </>
