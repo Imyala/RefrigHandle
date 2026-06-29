@@ -295,6 +295,44 @@ describe('role enforcement at the store layer', () => {
 })
 
 describe('audit logging gaps closed', () => {
+  it('changing a technician role is logged', () => {
+    const api = setup()
+    let id = ''
+    act(() => {
+      const t = api.current.addTechnician({ name: 'Pat', firstName: 'Pat', lastName: 'Lee', arcLicenceNumber: 'L-9', role: 'apprentice' })
+      id = t.id
+    })
+    act(() => api.current.updateTechnician(id, { role: 'technician' }))
+    const entry = api.current.state.auditLog.find(
+      (e) => e.entity === 'technician' && e.changes?.some((c) => c.field === 'Role'),
+    )
+    expect(entry).toBeTruthy()
+    expect(entry!.changes!.find((c) => c.field === 'Role')).toMatchObject({
+      from: 'Apprentice',
+      to: 'Technician',
+    })
+  })
+
+  it('updating a technician licence is logged but never the password hash', () => {
+    const api = setup()
+    let id = ''
+    act(() => {
+      const t = api.current.addTechnician({ name: 'Sam', firstName: 'Sam', lastName: 'Roe', arcLicenceNumber: 'OLD', role: 'technician' })
+      id = t.id
+    })
+    act(() => api.current.updateTechnician(id, { arcLicenceNumber: 'NEW', passwordHash: 'secrethash' }))
+    const entry = api.current.state.auditLog.find(
+      (e) => e.entity === 'technician' && e.changes?.some((c) => c.field === 'RHL'),
+    )
+    expect(entry).toBeTruthy()
+    // RHL change recorded…
+    expect(entry!.changes!.some((c) => c.field === 'RHL' && c.to === 'NEW')).toBe(true)
+    // …password recorded as a state, never the hash value itself.
+    const serialized = JSON.stringify(api.current.state.auditLog)
+    expect(serialized).not.toContain('secrethash')
+    expect(entry!.changes!.some((c) => c.field === 'Password lock')).toBe(true)
+  })
+
   it('switching the active profile is recorded on the change log', () => {
     const api = setup()
     addActiveTech(api, 'owner')

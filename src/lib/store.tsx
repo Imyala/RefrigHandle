@@ -44,6 +44,7 @@ import {
   TECH_FIELDS,
   UNIT_FIELDS,
   diffFields,
+  rawChanges,
 } from './audit'
 import {
   loadState,
@@ -533,14 +534,17 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (!before) return { ...s, bottles }
       const siteName = (v: unknown) =>
         v ? (s.sites.find((x) => x.id === v)?.name ?? String(v)) : '—'
-      const changes = diffFields(before, patch, BOTTLE_FIELDS, {
+      const labelled = diffFields(before, patch, BOTTLE_FIELDS, {
         currentSiteId: siteName,
         // Audit the retest flag as a readable state, not a raw timestamp.
         sentForRetestAt: (v) => (v ? 'Sent for retest' : 'Not sent'),
       })
-      // No tracked field changed (e.g. form saved untouched) — don't
+      // Catch-all so no field change is ever silently unlogged.
+      const all = rawChanges(before, patch)
+      // Nothing actually changed (e.g. form saved untouched) — don't
       // clutter the history with an empty edit.
-      if (changes.length === 0) return { ...s, bottles }
+      if (all.length === 0) return { ...s, bottles }
+      const changes = labelled.length ? labelled : all
       const relocated =
         'currentSiteId' in patch && patch.currentSiteId !== before.currentSiteId
       return {
@@ -651,8 +655,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           : x,
       )
       if (!before) return { ...s, sites }
-      const changes = diffFields(before, patch, SITE_FIELDS)
-      if (changes.length === 0) return { ...s, sites }
+      const labelled = diffFields(before, patch, SITE_FIELDS)
+      const all = rawChanges(before, patch)
+      if (all.length === 0) return { ...s, sites }
+      const changes = labelled.length ? labelled : all
       return {
         ...s,
         sites,
@@ -776,8 +782,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           : u,
       )
       if (!before) return { ...s, units }
-      const changes = diffFields(before, patch, UNIT_FIELDS)
-      if (changes.length === 0) return { ...s, units }
+      const labelled = diffFields(before, patch, UNIT_FIELDS)
+      const all = rawChanges(before, patch)
+      if (all.length === 0) return { ...s, units }
+      const changes = labelled.length ? labelled : all
       return {
         ...s,
         units,
@@ -1244,17 +1252,24 @@ export function StoreProvider({ children }: { children: ReactNode }) {
             : t,
         )
         if (!before) return { ...s, technicians }
-        // Diff name/RHL; also note a password being set/cleared without
-        // ever putting the hash itself in the trail.
-        const changes = diffFields(before, patch, TECH_FIELDS)
+        // Diff name / RHL / role / name-parts, showing the role as its
+        // readable label rather than the raw enum value.
+        const labelled = diffFields(before, patch, TECH_FIELDS, {
+          role: (v) => roleInfo(v as TechnicianRole | undefined).label,
+        })
+        // Note a password being set/cleared — never the hash itself.
         if ('passwordHash' in patch && patch.passwordHash !== before.passwordHash) {
-          changes.push({
+          labelled.push({
             field: 'Password lock',
             from: before.passwordHash ? 'Set' : 'None',
             to: patch.passwordHash ? 'Set' : 'None',
           })
         }
-        if (changes.length === 0) return { ...s, technicians }
+        // Catch-all for any other changed field, but NEVER the raw
+        // passwordHash (audited above as a state, not a value).
+        const all = rawChanges(before, patch, ['passwordHash'])
+        if (labelled.length === 0 && all.length === 0) return { ...s, technicians }
+        const changes = labelled.length ? labelled : all
         return {
           ...s,
           technicians,

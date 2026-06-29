@@ -87,6 +87,7 @@ export const SITE_FIELDS: FieldLabels<Site> = {
   address: 'Address',
   state: 'State',
   city: 'City',
+  group: 'Region / group',
   notes: 'Notes',
 }
 
@@ -105,6 +106,10 @@ export const UNIT_FIELDS: FieldLabels<Unit> = {
 
 export const TECH_FIELDS: FieldLabels<Technician> = {
   name: 'Name',
+  firstName: 'First name',
+  middleName: 'Middle name',
+  lastName: 'Surname',
+  role: 'Role',
   arcLicenceNumber: 'RHL',
   licenceExpiry: 'RHL expiry',
 }
@@ -112,6 +117,34 @@ export const TECH_FIELDS: FieldLabels<Technician> = {
 function formatValue(v: unknown): string {
   if (v == null || v === '') return '—'
   return String(v)
+}
+
+// Meta fields that are never themselves an auditable "change" — ids and
+// timestamps move on every write but aren't edits a person made.
+const DEFAULT_IGNORED_FIELDS = new Set(['id', 'createdAt', 'updatedAt'])
+
+// Catch-all diff: EVERY field in `patch` whose value actually changed,
+// keyed by its raw field name. This is the safety net behind the friendly
+// label maps above — it guarantees no stored-field change is ever silently
+// unlogged, even a field nobody has given a nice label yet (or a new field
+// added later). Callers pass extra `ignore` names for anything sensitive
+// or handled specially (e.g. a technician's passwordHash, which is audited
+// as "Password lock set/cleared", never as its hash).
+export function rawChanges<T>(
+  before: T,
+  patch: Partial<T>,
+  ignore: Iterable<string> = [],
+): AuditChange[] {
+  const skip = new Set<string>([...DEFAULT_IGNORED_FIELDS, ...ignore])
+  const b = before as Record<string, unknown>
+  const p = patch as Record<string, unknown>
+  const out: AuditChange[] = []
+  for (const key of Object.keys(p)) {
+    if (skip.has(key)) continue
+    if (b[key] === p[key]) continue
+    out.push({ field: key, from: formatValue(b[key]), to: formatValue(p[key]) })
+  }
+  return out
 }
 
 // Diff the labelled fields present in `patch` against `before`. Returns
