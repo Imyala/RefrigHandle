@@ -6,17 +6,20 @@ import {
   expiryStatus,
   hydroStatusFor,
   isTechnicianActive,
+  leakStatusFor,
 } from '../lib/types'
 import { profileFor } from '../lib/compliance'
 import { backupStatus } from '../lib/backup'
 import { formatPlainDate } from '../lib/datetime'
 import { isStoragePersisted, requestPersistentStorage } from '../lib/storage'
 
-// At-a-glance compliance overview for the whole business. Rolls the four
+// At-a-glance compliance overview for the whole business. Rolls the
 // things that actually get an operator in trouble — technician licences
 // (RHL), the business authorisation (RTA), cylinder periodic testing
-// (AS 2030), and whether the records are backed up — into a single
-// traffic-light card. The detailed, actionable + snoozable alerts still
+// (AS 2030), equipment leak rate (AIRAH DA19), and whether the records
+// are backed up — into a single traffic-light card. Every compliance
+// signal the app tracks surfaces here; anything red/amber deep-links to
+// the fix. The detailed, actionable + snoozable alerts still
 // live in <Alerts/> below; this is the "are we OK?" summary a supervisor
 // can read in one glance and the headline demo of the app's value.
 
@@ -198,7 +201,41 @@ export function ComplianceHealth() {
       to: '/bottles',
     })
 
-    // 4. Records backup.
+    // 4. Equipment leak rate (AIRAH DA19) — active units topped up above
+    // the leak-rate threshold over the trailing 12 months. A suspected
+    // leak is a reportable refrigerant-loss concern, so it belongs on the
+    // compliance summary, not just the separate leak-watch card.
+    const activeUnits = state.units.filter((u) => u.status === 'active')
+    let leakSuspected = 0
+    let leakWatch = 0
+    for (const u of activeUnits) {
+      const lk = leakStatusFor(u, state.transactions)
+      if (lk.level === 'suspected') leakSuspected += 1
+      else if (lk.level === 'watch') leakWatch += 1
+    }
+    const leakLevel: Level = leakSuspected
+      ? 'action'
+      : leakWatch
+        ? 'attention'
+        : 'ok'
+    out.push({
+      id: 'leaks',
+      label: 'Equipment leak rate (DA19)',
+      level: leakLevel,
+      summary:
+        activeUnits.length === 0
+          ? 'No equipment in service'
+          : leakSuspected || leakWatch
+            ? joinParts([
+                leakSuspected &&
+                  `${leakSuspected} suspected leak${leakSuspected === 1 ? '' : 's'}`,
+                leakWatch && `${leakWatch} to watch`,
+              ])
+            : `All ${activeUnits.length} within range`,
+      to: '/sites',
+    })
+
+    // 5. Records backup.
     const bs = backupStatus(state)
     let bkLevel: Level = 'ok'
     let bkSummary: string
