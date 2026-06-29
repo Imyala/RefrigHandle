@@ -1937,3 +1937,39 @@ export function hydroStatusFor(
   if (months <= 1) return { status: 'due_soon', monthsUntilDue: months }
   return { status: 'ok', monthsUntilDue: months }
 }
+
+// Case-insensitive duplicate check on bottle numbers, ignoring the
+// bottle being edited (pass its id as `excludeId`). Shared by the bottle
+// forms and the quick-add. (Moved here so the quick-add components can be
+// reused outside the Bottles page without a circular import.)
+export function isDuplicateBottleNumber(
+  bottles: readonly Bottle[],
+  bottleNumber: string,
+  excludeId?: string,
+): boolean {
+  const n = bottleNumber.trim().toLowerCase()
+  if (!n) return false
+  return bottles.some(
+    (b) => b.id !== excludeId && b.bottleNumber.trim().toLowerCase() === n,
+  )
+}
+
+// Stronger variant: a duplicate of an ACTIVE (not returned) cylinder. This
+// is the dangerous case — two in-service bottles sharing a number make
+// every scan / search / history lookup ambiguous, so it's blocked rather
+// than warned. Re-using the number of a cylinder that's been returned to
+// the supplier is still allowed (the old one has left our possession).
+export function isDuplicateActiveBottleNumber(
+  bottles: readonly Bottle[],
+  bottleNumber: string,
+  excludeId?: string,
+): boolean {
+  const n = bottleNumber.trim().toLowerCase()
+  if (!n) return false
+  return bottles.some(
+    (b) =>
+      b.id !== excludeId &&
+      b.status !== 'returned' &&
+      b.bottleNumber.trim().toLowerCase() === n,
+  )
+}
