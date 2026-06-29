@@ -66,8 +66,16 @@ store/supplier, **intake** of a new cylinder, and manual **adjustments**.
   cryptographic hash chain, verifiable from Settings
 * Append-only **corrections** — a wrong entry is re-stated, never quietly
   overwritten, and both rows stay on the record
-* **Soft-delete with restore** — removed log entries are kept for the audit
-  trail and recoverable by an owner/supervisor
+* **Nothing is ever permanently deleted** — removed log entries are
+  soft-deleted, and removed bottles, sites, equipment, technicians, presets
+  and custom refrigerants move to a **recycle bin** (Change log → Recently
+  deleted) where an owner/supervisor can restore them. Every deletion and
+  restore is itself written to the change log
+* **Enforced role permissions** — owner / supervisor / lead-tech /
+  technician / apprentice tiers are checked at the data layer, not just in
+  the UI: deleting records, removing cylinders or equipment, managing
+  technicians, editing company identity, importing a backup and closing the
+  account are each gated to the right tier
 * **ARC quarterly record** — refrigerant bought, charged, recovered and
   returned per quarter, printable to PDF
 * Alerts for RHL / RTA expiry and overdue cylinder tests

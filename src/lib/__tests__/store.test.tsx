@@ -208,3 +208,104 @@ describe('soft-delete and restore', () => {
     expect(api.current.state.transactions.find((t) => t.id === txId)!.deletedAt).toBeFalsy()
   })
 })
+
+// Add a technician with a given role and make it the active profile.
+function addActiveTech(
+  api: { current: Api },
+  role: Parameters<Api['addTechnician']>[0]['role'],
+) {
+  act(() => {
+    const t = api.current.addTechnician({
+      name: `${role}-user`,
+      firstName: role as string,
+      lastName: 'User',
+      arcLicenceNumber: 'L-1',
+      role,
+    })
+    api.current.setActiveTechnicianId(t.id)
+  })
+}
+
+describe('recycle bin — nothing is permanently deleted', () => {
+  it('deleting a bottle moves it to the recycle bin and restore brings it back', () => {
+    const api = setup()
+    const b = addBottle(api.current, { bottleNumber: 'RB1' })
+
+    act(() => api.current.deleteBottle(b.id))
+    // Gone from the live collection…
+    expect(api.current.state.bottles.some((x) => x.id === b.id)).toBe(false)
+    // …but captured in the recycle bin, with a tombstone for sync.
+    const entry = api.current.state.recycleBin.find((e) => e.recordId === b.id)
+    expect(entry).toBeTruthy()
+    expect(entry!.entity).toBe('bottle')
+    expect(api.current.state.tombstones.some((t) => t.id === b.id)).toBe(true)
+
+    act(() => api.current.restoreFromRecycleBin(entry!.id))
+    // Record is back, the bin entry is consumed, and the tombstone cleared
+    // so a later sync won't re-delete it.
+    expect(api.current.state.bottles.some((x) => x.id === b.id)).toBe(true)
+    expect(api.current.state.recycleBin.some((e) => e.id === entry!.id)).toBe(false)
+    expect(api.current.state.tombstones.some((t) => t.id === b.id)).toBe(false)
+  })
+
+  it('deleting a site recycle-bins the site and each of its units', () => {
+    const api = setup()
+    let siteId = ''
+    let unitId = ''
+    act(() => {
+      const site = api.current.addSite({ name: 'Roof', client: '', address: '', state: '', city: '', notes: '' })
+      siteId = site.id
+      const unit = api.current.addUnit({ siteId: site.id, name: 'AHU-1', kind: 'split', refrigerantType: 'R32', refrigerantCharge: 2 })
+      unitId = unit.id
+    })
+    act(() => api.current.deleteSite(siteId))
+    const binned = api.current.state.recycleBin
+    expect(binned.some((e) => e.entity === 'site' && e.recordId === siteId)).toBe(true)
+    expect(binned.some((e) => e.entity === 'unit' && e.recordId === unitId)).toBe(true)
+  })
+})
+
+describe('role enforcement at the store layer', () => {
+  it('an apprentice cannot delete a bottle, but an owner can', () => {
+    const api = setup()
+    const b = addBottle(api.current, { bottleNumber: 'PERM1' })
+
+    addActiveTech(api, 'apprentice')
+    act(() => api.current.deleteBottle(b.id))
+    // Blocked — still live, nothing binned.
+    expect(api.current.state.bottles.some((x) => x.id === b.id)).toBe(true)
+    expect(api.current.state.recycleBin.length).toBe(0)
+
+    addActiveTech(api, 'owner')
+    act(() => api.current.deleteBottle(b.id))
+    expect(api.current.state.bottles.some((x) => x.id === b.id)).toBe(false)
+  })
+
+  it('an apprentice cannot delete a transaction', () => {
+    const api = setup()
+    const b = addBottle(api.current)
+    act(() => {
+      api.current.addTransaction({ bottleId: b.id, kind: 'charge', amount: 1, date: DATE })
+    })
+    const txId = txIdFor(api.current, b.id)
+    addActiveTech(api, 'apprentice')
+    act(() => api.current.deleteTransaction(txId, 'nope'))
+    expect(api.current.state.transactions.find((t) => t.id === txId)!.deletedAt).toBeFalsy()
+  })
+})
+
+describe('audit logging gaps closed', () => {
+  it('switching the active profile is recorded on the change log', () => {
+    const api = setup()
+    addActiveTech(api, 'owner')
+    let secondId = ''
+    act(() => {
+      const t = api.current.addTechnician({ name: 'Second', firstName: 'Second', lastName: 'Tech', arcLicenceNumber: 'L-2', role: 'technician' })
+      secondId = t.id
+    })
+    act(() => api.current.setActiveTechnicianId(secondId))
+    expect(
+      api.current.state.auditLog.some((e) => /Switched the active profile/.test(e.summary)),
+    ).toBe(true)
+  })
+})

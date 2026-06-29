@@ -48,6 +48,7 @@ interface LegacyState
     | 'activeTechnicianId'
     | 'auditLog'
     | 'tombstones'
+    | 'recycleBin'
     | 'termsAcceptedVersion'
   > {
   bottles?: LegacyBottle[]
@@ -80,6 +81,7 @@ interface LegacyState
   technicians?: Technician[]
   activeTechnicianId?: string
   tombstones?: AppState['tombstones']
+  recycleBin?: AppState['recycleBin']
 }
 
 export type LoadStatus = 'ok' | 'empty' | 'corrupted'
@@ -266,6 +268,7 @@ function normalize(parsed: LegacyState): AppState {
     },
     setupCompletedAt,
     tombstones: parsed.tombstones ?? [],
+    recycleBin: parsed.recycleBin ?? [],
   }
 }
 

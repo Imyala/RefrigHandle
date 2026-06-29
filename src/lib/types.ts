@@ -467,6 +467,36 @@ export interface Tombstone {
   at: string // ISO timestamp of the deletion
 }
 
+// Entities that can be sent to (and recovered from) the recycle bin.
+export type RecyclableEntity =
+  | 'bottle'
+  | 'site'
+  | 'unit'
+  | 'technician'
+  | 'preset'
+  | 'refrigerant'
+
+// A recoverable record of a deletion. The app NEVER hard-drops a bottle,
+// site, unit, technician profile, preset or custom refrigerant into
+// oblivion — the removed record is captured here in full so an
+// owner/supervisor can restore it later (Change log → Recently deleted).
+// The live collection (state.bottles, …) still only holds active records,
+// so every list/picker/report keeps working unchanged; the bin is the
+// archive alongside it. Restoring re-inserts the record and clears its
+// tombstone so a sync won't immediately re-delete it.
+export interface RecycleBinEntry {
+  id: string // id of THIS bin entry (not the record)
+  entity: RecyclableEntity
+  recordId: string // id of the deleted record (or the name, for refrigerants)
+  label: string // human label for the recovery list, e.g. "Bottle ABC123"
+  deletedAt: string
+  deletedBy?: string
+  deletedByLicence?: string
+  deletedReason?: string
+  // The full removed record, kept verbatim so a restore is lossless.
+  record: unknown
+}
+
 // The app is Australia-only (the ARC RHL/RTA scheme). The type is kept
 // as a single-member union so stored data and the compliance profile
 // indirection in lib/compliance.ts stay typed, rather than being a bare
@@ -889,6 +919,12 @@ export interface AppState {
   accountClosure?: AccountClosure
   // Deletion markers consumed by the sync merge — see Tombstone.
   tombstones: Tombstone[]
+  // Recoverable archive of every deleted record (bottle / site / unit /
+  // technician / preset / custom refrigerant). Deletions move the record
+  // here instead of discarding it, so nothing is ever permanently lost —
+  // an owner/supervisor can restore it from the change log. See
+  // RecycleBinEntry. Unioned (never reset-pruned) by the sync merge.
+  recycleBin: RecycleBinEntry[]
   // When the scalar settings block (business identity, location, units,
   // theme…) was last changed. A coarse fallback for the merge when the
   // per-field stamps below are absent (older states).
@@ -951,6 +987,7 @@ export const EMPTY_STATE: AppState = {
   setupCompletedAt: undefined,
   demoStartedAt: undefined,
   tombstones: [],
+  recycleBin: [],
   settingsUpdatedAt: undefined,
   settingsFieldsUpdatedAt: undefined,
   dataResetAt: undefined,

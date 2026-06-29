@@ -263,3 +263,39 @@ describe('settings merge — per field', () => {
     expect(m.settingsFieldsUpdatedAt).toEqual({ businessName: T3, unit: T3 })
   })
 })
+
+describe('recycle bin merge', () => {
+  const binEntry = (over: Record<string, unknown> = {}) => ({
+    id: 'bin1',
+    entity: 'bottle' as const,
+    recordId: 'b1',
+    label: 'Bottle B1',
+    deletedAt: '2026-06-01T00:00:00.000Z',
+    record: { id: 'b1' },
+    ...over,
+  })
+
+  it('unions recycle-bin entries from both devices, newest first', () => {
+    const e1 = binEntry({ id: 'bin1', deletedAt: '2026-06-01T00:00:00.000Z' })
+    const e2 = binEntry({ id: 'bin2', deletedAt: '2026-06-02T00:00:00.000Z' })
+    const merged = mergeStates(
+      makeState({ recycleBin: [e1] }),
+      makeState({ recycleBin: [e2] }),
+    )
+    expect(merged.recycleBin.map((e) => e.id)).toEqual(['bin2', 'bin1'])
+  })
+
+  it('a restored record (bin entry dropped + record live) is not re-deleted by a stale bin copy', () => {
+    // Device A restored b1: the bin entry is gone, the bottle is live with
+    // a fresh updatedAt, and the tombstone was cleared. Device B still holds
+    // the bin entry and the tombstone. The record must survive the merge.
+    const bottle = makeBottle({ id: 'b1', updatedAt: '2026-06-10T00:00:00.000Z' })
+    const a = makeState({ bottles: [bottle] }) // restored: no tombstone, no bin
+    const b = makeState({
+      recycleBin: [binEntry()],
+      tombstones: [{ entity: 'bottle', id: 'b1', at: '2026-06-01T00:00:00.000Z' }],
+    })
+    const merged = mergeStates(a, b)
+    expect(merged.bottles.some((x) => x.id === 'b1')).toBe(true)
+  })
+})

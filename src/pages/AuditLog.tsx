@@ -9,7 +9,7 @@ import {
   AUDIT_ENTITY_LABELS,
 } from '../lib/audit'
 import { canDeleteRecords } from '../lib/types'
-import type { AuditEntity, Transaction } from '../lib/types'
+import type { AuditEntity, RecycleBinEntry, Transaction } from '../lib/types'
 import { profileFor } from '../lib/compliance'
 import { TransactionDetails } from '../components/TransactionDetails'
 import { useToast } from '../lib/toast'
@@ -42,7 +42,7 @@ function filterLabel(f: (typeof ENTITY_FILTERS)[number]): string {
 }
 
 export default function AuditLog() {
-  const { state, restoreTransaction } = useStore()
+  const { state, restoreTransaction, restoreFromRecycleBin } = useStore()
   const { auditLog } = state
   const tz = state.location.timezone
   const licShort = profileFor(state.jurisdiction).techLicenceShort
@@ -67,6 +67,20 @@ export default function AuditLog() {
     if (!ok) return
     restoreTransaction(t.id)
     toast.show('Transaction restored', 'success')
+  }
+
+  // Recover a deleted record (bottle / site / unit / technician / preset /
+  // refrigerant) from the recycle bin. Same supervisor gate as a restore.
+  async function handleRestoreBin(entry: RecycleBinEntry) {
+    const ok = await confirm({
+      title: `Restore ${entry.label}?`,
+      message:
+        'It returns to the app and to every list and report it appears in. The original deletion stays on this change log.',
+      confirmLabel: 'Restore',
+    })
+    if (!ok) return
+    restoreFromRecycleBin(entry.id)
+    toast.show(`${entry.label} restored`, 'success')
   }
 
   const [query, setQuery] = useState('')
@@ -140,6 +154,58 @@ export default function AuditLog() {
           refrigerant movements are on the Refrigerant log. Read-only.
         </p>
       </div>
+
+      {state.recycleBin.length > 0 && (
+        <Card className="!p-3 border border-amber-300 bg-amber-50 dark:border-amber-500/40 dark:bg-amber-500/10">
+          <div className="flex items-center gap-2">
+            <span aria-hidden>♻️</span>
+            <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+              Recently deleted ({state.recycleBin.length})
+            </h3>
+          </div>
+          <p className="mt-0.5 text-xs text-slate-600 dark:text-slate-300">
+            Deleted bottles, sites, equipment, technicians and presets are kept
+            here and can be restored — nothing is permanently removed.
+          </p>
+          <ul className="mt-2 space-y-1.5">
+            {state.recycleBin.slice(0, 50).map((entry) => (
+              <li
+                key={entry.id}
+                className="flex items-center justify-between gap-2 rounded-xl bg-white/70 p-2 dark:bg-slate-900/30"
+              >
+                <div className="min-w-0">
+                  <div className="truncate text-sm font-medium text-slate-900 dark:text-slate-100">
+                    {entry.label}
+                  </div>
+                  <div className="truncate text-xs text-slate-500 dark:text-slate-400">
+                    Deleted {formatStampedTime(entry.deletedAt, undefined, tz, state.clock)}
+                    {entry.deletedBy ? ` · ${entry.deletedBy}` : ''}
+                    {entry.deletedReason ? ` · ${entry.deletedReason}` : ''}
+                  </div>
+                </div>
+                {mayRestore ? (
+                  <button
+                    onClick={() => handleRestoreBin(entry)}
+                    className="shrink-0 rounded-lg px-2 py-1 text-xs font-medium text-brand-600 hover:bg-brand-50 dark:hover:bg-brand-900/20"
+                    aria-label={`Restore ${entry.label}`}
+                  >
+                    ↩ Restore
+                  </button>
+                ) : (
+                  <span className="shrink-0 text-xs text-slate-400">
+                    Supervisor only
+                  </span>
+                )}
+              </li>
+            ))}
+          </ul>
+          {state.recycleBin.length > 50 && (
+            <p className="mt-1.5 text-xs text-slate-500">
+              Showing the 50 most recent of {state.recycleBin.length}.
+            </p>
+          )}
+        </Card>
+      )}
 
       {auditLog.length > 0 && (
         <TextInput

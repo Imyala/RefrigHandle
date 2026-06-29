@@ -17,6 +17,8 @@ import {
   type ClockFormat,
   type Jurisdiction,
   type LocationSettings,
+  type RecyclableEntity,
+  type RecycleBinEntry,
   type Site,
   type SyncSettings,
   type Technician,
@@ -29,6 +31,8 @@ import {
   SYNCED_SETTINGS_FIELDS,
   transactionLabel,
   composeName,
+  roleAtLeast,
+  roleInfo,
   DEFAULT_TECHNICIAN_ROLE,
   TECHNICIAN_PURGE_DAYS,
   TERMS_VERSION,
@@ -85,6 +89,32 @@ function withAudit(
   return [entry, ...s.auditLog]
 }
 
+// Capture a record being deleted so the deletion is recoverable (see
+// RecycleBinEntry). Stamps who/when from the active profile, mirroring
+// withAudit's attribution. The full record is kept verbatim for a
+// lossless restore. Pure w.r.t. `s` (safe inside a setState updater).
+function makeBinEntry(
+  s: AppState,
+  entity: RecyclableEntity,
+  recordId: string,
+  label: string,
+  record: unknown,
+  reason?: string,
+): RecycleBinEntry {
+  const tech = s.technicians.find((x) => x.id === s.activeTechnicianId)
+  return {
+    id: uid(),
+    entity,
+    recordId,
+    label,
+    deletedAt: new Date().toISOString(),
+    deletedBy: tech?.name || s.technician || undefined,
+    deletedByLicence: tech?.arcLicenceNumber || s.arcLicenceNumber || undefined,
+    deletedReason: reason,
+    record,
+  }
+}
+
 interface StoreApi {
   state: AppState
   // bottles
@@ -114,6 +144,11 @@ interface StoreApi {
   // the activity log and cumulative calcs, and records a 'restore' entry
   // on the change log. No-op if the row isn't currently deleted.
   restoreTransaction: (id: string) => void
+  // Recover a deleted bottle / site / unit / technician / preset / custom
+  // refrigerant from the recycle bin. Re-inserts the record, clears its
+  // tombstone, and logs a 'restore'. No-op if the bin entry is gone or the
+  // record is somehow already present. (Supervisor and above.)
+  restoreFromRecycleBin: (binId: string) => void
   // technician profiles
   addTechnician: (t: Omit<Technician, 'id' | 'createdAt'>) => Technician
   updateTechnician: (id: string, patch: Partial<Technician>) => void
@@ -319,6 +354,20 @@ export function StoreProvider({ children }: { children: ReactNode }) {
               at,
             })),
           ],
+          // Even an automatic purge stays recoverable from the recycle bin.
+          recycleBin: [
+            ...due.map((t) =>
+              makeBinEntry(
+                s,
+                'technician',
+                t.id,
+                `Technician ${t.name}`,
+                t,
+                `Auto-removed after the ${TECHNICIAN_PURGE_DAYS}-day retention period`,
+              ),
+            ),
+            ...s.recycleBin,
+          ],
           auditLog,
         }
       })
@@ -336,6 +385,31 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     stateRef.current = state
   }, [state])
+
+  // Role enforcement at the mutation layer — defence in depth behind the
+  // UI's button-hiding. Returns true (allowed) when the active profile
+  // sits at or above `min`. When there is NO active profile (a solo /
+  // first-run / demo device with no per-tech identity) there is no role
+  // boundary to enforce, so the action is allowed — matching how the app
+  // behaves before a crew is set up. A denied action is a no-op and tells
+  // the user which tier it needs. Real, unspoofable enforcement still
+  // needs server-side per-tech sign-in; this stops accidental misuse and
+  // honours the permissions the UI advertises.
+  const ensureRole = useCallback(
+    (min: TechnicianRole, action: string): boolean => {
+      const s = stateRef.current
+      const tech = s.technicians.find((t) => t.id === s.activeTechnicianId)
+      if (!tech) return true
+      if (roleAtLeast(tech.role, min)) return true
+      toast.show(
+        `${action} needs ${roleInfo(min).label} access or higher — you're signed in as ${roleInfo(tech.role).label}.`,
+        'error',
+        6000,
+      )
+      return false
+    },
+    [toast],
+  )
 
   // Merge-based remote apply. The old code REPLACED local state with
   // the remote blob (last write wins) — two techs logging at once lost
@@ -487,6 +561,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const deleteBottle: StoreApi['deleteBottle'] = useCallback((id) => {
+    if (!ensureRole('supervisor', 'Deleting a cylinder')) return
     setState((s) => {
       const before = s.bottles.find((b) => b.id === id)
       const activeTech = s.technicians.find(
@@ -520,18 +595,32 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         // Tombstone so a sync with a device that still holds this
         // bottle doesn't resurrect it (see lib/merge.ts).
         tombstones: [...s.tombstones, { entity: 'bottle' as const, id, at: now }],
+        // The bottle record itself is recoverable from the recycle bin —
+        // nothing is permanently deleted.
+        recycleBin: before
+          ? [
+              makeBinEntry(
+                s,
+                'bottle',
+                id,
+                `Bottle ${before.bottleNumber} · ${before.refrigerantType}`,
+                before,
+              ),
+              ...s.recycleBin,
+            ]
+          : s.recycleBin,
         auditLog: before
           ? withAudit(s, {
               action: 'delete',
               entity: 'bottle',
               entityId: id,
               target: before.bottleNumber,
-              summary: `Removed bottle ${before.bottleNumber} — its log entries are kept (soft-deleted) for the audit trail`,
+              summary: `Removed bottle ${before.bottleNumber} — recoverable from the recycle bin; its log entries are kept (soft-deleted) for the audit trail`,
             })
           : s.auditLog,
       }
     })
-  }, [])
+  }, [ensureRole])
 
   const addSite: StoreApi['addSite'] = useCallback((s) => {
     const site: Site = {
@@ -580,20 +669,39 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const deleteSite: StoreApi['deleteSite'] = useCallback((id) => {
+    if (!ensureRole('supervisor', 'Deleting a site')) return
     setState((s) => {
       const before = s.sites.find((x) => x.id === id)
       // Deleting a site (and its units) must not rewrite history: every
       // transaction that referenced it gets the site/unit NAME frozen on
       // the row before the link is cleared, so logbooks and exports keep
       // saying where the work happened.
-      const deletedUnitNames = new Map(
-        s.units.filter((u) => u.siteId === id).map((u) => [u.id, u.name]),
-      )
+      const deletedUnits = s.units.filter((u) => u.siteId === id)
+      const deletedUnitNames = new Map(deletedUnits.map((u) => [u.id, u.name]))
       const now = new Date().toISOString()
+      // Recycle-bin the site and each cascaded unit individually, so any
+      // of them can be recovered later — nothing is permanently deleted.
+      const binned: RecycleBinEntry[] = []
+      if (before) {
+        binned.push(makeBinEntry(s, 'site', id, `Site ${before.name}`, before))
+      }
+      for (const u of deletedUnits) {
+        binned.push(
+          makeBinEntry(
+            s,
+            'unit',
+            u.id,
+            `Unit ${u.name}`,
+            u,
+            before ? `Site ${before.name} removed` : undefined,
+          ),
+        )
+      }
       return {
         ...s,
         sites: s.sites.filter((x) => x.id !== id),
         units: s.units.filter((u) => u.siteId !== id),
+        recycleBin: binned.length ? [...binned, ...s.recycleBin] : s.recycleBin,
         // Tombstone the site AND its cascaded units so a sync can't
         // resurrect any of them (see lib/merge.ts).
         tombstones: [
@@ -628,12 +736,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
               entity: 'site',
               entityId: id,
               target: before.name,
-              summary: `Removed site ${before.name} — its units were deleted; past log entries keep the site/unit names frozen on the record`,
+              summary: `Removed site ${before.name} — its units were removed too; all recoverable from the recycle bin, and past log entries keep the site/unit names frozen on the record`,
             })
           : s.auditLog,
       }
     })
-  }, [])
+  }, [ensureRole])
 
   const addUnit: StoreApi['addUnit'] = useCallback((u) => {
     const unit: Unit = {
@@ -686,6 +794,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const deleteUnit: StoreApi['deleteUnit'] = useCallback((id) => {
+    if (!ensureRole('supervisor', 'Deleting equipment')) return
     setState((s) => {
       const before = s.units.find((u) => u.id === id)
       return {
@@ -695,6 +804,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           ...s.tombstones,
           { entity: 'unit' as const, id, at: new Date().toISOString() },
         ],
+        recycleBin: before
+          ? [makeBinEntry(s, 'unit', id, `Unit ${before.name}`, before), ...s.recycleBin]
+          : s.recycleBin,
         // Freeze the unit's name onto its log rows before clearing the
         // link — deleting equipment must not erase where past work
         // happened from the historical record.
@@ -709,12 +821,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
               entity: 'unit',
               entityId: id,
               target: before.name,
-              summary: `Removed unit ${before.name}`,
+              summary: `Removed unit ${before.name} — recoverable from the recycle bin`,
             })
           : s.auditLog,
       }
     })
-  }, [])
+  }, [ensureRole])
 
   const decommissionUnit: StoreApi['decommissionUnit'] = useCallback(
     (id, reason) => {
@@ -914,6 +1026,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const deleteTransaction: StoreApi['deleteTransaction'] = useCallback(
     (id, reason) => {
+      if (!ensureRole('supervisor', 'Deleting a log entry')) return
       setState((s) => {
         const activeTech = s.technicians.find(
           (x) => x.id === s.activeTechnicianId,
@@ -954,11 +1067,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         }
       })
     },
-    [],
+    [ensureRole],
   )
 
   const restoreTransaction: StoreApi['restoreTransaction'] = useCallback(
     (id) => {
+      if (!ensureRole('supervisor', 'Restoring a log entry')) return
       const now = new Date().toISOString()
       setState((s) => {
         const target = s.transactions.find((t) => t.id === id)
@@ -996,7 +1110,86 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         }
       })
     },
-    [],
+    [ensureRole],
+  )
+
+  const restoreFromRecycleBin: StoreApi['restoreFromRecycleBin'] = useCallback(
+    (binId) => {
+      if (!ensureRole('supervisor', 'Restoring a deleted record')) return
+      setState((s) => {
+        const entry = s.recycleBin.find((e) => e.id === binId)
+        if (!entry) return s
+        const now = new Date().toISOString()
+        // Drop the bin entry and the record's tombstone. Removing the
+        // tombstone (plus the bumped updatedAt below) is what stops the
+        // next sync merge from immediately re-deleting the record.
+        const recycleBin = s.recycleBin.filter((e) => e.id !== binId)
+        const tombstones = s.tombstones.filter(
+          (t) => !(t.entity === entry.entity && t.id === entry.recordId),
+        )
+        const base = { ...s, recycleBin, tombstones }
+        const log = (target: string): AuditEntry[] =>
+          withAudit(s, {
+            action: 'restore',
+            entity: entry.entity,
+            entityId: entry.recordId,
+            target,
+            summary: `Restored ${entry.label} from the recycle bin`,
+          })
+        switch (entry.entity) {
+          case 'bottle': {
+            const rec = { ...(entry.record as Bottle), updatedAt: now }
+            if (s.bottles.some((b) => b.id === rec.id)) return s
+            return { ...base, bottles: [...s.bottles, rec], auditLog: log(rec.bottleNumber) }
+          }
+          case 'site': {
+            const rec = { ...(entry.record as Site), updatedAt: now }
+            if (s.sites.some((x) => x.id === rec.id)) return s
+            return { ...base, sites: [...s.sites, rec], auditLog: log(rec.name) }
+          }
+          case 'unit': {
+            const rec = { ...(entry.record as Unit), updatedAt: now }
+            if (s.units.some((u) => u.id === rec.id)) return s
+            return { ...base, units: [...s.units, rec], auditLog: log(rec.name) }
+          }
+          case 'technician': {
+            // Restore as an active profile (any purge countdown is cleared).
+            const rec = {
+              ...(entry.record as Technician),
+              deactivatedAt: undefined,
+              updatedAt: now,
+            }
+            if (s.technicians.some((t) => t.id === rec.id)) return s
+            return {
+              ...base,
+              technicians: [...s.technicians, rec],
+              auditLog: log(rec.name),
+            }
+          }
+          case 'preset': {
+            const rec = entry.record as BottlePreset
+            if (s.customBottlePresets.some((p) => p.id === rec.id)) return s
+            return {
+              ...base,
+              customBottlePresets: [...s.customBottlePresets, rec],
+              auditLog: log(rec.label),
+            }
+          }
+          case 'refrigerant': {
+            const name = entry.recordId
+            if (s.customRefrigerants.includes(name)) return s
+            return {
+              ...base,
+              customRefrigerants: [...s.customRefrigerants, name],
+              auditLog: log(name),
+            }
+          }
+          default:
+            return s
+        }
+      })
+    },
+    [ensureRole],
   )
 
   const addTechnician: StoreApi['addTechnician'] = useCallback((t) => {
@@ -1080,6 +1273,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   )
 
   const deleteTechnician: StoreApi['deleteTechnician'] = useCallback((id) => {
+    if (!ensureRole('supervisor', 'Removing a technician')) return
     setState((s) => {
       const before = s.technicians.find((t) => t.id === id)
       const remaining = s.technicians.filter((t) => t.id !== id)
@@ -1093,21 +1287,28 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           ...s.tombstones,
           { entity: 'technician' as const, id, at: new Date().toISOString() },
         ],
+        recycleBin: before
+          ? [
+              makeBinEntry(s, 'technician', id, `Technician ${before.name}`, before),
+              ...s.recycleBin,
+            ]
+          : s.recycleBin,
         auditLog: before
           ? withAudit(s, {
               action: 'delete',
               entity: 'technician',
               entityId: id,
               target: before.name,
-              summary: `Removed technician ${before.name}`,
+              summary: `Removed technician ${before.name} — their profile is recoverable from the recycle bin; logged work is retained`,
             })
           : s.auditLog,
       }
     })
-  }, [])
+  }, [ensureRole])
 
   const deactivateTechnician: StoreApi['deactivateTechnician'] = useCallback(
     (id) => {
+      if (!ensureRole('supervisor', 'Deactivating a technician')) return
       setState((s) => {
         const target = s.technicians.find((t) => t.id === id)
         if (!target || target.deactivatedAt) return s
@@ -1135,11 +1336,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         }
       })
     },
-    [],
+    [ensureRole],
   )
 
   const reactivateTechnician: StoreApi['reactivateTechnician'] = useCallback(
     (id) => {
+      if (!ensureRole('supervisor', 'Reactivating a technician')) return
       setState((s) => {
         const target = s.technicians.find((t) => t.id === id)
         if (!target || !target.deactivatedAt) return s
@@ -1159,10 +1361,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         }
       })
     },
-    [],
+    [ensureRole],
   )
 
   const suspendTechnician: StoreApi['suspendTechnician'] = useCallback((id) => {
+    if (!ensureRole('supervisor', 'Suspending a technician')) return
     setState((s) => {
       const target = s.technicians.find((t) => t.id === id)
       if (!target || target.suspendedAt) return s
@@ -1190,10 +1393,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         }),
       }
     })
-  }, [])
+  }, [ensureRole])
 
   const unsuspendTechnician: StoreApi['unsuspendTechnician'] = useCallback(
     (id) => {
+      if (!ensureRole('supervisor', 'Lifting a suspension')) return
       setState((s) => {
         const target = s.technicians.find((t) => t.id === id)
         if (!target || !target.suspendedAt) return s
@@ -1213,11 +1417,36 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         }
       })
     },
-    [],
+    [ensureRole],
   )
 
+  // Switching the active profile on a shared device is itself an audited
+  // event — on a multi-tech crew it's the record of who was in the seat,
+  // and so who every later transaction/change is attributed to. The
+  // password lock (PasswordPromptModal) guards the switch in the UI; this
+  // logs the switch that results.
   const setActiveTechnicianId: StoreApi['setActiveTechnicianId'] = useCallback(
-    (id) => setState((s) => ({ ...s, activeTechnicianId: id })),
+    (id) =>
+      setState((s) => {
+        if (s.activeTechnicianId === id) return s
+        const to = s.technicians.find((t) => t.id === id)
+        const from = s.technicians.find((t) => t.id === s.activeTechnicianId)
+        return {
+          ...s,
+          activeTechnicianId: id,
+          auditLog: withAudit(s, {
+            action: 'settings',
+            entity: 'technician',
+            entityId: id,
+            target: to?.name ?? '(signed out)',
+            summary: to
+              ? `Switched the active profile to ${to.name}${
+                  to.role ? ` (${roleInfo(to.role).label})` : ''
+                }`
+              : `Signed out${from ? ` of ${from.name}` : ''}`,
+          }),
+        }
+      }),
     [],
   )
 
@@ -1378,7 +1607,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   )
 
   const setArcAuthorisationNumber = useCallback(
-    (n: string) =>
+    (n: string) => {
+      if (!ensureRole('supervisor', 'Editing the RTA')) return
       setState((s) =>
         s.arcAuthorisationNumber === n.trim()
           ? s
@@ -1393,12 +1623,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
                 n.trim(),
               ),
             },
-      ),
-    [],
+      )
+    },
+    [ensureRole],
   )
 
   const setArcAuthorisationExpiry = useCallback(
-    (d: string) =>
+    (d: string) => {
+      if (!ensureRole('supervisor', 'Editing the RTA expiry')) return
       setState((s) =>
         s.arcAuthorisationExpiry === d.trim()
           ? s
@@ -1413,12 +1645,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
                 d.trim(),
               ),
             },
-      ),
-    [],
+      )
+    },
+    [ensureRole],
   )
 
   const setBusinessName = useCallback(
-    (n: string) =>
+    (n: string) => {
+      if (!ensureRole('supervisor', 'Editing the business name')) return
       setState((s) =>
         s.businessName === n.trim()
           ? s
@@ -1428,12 +1662,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
               ...settingsStamp(s, 'businessName'),
               auditLog: settingsChange(s, 'Business name', s.businessName, n.trim()),
             },
-      ),
-    [],
+      )
+    },
+    [ensureRole],
   )
 
   const setBusinessAbn = useCallback(
-    (n: string) =>
+    (n: string) => {
+      if (!ensureRole('supervisor', 'Editing the ABN')) return
       setState((s) =>
         s.businessAbn === n.trim()
           ? s
@@ -1443,8 +1679,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
               ...settingsStamp(s, 'businessAbn'),
               auditLog: settingsChange(s, 'Business ABN', s.businessAbn, n.trim()),
             },
-      ),
-    [],
+      )
+    },
+    [ensureRole],
   )
 
   const acceptTerms = useCallback(() => {
@@ -1454,11 +1691,20 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       termsAcceptedAt: now,
       termsAcceptedVersion: TERMS_VERSION,
       settingsUpdatedAt: now,
+      // Record the re-acceptance in the change log — who/when/version — so
+      // the policy-acceptance trail isn't only captured at first-run setup.
+      auditLog: withAudit(s, {
+        action: 'settings',
+        entity: 'settings',
+        target: 'Policy acceptance',
+        summary: `Re-accepted the RefrigHandle policies (version ${TERMS_VERSION})`,
+      }),
     }))
   }, [])
 
   const requestAccountClosure: StoreApi['requestAccountClosure'] = useCallback(
     (req) => {
+      if (!ensureRole('owner', 'Closing the account')) return
       setState((s) => {
         if (s.accountClosure) return s // already closed
         const now = new Date().toISOString()
@@ -1488,7 +1734,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         }
       })
     },
-    [],
+    [ensureRole],
   )
 
   const resetToFreshInstall: StoreApi['resetToFreshInstall'] = useCallback(() => {
@@ -1627,6 +1873,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
                 at: new Date().toISOString(),
               },
             ],
+            recycleBin: [
+              makeBinEntry(s, 'refrigerant', name, `Refrigerant ${name}`, name),
+              ...s.recycleBin,
+            ],
             auditLog: withAudit(s, {
               action: 'delete',
               entity: 'refrigerant',
@@ -1686,6 +1936,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           ...s.tombstones,
           { entity: 'preset' as const, id, at: new Date().toISOString() },
         ],
+        recycleBin: before
+          ? [
+              makeBinEntry(s, 'preset', id, `Bottle preset ${before.label}`, before),
+              ...s.recycleBin,
+            ]
+          : s.recycleBin,
         auditLog: before
           ? withAudit(s, {
               action: 'delete',
@@ -1721,6 +1977,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const importState = useCallback((nextRaw: AppState) => {
+    if (!ensureRole('supervisor', 'Importing a backup')) return
     // Importing replaces the whole dataset (a restore-from-backup). We
     // keep the imported file's own history and prepend an 'import' entry
     // so the join point is visible in the trail. The file runs through
@@ -1749,7 +2006,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         summary: 'Imported data from a backup file',
       }),
     }))
-  }, [])
+  }, [ensureRole])
 
   const api = useMemo<StoreApi>(
     () => ({
@@ -1768,6 +2025,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       addTransaction,
       deleteTransaction,
       restoreTransaction,
+      restoreFromRecycleBin,
       addTechnician,
       updateTechnician,
       deactivateTechnician,
@@ -1817,6 +2075,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       addTransaction,
       deleteTransaction,
       restoreTransaction,
+      restoreFromRecycleBin,
       addTechnician,
       updateTechnician,
       deactivateTechnician,
