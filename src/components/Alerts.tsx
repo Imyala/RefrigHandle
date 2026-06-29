@@ -2,7 +2,12 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Button, Card, Pill } from './ui'
 import { useStore } from '../lib/store'
-import { expiryStatus, hydroStatusFor, type ExpiryStatus } from '../lib/types'
+import {
+  expiryStatus,
+  hydroStatusFor,
+  roleAtLeast,
+  type ExpiryStatus,
+} from '../lib/types'
 import { profileFor } from '../lib/compliance'
 import { formatPlainDate } from '../lib/datetime'
 import {
@@ -25,10 +30,79 @@ import { useToast } from '../lib/toast'
 export function Alerts() {
   return (
     <>
+      <LicenceReviewAlerts />
       <LicenceAlerts />
       <HydroAlerts />
       <BackupAlert />
     </>
+  )
+}
+
+// Notifies supervisors / owners when a technician has self-updated their own
+// RHL (the app doesn't verify licences, so a manager confirms it). Visible
+// only to supervisor+; acknowledging clears the flag and is logged.
+function LicenceReviewAlerts() {
+  const { state, acknowledgeLicenceUpdate } = useStore()
+  const toast = useToast()
+  const profile = profileFor(state.jurisdiction)
+  const activeTech = state.technicians.find(
+    (t) => t.id === state.activeTechnicianId,
+  )
+  if (!roleAtLeast(activeTech?.role, 'supervisor')) return null
+
+  const pending = state.technicians
+    .filter((t) => t.licenceReviewPendingAt && !t.deactivatedAt)
+    .sort((a, b) =>
+      (a.licenceReviewPendingAt ?? '').localeCompare(
+        b.licenceReviewPendingAt ?? '',
+      ),
+    )
+  if (pending.length === 0) return null
+
+  return (
+    <Card className="!border-blue-300 !bg-blue-50 dark:!border-blue-900/50 dark:!bg-blue-900/20">
+      <div className="flex items-center justify-between gap-2">
+        <div className="text-sm font-semibold text-blue-900 dark:text-blue-200">
+          Licence updates to review
+        </div>
+        <Link
+          to="/settings"
+          state={{ scrollTo: 'business' }}
+          className="text-xs font-medium text-blue-900 hover:underline dark:text-blue-200"
+        >
+          Settings
+        </Link>
+      </div>
+      <p className="mt-1 text-xs text-blue-900/80 dark:text-blue-100/80">
+        These people updated their own {profile.techLicenceShort}. Confirm the
+        details are correct, then mark as reviewed.
+      </p>
+      <ul className="mt-2 space-y-1 text-sm">
+        {pending.map((t) => (
+          <li
+            key={t.id}
+            className="flex items-center justify-between gap-2 text-blue-900 dark:text-blue-100"
+          >
+            <span className="min-w-0 truncate">
+              <strong>{t.name}</strong>
+              {t.arcLicenceNumber
+                ? ` · ${profile.techLicenceShort} ${t.arcLicenceNumber}`
+                : ` · no ${profile.techLicenceShort}`}
+              {t.licenceExpiry ? ` · expires ${formatPlainDate(t.licenceExpiry)}` : ''}
+            </span>
+            <Button
+              variant="secondary"
+              onClick={() => {
+                acknowledgeLicenceUpdate(t.id)
+                toast.show('Licence update acknowledged')
+              }}
+            >
+              Reviewed
+            </Button>
+          </li>
+        ))}
+      </ul>
+    </Card>
   )
 }
 

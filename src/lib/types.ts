@@ -920,6 +920,11 @@ export interface Technician {
   // the moment a new password is set. Informational: an owner can set a new
   // password, or the account holder can change it after signing in.
   passwordResetRequested?: string
+  // Set when the account holder updates their OWN RHL (number or expiry).
+  // The app doesn't verify licences, so a self-update is flagged for a
+  // supervisor/owner to review and acknowledge. Cleared when a manager
+  // acknowledges it, or when a manager edits the licence directly.
+  licenceReviewPendingAt?: string
   arcLicenceNumber: string // ARC RHL — personal licence, per tech
   // RHL expiry date (YYYY-MM-DD). RHLs run for two years; logging work
   // against a lapsed licence is itself a breach, so the app alerts as

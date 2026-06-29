@@ -371,6 +371,80 @@ describe('audit logging gaps closed', () => {
     expect(exp[0].summary).toMatch(/overdue on 2020-01-01/)
   })
 
+  it('a self RHL update flags it for review, logs it, and a manager can acknowledge', () => {
+    const api = setup()
+    // An owner exists to do the reviewing later.
+    let ownerId = ''
+    act(() => {
+      const o = api.current.addTechnician({
+        name: 'Olive Owner',
+        firstName: 'Olive',
+        lastName: 'Owner',
+        arcLicenceNumber: 'L-OWN',
+        role: 'owner',
+      })
+      ownerId = o.id
+    })
+    // The technician updates their OWN licence while in the seat.
+    let selfId = ''
+    act(() => {
+      const t = api.current.addTechnician({
+        name: 'Tina Tech',
+        firstName: 'Tina',
+        lastName: 'Tech',
+        arcLicenceNumber: 'OLD',
+        role: 'technician',
+      })
+      selfId = t.id
+      api.current.setActiveTechnicianId(t.id)
+    })
+    act(() => api.current.updateTechnician(selfId, { arcLicenceNumber: 'NEW' }))
+    // Flagged for review…
+    expect(
+      api.current.state.technicians.find((t) => t.id === selfId)
+        ?.licenceReviewPendingAt,
+    ).toBeTruthy()
+    // …and the licence change is logged.
+    expect(
+      api.current.state.auditLog.some(
+        (e) => e.entity === 'technician' && e.changes?.some((c) => c.field === 'RHL'),
+      ),
+    ).toBe(true)
+    // A manager (the owner) acknowledges → flag clears and an audit entry
+    // is written. (A technician acknowledging their own is blocked by role.)
+    act(() => api.current.setActiveTechnicianId(ownerId))
+    act(() => api.current.acknowledgeLicenceUpdate(selfId))
+    expect(
+      api.current.state.technicians.find((t) => t.id === selfId)
+        ?.licenceReviewPendingAt,
+    ).toBeFalsy()
+    expect(
+      api.current.state.auditLog.some((e) => /acknowledged/i.test(e.summary)),
+    ).toBe(true)
+  })
+
+  it('a manager editing someone else’s licence does not flag a self-review', () => {
+    const api = setup()
+    addActiveTech(api, 'owner')
+    let otherId = ''
+    act(() => {
+      const t = api.current.addTechnician({
+        name: 'Other Tech',
+        firstName: 'Other',
+        lastName: 'Tech',
+        arcLicenceNumber: 'L-7',
+        role: 'technician',
+      })
+      otherId = t.id
+    })
+    // Owner (active) edits the OTHER tech's licence — counts as the review.
+    act(() => api.current.updateTechnician(otherId, { arcLicenceNumber: 'L-8' }))
+    expect(
+      api.current.state.technicians.find((t) => t.id === otherId)
+        ?.licenceReviewPendingAt,
+    ).toBeFalsy()
+  })
+
   it('switching the active profile is recorded on the change log', () => {
     const api = setup()
     addActiveTech(api, 'owner')

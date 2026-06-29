@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import {
   Button,
@@ -93,6 +100,7 @@ export default function Settings() {
     suspendTechnician,
     unsuspendTechnician,
     requestPasswordReset,
+    acknowledgeLicenceUpdate,
     setActiveTechnicianId,
     setArcAuthorisationNumber,
     setArcAuthorisationExpiry,
@@ -121,6 +129,12 @@ export default function Settings() {
   const [teamIdInput, setTeamIdInput] = useStoreSyncedState(state.sync.teamId)
   const [techModalOpen, setTechModalOpen] = useState(false)
   const [editingTech, setEditingTech] = useState<Technician | null>(null)
+  // The active user editing only their OWN RHL (available to every role).
+  const [selfLicenceOpen, setSelfLicenceOpen] = useState(false)
+  // Which role groups are collapsed in the technician list (by role value).
+  const [collapsedRoles, setCollapsedRoles] = useState<Set<TechnicianRole>>(
+    () => new Set(),
+  )
   const fileRef = useRef<HTMLInputElement>(null)
   const favorites = state.favoriteRefrigerants
   // Device-local backup freshness marker (see lib/backup.ts).
@@ -155,6 +169,32 @@ export default function Settings() {
   // owners and supervisors only — roles below that just switch profiles.
   const canManage = roleAtLeast(activeTech?.role, 'supervisor')
   const canEditCompany = canEditCompanyIdentity(activeTech?.role)
+
+  // Bundle technicians by role (highest tier first, per TECHNICIAN_ROLES),
+  // then alphabetically by name within each role — so a big crew is easy to
+  // scan. Each role group can be collapsed (see collapsedRoles).
+  const techGroups = useMemo(
+    () =>
+      TECHNICIAN_ROLES.map((ri) => ({
+        role: ri.value,
+        label: ri.label,
+        techs: state.technicians
+          .filter((t) => roleInfo(t.role).value === ri.value)
+          .sort((a, b) =>
+            (a.name || '').localeCompare(b.name || '', undefined, {
+              sensitivity: 'base',
+            }),
+          ),
+      })).filter((g) => g.techs.length > 0),
+    [state.technicians],
+  )
+  const toggleRoleCollapsed = (role: TechnicianRole) =>
+    setCollapsedRoles((prev) => {
+      const next = new Set(prev)
+      if (next.has(role)) next.delete(role)
+      else next.add(role)
+      return next
+    })
 
   // Deep-link scroll: alert cards (e.g. the licence-expiry warning) link
   // here with navigation state { scrollTo: 'technicians' | 'compliance' } so
@@ -524,8 +564,39 @@ export default function Settings() {
             audits.
           </p>
         ) : (
-          <div className="space-y-2">
-            {state.technicians.map((t) => {
+          <div className="space-y-3">
+            {techGroups.map((group) => {
+              const collapsed = collapsedRoles.has(group.role)
+              return (
+                <div key={group.role}>
+                  <button
+                    type="button"
+                    onClick={() => toggleRoleCollapsed(group.role)}
+                    aria-expanded={!collapsed}
+                    className="mb-1.5 flex w-full items-center gap-1.5 rounded-lg px-1 py-1 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 transition hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
+                  >
+                    <svg
+                      aria-hidden
+                      viewBox="0 0 24 24"
+                      className={`h-4 w-4 shrink-0 transition-transform ${
+                        collapsed ? '-rotate-90' : ''
+                      }`}
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <path d="M6 9l6 6 6-6" />
+                    </svg>
+                    <span>{group.label}</span>
+                    <span className="font-normal normal-case text-slate-400 dark:text-slate-500">
+                      · {group.techs.length}
+                    </span>
+                  </button>
+                  {!collapsed && (
+                    <div className="space-y-2">
+                      {group.techs.map((t) => {
               const isActive = state.activeTechnicianId === t.id
               const active = isTechnicianActive(t)
               const untilPurge = active ? null : daysUntilPurge(t, new Date())
@@ -565,6 +636,9 @@ export default function Settings() {
                       )}
                       {active && t.passwordResetRequested && (
                         <Pill tone="amber">Password reset requested</Pill>
+                      )}
+                      {active && t.licenceReviewPendingAt && (
+                        <Pill tone="amber">Licence updated — review</Pill>
                       )}
                       {t.nonHandling && <Pill tone="slate">No RHL</Pill>}
                       <Pill tone={roleInfo(t.role).level >= 3 ? 'blue' : 'slate'}>
@@ -614,6 +688,30 @@ export default function Settings() {
                             {t.suspendedAt ? 'Suspended' : 'Use'}
                           </Button>
                         )}
+                        {/* Every role can update their OWN RHL. Managers do
+                            it through Manage; everyone else gets this. */}
+                        {isActive && !canManageThis && (
+                          <Button
+                            variant="ghost"
+                            onClick={() => setSelfLicenceOpen(true)}
+                          >
+                            Update my {profile.techLicenceShort}
+                          </Button>
+                        )}
+                        {/* A supervisor/owner clears a self-update review. */}
+                        {canManage &&
+                          !isActive &&
+                          t.licenceReviewPendingAt && (
+                            <Button
+                              variant="secondary"
+                              onClick={() => {
+                                acknowledgeLicenceUpdate(t.id)
+                                toast.show('Licence update acknowledged')
+                              }}
+                            >
+                              Reviewed
+                            </Button>
+                          )}
                         {canManageThis && (
                           <Button variant="ghost" onClick={() => openEditTech(t)}>
                             Manage
@@ -633,6 +731,11 @@ export default function Settings() {
                       )
                     )}
                   </div>
+                </div>
+              )
+                      })}
+                    </div>
+                  )}
                 </div>
               )
             })}
@@ -1231,6 +1334,23 @@ export default function Settings() {
         }
       />
 
+      <SelfLicenceModal
+        open={selfLicenceOpen}
+        tech={selfLicenceOpen ? activeTech ?? null : null}
+        onClose={() => setSelfLicenceOpen(false)}
+        onSave={(data) => {
+          if (!activeTech) return
+          updateTechnician(activeTech.id, {
+            arcLicenceNumber: data.arcLicenceNumber,
+            licenceExpiry: data.licenceExpiry,
+          })
+          setSelfLicenceOpen(false)
+          toast.show(
+            'Licence updated — your supervisor has been notified to review it',
+          )
+        }}
+      />
+
       <PasswordPromptModal
         tech={pwPromptTech}
         onClose={() => setPwPromptTech(null)}
@@ -1241,6 +1361,85 @@ export default function Settings() {
         }}
       />
     </div>
+  )
+}
+
+// Self-service licence update — every role can keep their OWN RHL current.
+// Scope is deliberately just the licence (number + expiry); the change is
+// flagged for a supervisor/owner to review (updateTechnician sets the
+// pending flag for a self-edit) and is written to the change log.
+function SelfLicenceModal({
+  open,
+  tech,
+  onClose,
+  onSave,
+}: {
+  open: boolean
+  tech: Technician | null
+  onClose: () => void
+  onSave: (data: { arcLicenceNumber: string; licenceExpiry: string }) => void
+}) {
+  const { state } = useStore()
+  const profile = profileFor(state.jurisdiction)
+  const [rhl, setRhl] = useState('')
+  const [expiry, setExpiry] = useState('')
+  const [attempted, setAttempted] = useState(false)
+
+  const key = tech?.id ?? 'none'
+  const [seenKey, setSeenKey] = useState('')
+  if (open && seenKey !== key) {
+    setSeenKey(key)
+    setRhl(tech?.arcLicenceNumber ?? '')
+    setExpiry(tech?.licenceExpiry ?? '')
+    setAttempted(false)
+  }
+  if (!open && seenKey !== '') setSeenKey('')
+
+  const expiryErr =
+    attempted && !expiry
+      ? `${profile.techLicenceShort} expiry date is required.`
+      : undefined
+
+  function submit(e: React.FormEvent) {
+    e.preventDefault()
+    setAttempted(true)
+    if (!expiry) return
+    onSave({ arcLicenceNumber: rhl.trim(), licenceExpiry: expiry })
+  }
+
+  return (
+    <Modal open={open} onClose={onClose} title={`Update my ${profile.techLicenceShort}`}>
+      <form onSubmit={submit} className="space-y-3">
+        <p className="text-xs text-slate-500">
+          Keep your own licence current. When you save, your supervisor or the
+          business owner is notified to review it, and the change is recorded in
+          the change log.
+        </p>
+        <Field label={profile.techLicenceLabel}>
+          <TextInput
+            autoFocus
+            value={rhl}
+            onChange={(e) => setRhl(e.target.value)}
+            placeholder="e.g. L000000"
+          />
+        </Field>
+        <Field
+          label={`${profile.techLicenceShort} expiry *`}
+          error={expiryErr}
+          hint="The app warns before this lapses, since logging work on an expired licence is a breach."
+        >
+          <DateInput
+            value={expiry}
+            onChange={setExpiry}
+            invalid={!!expiryErr}
+            ariaLabel="Licence expiry date"
+          />
+        </Field>
+        <Button type="submit" full>
+          Save licence
+        </Button>
+      </form>
+    </Modal>
   )
 }
 

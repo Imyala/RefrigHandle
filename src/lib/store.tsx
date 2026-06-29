@@ -165,6 +165,9 @@ interface StoreApi {
   // Flag that an account's password should be reset. Used by a same-tier
   // senior peer who may request — but not set — another manager's password.
   requestPasswordReset: (id: string) => void
+  // A supervisor/owner acknowledges a technician's self-updated RHL,
+  // clearing the pending-review flag. Logged.
+  acknowledgeLicenceUpdate: (id: string) => void
   deleteTechnician: (id: string) => void
   setActiveTechnicianId: (id: string | undefined) => void
   // first-run onboarding — writes business identity, ARC RTA, the first
@@ -1359,6 +1362,21 @@ export function StoreProvider({ children }: { children: ReactNode }) {
                   patch.passwordHash !== t.passwordHash
                     ? undefined
                     : patch.passwordResetRequested ?? t.passwordResetRequested,
+                // Licence-review flag: when the account holder edits their
+                // OWN RHL it's flagged for a supervisor/owner to review (the
+                // app doesn't verify licences). A manager editing someone
+                // else's licence counts as the review, so it clears the flag.
+                licenceReviewPendingAt: (() => {
+                  const licenceChanged =
+                    ('arcLicenceNumber' in patch &&
+                      (patch.arcLicenceNumber ?? '').trim() !==
+                        (t.arcLicenceNumber ?? '').trim()) ||
+                    ('licenceExpiry' in patch &&
+                      (patch.licenceExpiry ?? '') !== (t.licenceExpiry ?? ''))
+                  if (!licenceChanged) return t.licenceReviewPendingAt
+                  const isSelfEdit = id === s.activeTechnicianId
+                  return isSelfEdit ? new Date().toISOString() : undefined
+                })(),
                 updatedAt: new Date().toISOString(),
               }
             : t,
@@ -1579,6 +1597,34 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     },
     [ensureRole],
   )
+
+  const acknowledgeLicenceUpdate: StoreApi['acknowledgeLicenceUpdate'] =
+    useCallback(
+      (id) => {
+        if (!ensureRole('supervisor', 'Acknowledging a licence update')) return
+        setState((s) => {
+          const target = s.technicians.find((t) => t.id === id)
+          if (!target || !target.licenceReviewPendingAt) return s
+          const now = new Date().toISOString()
+          return {
+            ...s,
+            technicians: s.technicians.map((t) =>
+              t.id === id
+                ? { ...t, licenceReviewPendingAt: undefined, updatedAt: now }
+                : t,
+            ),
+            auditLog: withAudit(s, {
+              action: 'update',
+              entity: 'technician',
+              entityId: id,
+              target: target.name,
+              summary: `Reviewed and acknowledged ${target.name}'s self-updated ${profileFor(s.jurisdiction).techLicenceShort}`,
+            }),
+          }
+        })
+      },
+      [ensureRole],
+    )
 
   // Switching the active profile on a shared device is itself an audited
   // event — on a multi-tech crew it's the record of who was in the seat,
@@ -2194,6 +2240,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       suspendTechnician,
       unsuspendTechnician,
       requestPasswordReset,
+      acknowledgeLicenceUpdate,
       deleteTechnician,
       setActiveTechnicianId,
       completeSetup,
@@ -2245,6 +2292,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       suspendTechnician,
       unsuspendTechnician,
       requestPasswordReset,
+      acknowledgeLicenceUpdate,
       deleteTechnician,
       setActiveTechnicianId,
       completeSetup,
