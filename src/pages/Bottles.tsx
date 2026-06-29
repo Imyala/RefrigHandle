@@ -94,6 +94,11 @@ export default function Bottles() {
   // / tare / gross); full details (W.C, supplier, test dates…) are one tap
   // away via "More fields" or by editing the bottle afterwards.
   const [quickAdding, setQuickAdding] = useState(false)
+  // Carries the values already typed into quick-add across the "More
+  // fields" handoff, so switching to the full form doesn't lose them.
+  const [addPrefill, setAddPrefill] = useState<Partial<Bottle> | undefined>(
+    undefined,
+  )
   // Cylinders to print QR labels for (one bottle, or the visible set).
   const [labelsFor, setLabelsFor] = useState<Bottle[] | null>(null)
   // Set after a "Save & share" so the share sheet pops for the new record.
@@ -601,7 +606,8 @@ export default function Bottles() {
           setQuickAdding(false)
           toast.show('Bottle added')
         }}
-        onMoreDetails={() => {
+        onMoreDetails={(draft) => {
+          setAddPrefill(draft)
           setQuickAdding(false)
           setAdding(true)
         }}
@@ -611,10 +617,15 @@ export default function Bottles() {
         open={adding}
         title="New bottle"
         types={allTypes}
-        onClose={() => setAdding(false)}
+        prefill={addPrefill}
+        onClose={() => {
+          setAdding(false)
+          setAddPrefill(undefined)
+        }}
         onSave={(data) => {
           addBottle(data)
           setAdding(false)
+          setAddPrefill(undefined)
           toast.show('Bottle added')
         }}
       />
@@ -1951,7 +1962,7 @@ function QuickLogModal({
   )
 }
 
-function BottleQuickAdd({
+export function BottleQuickAdd({
   open,
   types,
   onClose,
@@ -1966,8 +1977,9 @@ function BottleQuickAdd({
     customType?: string,
   ) => void
   // When provided, shows a "More fields" link that hands off to the full
-  // bottle form (supplier, water capacity, test dates, status…).
-  onMoreDetails?: () => void
+  // bottle form (supplier, water capacity, test dates, status…). Receives
+  // the values already entered so the full form can pre-fill them.
+  onMoreDetails?: (draft: Partial<Bottle>) => void
 }) {
   const { state } = useStore()
   const displayUnit = state.unit
@@ -2096,7 +2108,17 @@ function BottleQuickAdd({
               {' '}
               <button
                 type="button"
-                onClick={onMoreDetails}
+                onClick={() =>
+                  onMoreDetails({
+                    bottleNumber: bottleNumber.trim() || undefined,
+                    refrigerantType,
+                    tareWeight: displayToKg(parseFloat(tare) || 0, displayUnit),
+                    grossWeight: displayToKg(
+                      parseFloat(gross) || 0,
+                      displayUnit,
+                    ),
+                  })
+                }
                 className="font-medium text-brand-600 hover:underline dark:text-brand-400"
               >
                 Need supplier, water capacity or test dates? More fields →
@@ -2186,6 +2208,7 @@ function BottleForm({
   title,
   types,
   bottle,
+  prefill,
   onClose,
   onSave,
   onDelete,
@@ -2194,6 +2217,9 @@ function BottleForm({
   title: string
   types: string[]
   bottle?: Bottle
+  // Seed values for a NEW bottle (e.g. handed over from quick-add's "More
+  // fields"). Ignored when editing an existing bottle.
+  prefill?: Partial<Bottle>
   onClose: () => void
   onSave: (data: Omit<Bottle, 'id' | 'createdAt' | 'updatedAt'>) => void
   onDelete?: () => void
@@ -2203,16 +2229,18 @@ function BottleForm({
   const initialDisplay = (kg: number) =>
     kg ? kgToDisplay(kg, unit).toFixed(2) : ''
 
-  const [bottleNumber, setBottleNumber] = useState(bottle?.bottleNumber ?? '')
+  // For a new bottle, fall back to any values carried over from quick-add.
+  const seed = bottle ?? prefill
+  const [bottleNumber, setBottleNumber] = useState(seed?.bottleNumber ?? '')
   const [bottleKind, setBottleKind] = useState<BottleKind>(
     bottle?.bottleKind ?? 'standard',
   )
   const [refrigerantType, setRefrigerantType] = useState(
-    bottle?.refrigerantType ?? types[0] ?? 'R410A',
+    seed?.refrigerantType ?? types[0] ?? 'R410A',
   )
-  const [tareWeight, setTareWeight] = useState(initialDisplay(bottle?.tareWeight ?? 0))
+  const [tareWeight, setTareWeight] = useState(initialDisplay(seed?.tareWeight ?? 0))
   const [grossWeight, setGrossWeight] = useState(
-    initialDisplay(bottle?.grossWeight ?? 0),
+    initialDisplay(seed?.grossWeight ?? 0),
   )
   // Sanitize a saved status against the current weights — a bottle
   // whose stored status is 'empty' but whose math now says net > 0
@@ -2303,11 +2331,11 @@ function BottleForm({
   const [lastResetKey, setLastResetKey] = useState(resetKey)
   if (open && resetKey !== lastResetKey) {
     setLastResetKey(resetKey)
-    setBottleNumber(bottle?.bottleNumber ?? '')
+    setBottleNumber(seed?.bottleNumber ?? '')
     setBottleKind(bottle?.bottleKind ?? 'standard')
-    setRefrigerantType(bottle?.refrigerantType ?? types[0] ?? 'R410A')
-    setTareWeight(initialDisplay(bottle?.tareWeight ?? 0))
-    setGrossWeight(initialDisplay(bottle?.grossWeight ?? 0))
+    setRefrigerantType(seed?.refrigerantType ?? types[0] ?? 'R410A')
+    setTareWeight(initialDisplay(seed?.tareWeight ?? 0))
+    setGrossWeight(initialDisplay(seed?.grossWeight ?? 0))
     setStatus(
       sanitizeStatus(
         bottle?.status,

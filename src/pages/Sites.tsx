@@ -17,6 +17,7 @@ import {
   CITY_OTHER_VALUE,
   NON_REFRIGERANT_UNIT_KINDS,
   REASON_LABELS,
+  REFRIGERANT_TYPES,
   UNIT_KIND_LABELS,
   gwpFor,
   isRestatement,
@@ -24,6 +25,7 @@ import {
   netWeight,
   regionForCity,
   siteLabel,
+  sortRefrigerants,
   statusLabel,
   supersededIds,
   tonnesCO2eFor,
@@ -38,6 +40,7 @@ import {
   type UnitKind,
 } from '../lib/types'
 import { RefrigerantSelect } from '../components/RefrigerantSelect'
+import { BottleQuickAdd } from './Bottles'
 import { IntegrityStamp } from '../components/IntegrityStamp'
 import { DateInput } from '../components/DateInput'
 import { formatDate, formatDateTime, formatPlainDate } from '../lib/datetime'
@@ -821,8 +824,18 @@ function AssignBottleModal({
   onClose: () => void
   onAssign: (bottle: Bottle) => void
 }) {
-  const { state } = useStore()
+  const { state, addBottle, addCustomRefrigerant } = useStore()
   const confirm = useConfirm()
+  const [creating, setCreating] = useState(false)
+
+  const allTypes = useMemo(
+    () =>
+      sortRefrigerants(
+        [...REFRIGERANT_TYPES, ...state.customRefrigerants],
+        state.favoriteRefrigerants,
+      ),
+    [state.customRefrigerants, state.favoriteRefrigerants],
+  )
 
   // Candidates: any bottle not already on this site and not retired
   // (empty / returned). A bottle currently on another site can still be
@@ -870,14 +883,29 @@ function AssignBottleModal({
     onAssign(b)
   }
 
+  // Create a brand-new cylinder and drop it straight onto this site, so the
+  // tech doesn't have to detour to the Bottles tab first.
+  function createAndAssign(
+    data: Omit<Bottle, 'id' | 'createdAt' | 'updatedAt'>,
+    customType?: string,
+  ) {
+    if (customType) addCustomRefrigerant(customType)
+    const created = addBottle(data)
+    setCreating(false)
+    onAssign(created)
+  }
+
   return (
     <Modal open={open} title="Add bottle to site" onClose={onClose}>
       {candidates.length === 0 ? (
         <div className="space-y-3">
           <p className="text-sm text-slate-500">
-            No bottles available to add. Create a bottle on the Bottles tab
-            first, or free one up from another site.
+            No existing cylinders are free to add. Create a new one now, or free
+            one up from another site.
           </p>
+          <Button full onClick={() => setCreating(true)}>
+            + Create new bottle
+          </Button>
           <Button full variant="secondary" onClick={onClose}>
             Close
           </Button>
@@ -888,6 +916,9 @@ function AssignBottleModal({
             Pick a cylinder to place at {siteLabel(site)}. It will be marked “On
             site” and a move is recorded in the log.
           </p>
+          <Button full onClick={() => setCreating(true)}>
+            + Create new bottle
+          </Button>
           <div className="-mx-1 max-h-[60svh] space-y-2 overflow-y-auto px-1">
             {candidates.map((b) => {
               const loc = siteName(b.currentSiteId)
@@ -920,6 +951,12 @@ function AssignBottleModal({
           </Button>
         </div>
       )}
+      <BottleQuickAdd
+        open={creating}
+        types={allTypes}
+        onClose={() => setCreating(false)}
+        onCreate={createAndAssign}
+      />
     </Modal>
   )
 }
