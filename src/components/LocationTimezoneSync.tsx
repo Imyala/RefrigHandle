@@ -1,5 +1,4 @@
 import { useEffect } from 'react'
-import tzlookup from 'tz-lookup'
 import { useDevicePrefs } from '../lib/devicePrefs'
 import { setResolvedLocationTz } from '../lib/datetime'
 
@@ -20,14 +19,23 @@ export function LocationTimezoneSync() {
     }
     if (typeof navigator === 'undefined' || !navigator.geolocation) return
 
+    // Load the (sizeable) timezone dataset only when this pref is actually
+    // on, so it stays out of the eager first-paint bundle. Resolved lazily
+    // on first use and reused for subsequent position fixes.
+    let tzlookup: ((lat: number, lon: number) => string) | null = null
     const id = navigator.geolocation.watchPosition(
       (pos) => {
-        try {
-          const tz = tzlookup(pos.coords.latitude, pos.coords.longitude)
-          if (tz) setResolvedLocationTz(tz)
-        } catch {
-          // Coordinates outside the lookup's data — keep the fallback.
-        }
+        void (async () => {
+          try {
+            if (!tzlookup) {
+              tzlookup = (await import('tz-lookup')).default
+            }
+            const tz = tzlookup(pos.coords.latitude, pos.coords.longitude)
+            if (tz) setResolvedLocationTz(tz)
+          } catch {
+            // Coordinates outside the lookup's data — keep the fallback.
+          }
+        })()
       },
       () => {
         // Permission denied / unavailable — leave the device-clock fallback.

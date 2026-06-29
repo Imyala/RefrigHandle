@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react'
-import QRCode from 'qrcode'
 import { Modal, Button } from './ui'
 import type { Bottle } from '../lib/types'
 import { formatWeight, type WeightUnit } from '../lib/units'
@@ -23,21 +22,25 @@ export function BottleLabels({
 
   useEffect(() => {
     let cancelled = false
-    Promise.all(
-      bottles.map(
-        async (b) =>
-          [
-            b.id,
-            await QRCode.toString(b.bottleNumber || b.id, {
-              type: 'svg',
-              margin: 0,
-              errorCorrectionLevel: 'M',
-            }),
-          ] as const,
-      ),
-    ).then((pairs) => {
+    // Load the QR encoder on demand so it stays out of the main bundle —
+    // labels are a print-time feature only a fraction of sessions reach.
+    void (async () => {
+      const { default: QRCode } = await import('qrcode')
+      const pairs = await Promise.all(
+        bottles.map(
+          async (b) =>
+            [
+              b.id,
+              await QRCode.toString(b.bottleNumber || b.id, {
+                type: 'svg',
+                margin: 0,
+                errorCorrectionLevel: 'M',
+              }),
+            ] as const,
+        ),
+      )
       if (!cancelled) setQr(Object.fromEntries(pairs))
-    })
+    })()
     return () => {
       cancelled = true
     }

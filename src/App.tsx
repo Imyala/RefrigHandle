@@ -1,3 +1,4 @@
+import { lazy, Suspense } from 'react'
 import { HashRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { Layout } from './components/Layout'
 import { ScrollRestoration } from './components/ScrollRestoration'
@@ -8,21 +9,28 @@ import { StoreProvider } from './lib/store'
 import { ToastProvider } from './lib/toast'
 import { ConfirmProvider } from './lib/confirm'
 import { ThemeApplier } from './lib/theme'
-import Dashboard from './pages/Dashboard'
-import Bottles from './pages/Bottles'
-import Sites from './pages/Sites'
-import Transactions from './pages/Transactions'
-import AuditLog from './pages/AuditLog'
-import Settings from './pages/Settings'
-import AccountDeletion from './pages/AccountDeletion'
-import TermsPage, { TermsGate } from './components/Terms'
-import PrivacyPage from './components/Privacy'
-import AcceptableUsePage from './components/AcceptableUse'
-import BillingRefundPage from './components/BillingRefund'
-import DataRetentionPage from './components/DataRetention'
-import SecurityPage from './components/Security'
-import DisclaimerPage from './components/Disclaimer'
-import CopyrightPage from './components/Copyright'
+import { TermsGate } from './components/Terms'
+
+// Route components are lazy-loaded so the first paint ships only the shell
+// and the landing route's code, not every page, the PDF/quarterly report,
+// the label/QR printer and all eight policy pages. Each becomes its own
+// chunk, fetched on navigation. The TermsGate (and its content) is needed
+// up front, so only the standalone /terms *page* is split, not the gate.
+const Dashboard = lazy(() => import('./pages/Dashboard'))
+const Bottles = lazy(() => import('./pages/Bottles'))
+const Sites = lazy(() => import('./pages/Sites'))
+const Transactions = lazy(() => import('./pages/Transactions'))
+const AuditLog = lazy(() => import('./pages/AuditLog'))
+const Settings = lazy(() => import('./pages/Settings'))
+const AccountDeletion = lazy(() => import('./pages/AccountDeletion'))
+const TermsPage = lazy(() => import('./components/Terms'))
+const PrivacyPage = lazy(() => import('./components/Privacy'))
+const AcceptableUsePage = lazy(() => import('./components/AcceptableUse'))
+const BillingRefundPage = lazy(() => import('./components/BillingRefund'))
+const DataRetentionPage = lazy(() => import('./components/DataRetention'))
+const SecurityPage = lazy(() => import('./components/Security'))
+const DisclaimerPage = lazy(() => import('./components/Disclaimer'))
+const CopyrightPage = lazy(() => import('./components/Copyright'))
 
 export default function App() {
   // ToastProvider sits ABOVE StoreProvider so the store can surface
@@ -39,6 +47,7 @@ export default function App() {
             <TermsGate>
             <HashRouter>
               <ScrollRestoration />
+              <Suspense fallback={<RouteFallback />}>
               <Routes>
                 <Route element={<Layout />}>
                   <Route index element={<Dashboard />} />
@@ -61,6 +70,7 @@ export default function App() {
                   <Route path="*" element={<Navigate to="/" replace />} />
                 </Route>
               </Routes>
+              </Suspense>
             </HashRouter>
             </TermsGate>
             </OnboardingGate>
@@ -68,5 +78,17 @@ export default function App() {
         </StoreProvider>
       </ConfirmProvider>
     </ToastProvider>
+  )
+}
+
+// Shown for the brief moment a lazily-loaded route chunk is fetching. Kept
+// deliberately minimal — a centred spinner inside the Layout's main column —
+// so a fast navigation doesn't flash heavy skeleton UI.
+function RouteFallback() {
+  return (
+    <div className="flex min-h-[50svh] items-center justify-center" role="status" aria-live="polite">
+      <span className="sr-only">Loading…</span>
+      <span className="h-8 w-8 animate-spin rounded-full border-2 border-slate-300 border-t-brand-600 dark:border-slate-700 dark:border-t-brand-400" />
+    </div>
   )
 }
