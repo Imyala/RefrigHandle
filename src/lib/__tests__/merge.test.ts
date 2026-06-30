@@ -5,6 +5,49 @@ import { makeAudit, makeBottle, makeState, makeTx } from './fixtures'
 // Two-device merge semantics — the difference between "two techs can
 // log at once" and "two techs silently overwrite each other".
 
+function makeJob(over: Record<string, unknown> = {}) {
+  return {
+    id: 'j1',
+    reference: 'WO-1',
+    status: 'open' as const,
+    date: '2026-06-01T00:00:00.000Z',
+    createdAt: '2026-06-01T00:00:00.000Z',
+    ...over,
+  }
+}
+
+describe('jobs merge', () => {
+  it('unions jobs created on different devices', () => {
+    const merged = mergeStates(
+      makeState({ jobs: [makeJob({ id: 'j1', reference: 'A' })] }),
+      makeState({ jobs: [makeJob({ id: 'j2', reference: 'B' })] }),
+    )
+    expect(new Set(merged.jobs.map((j) => j.id))).toEqual(new Set(['j1', 'j2']))
+  })
+
+  it('newer updatedAt wins for the same job (e.g. closed on one device)', () => {
+    const openCopy = makeJob({ id: 'j1', status: 'open', updatedAt: '2026-06-01T00:00:00.000Z' })
+    const closedCopy = makeJob({ id: 'j1', status: 'closed', updatedAt: '2026-06-09T00:00:00.000Z' })
+    const merged = mergeStates(
+      makeState({ jobs: [openCopy] }),
+      makeState({ jobs: [closedCopy] }),
+    )
+    expect(merged.jobs.find((j) => j.id === 'j1')?.status).toBe('closed')
+  })
+
+  it('a tombstone removes a job whose last write predates the deletion', () => {
+    const job = makeJob({ id: 'j1', updatedAt: '2026-06-01T00:00:00.000Z' })
+    const merged = mergeStates(
+      makeState({ jobs: [job] }),
+      makeState({
+        jobs: [],
+        tombstones: [{ entity: 'job', id: 'j1', at: '2026-06-05T00:00:00.000Z' }],
+      }),
+    )
+    expect(merged.jobs.some((j) => j.id === 'j1')).toBe(false)
+  })
+})
+
 describe('transaction merge', () => {
   it('unions rows logged on different devices, newest first', () => {
     const t1 = makeTx({ date: '2026-06-01T00:00:00.000Z' })

@@ -21,7 +21,8 @@ import { formatWeight, kgToDisplay } from '../lib/units'
 
 export default function Dashboard() {
   const { state } = useStore()
-  const { bottles, sites, transactions, unit } = state
+  const { bottles, sites, jobs, transactions, unit } = state
+  const openJobs = jobs.filter((j) => j.status === 'open').length
 
   const totalsByType = new Map<string, { count: number; net: number }>()
   for (const b of bottles) {
@@ -86,7 +87,7 @@ export default function Dashboard() {
 
       <FleetLeakWatch />
 
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-3 gap-3">
         <Link to="/bottles" className="block">
           <Card className="!p-4 transition active:scale-[0.98]">
             <div className="font-semibold text-slate-900 dark:text-slate-100">
@@ -104,6 +105,16 @@ export default function Dashboard() {
             </div>
             <div className="text-xs text-slate-500">
               {pluralize(sites.length, 'site')}
+            </div>
+          </Card>
+        </Link>
+        <Link to="/jobs" className="block">
+          <Card className="!p-4 transition active:scale-[0.98]">
+            <div className="font-semibold text-slate-900 dark:text-slate-100">
+              Jobs
+            </div>
+            <div className="text-xs text-slate-500">
+              {openJobs > 0 ? `${openJobs} open` : pluralize(jobs.length, 'job')}
             </div>
           </Card>
         </Link>

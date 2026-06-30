@@ -26,6 +26,7 @@ import {
   type Theme,
   type Transaction,
   type Unit,
+  type Job,
   type WeightUnit,
   EMPTY_STATE,
   SYNCED_SETTINGS_FIELDS,
@@ -134,6 +135,14 @@ interface StoreApi {
   deleteUnit: (id: string) => void
   decommissionUnit: (id: string, reason?: string) => void
   reactivateUnit: (id: string) => void
+  // jobs (work-orders) — an optional grouping of a visit's movements.
+  addJob: (j: Omit<Job, 'id' | 'createdAt' | 'status'>) => Job
+  updateJob: (id: string, patch: Partial<Job>) => void
+  // Close / reopen a job (open while on site, closed when the visit is done).
+  setJobStatus: (id: string, status: 'open' | 'closed') => void
+  // Remove a job → recycle bin (supervisor+). The job's logged movements
+  // are untouched; they keep their jobId so restoring re-groups them.
+  deleteJob: (id: string) => void
   // transactions
   addTransaction: (
     t: Omit<Transaction, 'id' | 'weightBefore' | 'weightAfter'>,
@@ -1013,6 +1022,125 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     })
   }, [])
 
+  const addJob: StoreApi['addJob'] = useCallback((j) => {
+    const job: Job = {
+      ...j,
+      id: uid(),
+      status: 'open',
+      createdAt: new Date().toISOString(),
+    }
+    setState((cur) => {
+      const tech = cur.technicians.find((x) => x.id === cur.activeTechnicianId)
+      const site = job.siteId
+        ? cur.sites.find((x) => x.id === job.siteId)
+        : undefined
+      // Snapshot site/client/technician so the job reads standalone even if
+      // the site is later renamed/removed (same freezing the log rows use).
+      const enriched: Job = {
+        ...job,
+        siteName: job.siteName ?? site?.name,
+        clientName: job.clientName ?? site?.client,
+        technician: job.technician ?? tech?.name ?? (cur.technician || undefined),
+        technicianLicence:
+          job.technicianLicence ??
+          tech?.arcLicenceNumber ??
+          (cur.arcLicenceNumber || undefined),
+      }
+      return {
+        ...cur,
+        jobs: [...cur.jobs, enriched],
+        auditLog: withAudit(cur, {
+          action: 'create',
+          entity: 'job',
+          entityId: enriched.id,
+          target: enriched.reference,
+          summary: `Opened job ${enriched.reference}${site ? ` at ${site.name}` : ''}`,
+        }),
+      }
+    })
+    return job
+  }, [])
+
+  const updateJob: StoreApi['updateJob'] = useCallback((id, patch) => {
+    setState((s) => {
+      const before = s.jobs.find((j) => j.id === id)
+      const jobs = s.jobs.map((j) =>
+        j.id === id ? { ...j, ...patch, updatedAt: new Date().toISOString() } : j,
+      )
+      if (!before) return { ...s, jobs }
+      return {
+        ...s,
+        jobs,
+        auditLog: withAudit(s, {
+          action: 'update',
+          entity: 'job',
+          entityId: id,
+          target: patch.reference ?? before.reference,
+          summary: `Edited job ${before.reference}`,
+        }),
+      }
+    })
+  }, [])
+
+  const setJobStatus: StoreApi['setJobStatus'] = useCallback((id, status) => {
+    setState((s) => {
+      const before = s.jobs.find((j) => j.id === id)
+      if (!before || before.status === status) return s
+      const now = new Date().toISOString()
+      const jobs = s.jobs.map((j) =>
+        j.id === id
+          ? {
+              ...j,
+              status,
+              closedAt: status === 'closed' ? now : undefined,
+              updatedAt: now,
+            }
+          : j,
+      )
+      return {
+        ...s,
+        jobs,
+        auditLog: withAudit(s, {
+          action: 'update',
+          entity: 'job',
+          entityId: id,
+          target: before.reference,
+          summary: `${status === 'closed' ? 'Closed' : 'Reopened'} job ${before.reference}`,
+        }),
+      }
+    })
+  }, [])
+
+  const deleteJob: StoreApi['deleteJob'] = useCallback((id) => {
+    if (!ensureRole('supervisor', 'Deleting a job')) return
+    setState((s) => {
+      const before = s.jobs.find((j) => j.id === id)
+      return {
+        ...s,
+        jobs: s.jobs.filter((j) => j.id !== id),
+        tombstones: [
+          ...s.tombstones,
+          { entity: 'job' as const, id, at: new Date().toISOString() },
+        ],
+        recycleBin: before
+          ? [
+              makeBinEntry(s, 'job', id, `Job ${before.reference}`, before),
+              ...s.recycleBin,
+            ]
+          : s.recycleBin,
+        auditLog: before
+          ? withAudit(s, {
+              action: 'delete',
+              entity: 'job',
+              entityId: id,
+              target: before.reference,
+              summary: `Removed job ${before.reference} — recoverable from the recycle bin`,
+            })
+          : s.auditLog,
+      }
+    })
+  }, [ensureRole])
+
   const addTransaction: StoreApi['addTransaction'] = useCallback((t) => {
     let result: Transaction | null = null
     setState((s) => {
@@ -1274,6 +1402,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
             if (s.units.some((u) => u.id === rec.id)) return s
             return { ...base, units: [...s.units, rec], auditLog: log(rec.name) }
           }
+          case 'job': {
+            const rec = { ...(entry.record as Job), updatedAt: now }
+            if (s.jobs.some((j) => j.id === rec.id)) return s
+            return { ...base, jobs: [...s.jobs, rec], auditLog: log(rec.reference) }
+          }
           case 'technician': {
             // Restore as an active profile (any purge countdown is cleared).
             const rec = {
@@ -1326,6 +1459,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           target = s.sites.find((x) => x.id === entityId)?.name ?? target
         } else if (entityType === 'unit') {
           target = s.units.find((u) => u.id === entityId)?.name ?? target
+        } else if (entityType === 'job') {
+          target = s.jobs.find((j) => j.id === entityId)?.reference ?? target
         } else if (entityType === 'transaction') {
           const t = s.transactions.find((x) => x.id === entityId)
           const bottleNo = t && s.bottles.find((b) => b.id === t.bottleId)?.bottleNumber
@@ -2195,6 +2330,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       deleteUnit,
       decommissionUnit,
       reactivateUnit,
+      addJob,
+      updateJob,
+      setJobStatus,
+      deleteJob,
       addTransaction,
       deleteTransaction,
       restoreTransaction,
@@ -2246,6 +2385,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       deleteUnit,
       decommissionUnit,
       reactivateUnit,
+      addJob,
+      updateJob,
+      setJobStatus,
+      deleteJob,
       addTransaction,
       deleteTransaction,
       restoreTransaction,

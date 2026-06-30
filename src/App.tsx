@@ -19,6 +19,7 @@ import { TermsGate } from './components/Terms'
 const Dashboard = lazy(() => import('./pages/Dashboard'))
 const Bottles = lazy(() => import('./pages/Bottles'))
 const Sites = lazy(() => import('./pages/Sites'))
+const Jobs = lazy(() => import('./pages/Jobs'))
 const Transactions = lazy(() => import('./pages/Transactions'))
 const AuditLog = lazy(() => import('./pages/AuditLog'))
 const Settings = lazy(() => import('./pages/Settings'))
@@ -53,7 +54,7 @@ export default function App() {
                   <Route index element={<Dashboard />} />
                   <Route path="/bottles" element={<Bottles />} />
                   <Route path="/sites" element={<Sites />} />
-                  <Route path="/jobs" element={<Navigate to="/sites" replace />} />
+                  <Route path="/jobs" element={<Jobs />} />
                   <Route path="/locations" element={<Navigate to="/sites" replace />} />
                   <Route path="/transactions" element={<Transactions />} />
                   <Route path="/history" element={<AuditLog />} />

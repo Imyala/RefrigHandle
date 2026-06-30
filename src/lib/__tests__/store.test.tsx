@@ -265,6 +265,64 @@ describe('recycle bin — nothing is permanently deleted', () => {
   })
 })
 
+describe('jobs (work-orders)', () => {
+  it('opens a job, logs a movement against it, and groups the work', () => {
+    const api = setup()
+    const b = addBottle(api.current, { bottleNumber: 'JCYL' })
+    let jobId = ''
+    act(() => {
+      const job = api.current.addJob({ reference: 'WO-100', date: new Date().toISOString() })
+      jobId = job.id
+    })
+    const job = api.current.state.jobs.find((j) => j.id === jobId)
+    expect(job?.status).toBe('open')
+    // Opening a job is on the change log.
+    expect(
+      api.current.state.auditLog.some(
+        (e) => e.entity === 'job' && /Opened job WO-100/.test(e.summary),
+      ),
+    ).toBe(true)
+
+    act(() =>
+      api.current.addTransaction({
+        bottleId: b.id,
+        kind: 'charge',
+        amount: 1,
+        jobId,
+        date: new Date().toISOString(),
+      }),
+    )
+    const grouped = api.current.state.transactions.filter((t) => t.jobId === jobId)
+    expect(grouped.length).toBe(1)
+  })
+
+  it('closes and reopens a job', () => {
+    const api = setup()
+    let jobId = ''
+    act(() => {
+      jobId = api.current.addJob({ reference: 'WO-200', date: new Date().toISOString() }).id
+    })
+    act(() => api.current.setJobStatus(jobId, 'closed'))
+    expect(api.current.state.jobs.find((j) => j.id === jobId)?.status).toBe('closed')
+    act(() => api.current.setJobStatus(jobId, 'open'))
+    expect(api.current.state.jobs.find((j) => j.id === jobId)?.status).toBe('open')
+  })
+
+  it('deleting a job recycle-bins it and restore brings it back', () => {
+    const api = setup()
+    let jobId = ''
+    act(() => {
+      jobId = api.current.addJob({ reference: 'WO-300', date: new Date().toISOString() }).id
+    })
+    act(() => api.current.deleteJob(jobId))
+    expect(api.current.state.jobs.some((j) => j.id === jobId)).toBe(false)
+    const entry = api.current.state.recycleBin.find((e) => e.recordId === jobId)
+    expect(entry?.entity).toBe('job')
+    act(() => api.current.restoreFromRecycleBin(entry!.id))
+    expect(api.current.state.jobs.some((j) => j.id === jobId)).toBe(true)
+  })
+})
+
 describe('role enforcement at the store layer', () => {
   it('an apprentice cannot delete a bottle, but an owner can', () => {
     const api = setup()

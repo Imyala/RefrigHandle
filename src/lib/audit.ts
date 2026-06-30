@@ -32,6 +32,7 @@ export const AUDIT_ENTITY_LABELS: Record<AuditEntity, string> = {
   bottle: 'Bottle',
   site: 'Site',
   unit: 'Unit',
+  job: 'Job',
   transaction: 'Transaction',
   technician: 'Technician',
   settings: 'Settings',

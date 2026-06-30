@@ -4,6 +4,7 @@ import {
   type AppState,
   type AuditEntry,
   type Bottle,
+  type Job,
   type Site,
   type Technician,
   type Transaction,
@@ -31,6 +32,7 @@ interface LegacyState
     | 'transactions'
     | 'sites'
     | 'units'
+    | 'jobs'
     | 'unit'
     | 'sync'
     | 'theme'
@@ -152,6 +154,22 @@ function normalize(parsed: LegacyState): AppState {
     return { ...u, kind } as AppState['units'][number]
   })
 
+  // Jobs (work-orders) are a NEW concept that happens to share a field name
+  // with the LEGACY use of `jobs` as the old name for sites (see the sites
+  // migration above). Distinguish them purely by SHAPE: a new job has a
+  // string `reference` and a 'open'/'closed' `status`, which a legacy site
+  // record never does — so an ancient blob whose `jobs` is really the old
+  // sites array yields no jobs, while a current blob keeps its work-orders.
+  const jobs: Job[] = Array.isArray(parsed.jobs)
+    ? (parsed.jobs as unknown as Job[]).filter(
+        (j) =>
+          j != null &&
+          typeof j === 'object' &&
+          typeof (j as Job).reference === 'string' &&
+          ((j as Job).status === 'open' || (j as Job).status === 'closed'),
+      )
+    : []
+
   // Seed a tech profile from the legacy single-tech fields when the
   // user has data but no profile list yet — keeps logged transactions
   // attributable after the upgrade without any manual step.
@@ -224,6 +242,7 @@ function normalize(parsed: LegacyState): AppState {
     bottles,
     sites,
     units,
+    jobs,
     transactions,
     auditLog: parsed.auditLog ?? [],
     customRefrigerants: parsed.customRefrigerants ?? [],

@@ -17,7 +17,12 @@ const DB_VERSION = 1
 const STORE = 'attachments'
 
 export type AttachmentKind = 'photo' | 'signature'
-export type AttachmentEntity = 'unit' | 'transaction' | 'bottle' | 'site'
+export type AttachmentEntity =
+  | 'unit'
+  | 'transaction'
+  | 'bottle'
+  | 'site'
+  | 'job'
 
 export interface AttachmentMeta {
   id: string

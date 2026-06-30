@@ -209,6 +209,34 @@ export interface Unit {
   updatedAt?: string
 }
 
+// A job / work-order: one site visit, grouping the refrigerant movements
+// logged against it (via Transaction.jobId) plus its photos and customer
+// sign-off (in the attachment store, entityType 'job'). The container that
+// turns a string of transactions into "the work we did at this site today"
+// and the basis for a customer-facing service report.
+export interface Job {
+  id: string
+  // Human reference / title: a work-order number, or a short description
+  // like "AC service — Smith". Required so the job is identifiable.
+  reference: string
+  siteId?: string
+  // Snapshots taken at creation so the job reads standalone even if the
+  // site is later renamed or removed.
+  siteName?: string
+  clientName?: string
+  // When the visit happened (ISO timestamp).
+  date: string
+  // Who attended — frozen name + ARC RHL, like a transaction's stamp.
+  technician?: string
+  technicianLicence?: string
+  notes?: string
+  status: 'open' | 'closed'
+  closedAt?: string
+  createdAt: string
+  // Drives last-write-wins per record on sync (see lib/merge.ts).
+  updatedAt?: string
+}
+
 export type TransactionKind =
   | 'charge' // refrigerant put INTO equipment, removed from bottle
   | 'recover' // refrigerant pulled OUT of equipment, added to bottle
@@ -246,6 +274,10 @@ export interface Transaction {
   sourceWeightAfter?: number
   siteId?: string
   unitId?: string
+  // Optional work-order grouping: the job (site visit) this movement was
+  // logged against. Lets a visit's charges/recoveries be gathered into one
+  // record and a customer-facing service report. Unset for ad-hoc entries.
+  jobId?: string
   // Frozen display names, stamped when the referenced site/unit record
   // is deleted. Historical rows must keep saying where the work
   // happened even after the site/unit itself is removed from the
@@ -407,6 +439,7 @@ export type AuditEntity =
   | 'bottle'
   | 'site'
   | 'unit'
+  | 'job'
   | 'transaction'
   | 'technician'
   | 'settings'
@@ -464,6 +497,7 @@ export interface Tombstone {
     | 'bottle'
     | 'site'
     | 'unit'
+    | 'job'
     | 'technician'
     | 'preset'
     | 'refrigerant'
@@ -476,6 +510,7 @@ export type RecyclableEntity =
   | 'bottle'
   | 'site'
   | 'unit'
+  | 'job'
   | 'technician'
   | 'preset'
   | 'refrigerant'
@@ -860,6 +895,8 @@ export interface AppState {
   bottles: Bottle[]
   sites: Site[]
   units: Unit[]
+  // Work-orders / jobs (optional grouping of a visit's movements).
+  jobs: Job[]
   transactions: Transaction[]
   // Append-only change history covering every mutation in the app.
   // Newest entries first (the store prepends). Survives a data reset so
@@ -973,6 +1010,7 @@ export const EMPTY_STATE: AppState = {
   bottles: [],
   sites: [],
   units: [],
+  jobs: [],
   transactions: [],
   auditLog: [],
   customRefrigerants: [],

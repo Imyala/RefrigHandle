@@ -62,6 +62,7 @@ export type LogFormData = {
   sourceBottleId?: string
   siteId?: string
   unitId?: string
+  jobId?: string
   kind: TransactionKind
   amount: number
   bottleAmount?: number
@@ -114,6 +115,7 @@ export function LogForm({
     addSite,
     addUnit,
     addBottle,
+    addJob,
     addCustomRefrigerant,
     addTechnician,
     setActiveTechnicianId,
@@ -205,6 +207,19 @@ export function LogForm({
   const [addingSite, setAddingSite] = useState(false)
   const [addingUnit, setAddingUnit] = useState(false)
   const [addingBottle, setAddingBottle] = useState(false)
+  // Optional work-order grouping. Defaults to the most recent open job so a
+  // run of movements on one visit gathers itself; '' opts out.
+  const [jobId, setJobId] = useState('')
+  const [addingJob, setAddingJob] = useState(false)
+  const [newJobRef, setNewJobRef] = useState('')
+
+  const openJobs = useMemo(
+    () =>
+      state.jobs
+        .filter((j) => j.status === 'open')
+        .sort((a, b) => (a.date < b.date ? 1 : -1)),
+    [state.jobs],
+  )
 
   const siteUnits = state.units.filter(
     (u) => u.siteId === siteId && u.status === 'active',
@@ -302,6 +317,11 @@ export function LogForm({
     setDocketNumber('')
     setNotes('')
     setPendingPhotos([])
+    // Keep a correction on its original's job; otherwise default to the
+    // most recent open job (the visit you're working) if there is one.
+    setJobId(correcting ? (correcting.jobId ?? '') : (openJobs[0]?.id ?? ''))
+    setAddingJob(false)
+    setNewJobRef('')
   } else if (!open && lastOpen) {
     setLastOpen(false)
   }
@@ -439,6 +459,7 @@ export function LogForm({
         isBottleToBottleRecover && sourceBottleId ? sourceBottleId : undefined,
       siteId: showSite && siteId ? siteId : undefined,
       unitId: showSite && unitId ? unitId : undefined,
+      jobId: jobId || undefined,
       kind,
       amount: showAmount ? signedAmountKg : 0,
       bottleAmount:
@@ -484,6 +505,19 @@ export function LogForm({
           : undefined,
       savedOverSafeFill: projectedOverSafeFill || undefined,
     }, share)
+  }
+
+  function commitNewJob() {
+    const ref = newJobRef.trim()
+    if (!ref) return
+    const created = addJob({
+      reference: ref,
+      siteId: siteId || undefined,
+      date: dateTimeInputToIso(date, tz),
+    })
+    setJobId(created.id)
+    setAddingJob(false)
+    setNewJobRef('')
   }
 
   function commitNewTech() {
@@ -1120,6 +1154,64 @@ export function LogForm({
                   setAddingTech(false)
                   setNewTechName('')
                   setNewTechRhl('')
+                }}
+              >
+                Cancel
+              </Button>
+            </div>
+          </div>
+        )}
+
+        <Field
+          label="Job (optional)"
+          hint="Group this movement under a work-order / site visit, so the whole visit prints as one service report."
+        >
+          <Picker
+            title="Job"
+            value={jobId}
+            onChange={(v) => {
+              if (v === '__newjob__') {
+                setAddingJob(true)
+                return
+              }
+              setJobId(v)
+            }}
+            emptyLabel="— none —"
+            placeholder="— none —"
+            options={[
+              ...openJobs.map((j) => ({
+                value: j.id,
+                label: j.reference,
+                hint: j.siteName || undefined,
+              })),
+              { value: '__newjob__', label: '+ New job…' },
+            ]}
+          />
+        </Field>
+
+        {addingJob && (
+          <div className="space-y-2 rounded-xl bg-slate-50 p-3 dark:bg-slate-800/50">
+            <div className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+              New job
+            </div>
+            <Field label="Reference / title">
+              <TextInput
+                autoFocus
+                value={newJobRef}
+                onChange={(e) => setNewJobRef(e.target.value)}
+                placeholder="e.g. WO-1042, AC service — Smith"
+              />
+            </Field>
+            <div className="flex gap-2">
+              <Button type="button" onClick={commitNewJob}>
+                Open job
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => {
+                  setAddingJob(false)
+                  setNewJobRef('')
                 }}
               >
                 Cancel
