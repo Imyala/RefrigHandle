@@ -940,7 +940,15 @@ function UnitCard({
   return (
     <Card className="!p-3">
       <div className="flex items-start justify-between gap-3">
-        <button className="min-w-0 flex-1 text-left" onClick={onEdit}>
+        {/* Primary tap opens the read-only logbook (a view), not the edit
+            form — so a mis-tap can't silently change compliance data.
+            Editing is the explicit button below. Mirrors the
+            tap-to-view-then-edit pattern on bottles and sites. */}
+        <button
+          className="min-w-0 flex-1 text-left"
+          onClick={onLogbook}
+          aria-label={`Open the logbook for ${u.name}`}
+        >
           <div className="flex flex-wrap items-center gap-2">
             <span className="font-semibold text-slate-900 dark:text-slate-100">
               {u.name}
@@ -960,6 +968,18 @@ function UnitCard({
             </div>
           )}
         </button>
+        <svg
+          aria-hidden
+          viewBox="0 0 24 24"
+          className="mt-1 h-4 w-4 shrink-0 text-slate-400"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <path d="M9 6l6 6-6 6" />
+        </svg>
       </div>
       {/* Leak detail INLINE (not a hover tooltip) so the actionable
           insight is visible on a phone. */}
@@ -982,6 +1002,9 @@ function UnitCard({
       <div className="mt-3 flex flex-wrap gap-2">
         <Button variant="secondary" onClick={onLogbook}>
           Logbook
+        </Button>
+        <Button variant="secondary" onClick={onEdit}>
+          Edit
         </Button>
         <Button variant="secondary" onClick={onDecommission}>
           Decommission
