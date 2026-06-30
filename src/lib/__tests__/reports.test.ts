@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { complianceRows, quarterlyTotals } from '../reports'
+import { complianceRows, quarterlyTotals, rangeTotals } from '../reports'
 import { makeBottle, makeState, makeTx } from './fixtures'
 
 // UTC dates land in 2026 Q2 for an Australian (UTC+) timezone too, so the
@@ -40,6 +40,36 @@ describe('quarterlyTotals', () => {
     ]
     const [r] = quarterlyTotals(live, [bottle], Q2, TZ)
     expect(r.chargedKg).toBe(3) // the corrected figure, not 5+3
+  })
+})
+
+describe('rangeTotals (year / custom-range engine)', () => {
+  it('aggregates across quarter boundaries over an arbitrary day range', () => {
+    const bottle = makeBottle({ id: 'b1', refrigerantType: 'R32' })
+    const live = [
+      makeTx({ bottleId: 'b1', kind: 'charge', amount: 2, date: '2026-02-10T02:00:00.000Z' }), // Q1
+      makeTx({ bottleId: 'b1', kind: 'charge', amount: 3, date: '2026-05-10T02:00:00.000Z' }), // Q2
+      makeTx({ bottleId: 'b1', kind: 'charge', amount: 9, date: '2026-09-10T02:00:00.000Z' }), // Q3, out of range
+    ]
+    // Custom range Feb–Jun spans Q1 and Q2 but excludes Q3.
+    const inRange = (day: string) => day >= '2026-02-01' && day <= '2026-06-30'
+    const [r] = rangeTotals(live, [bottle], inRange, TZ)
+    expect(r.chargedKg).toBe(5) // 2 + 3, not 9
+  })
+
+  it('quarterlyTotals matches rangeTotals restricted to that quarter', () => {
+    const bottle = makeBottle({ id: 'b1', refrigerantType: 'R32' })
+    const live = [
+      makeTx({ bottleId: 'b1', kind: 'charge', amount: 4, date: '2026-05-10T02:00:00.000Z' }),
+    ]
+    const viaQuarter = quarterlyTotals(live, [bottle], Q2, TZ)
+    const viaRange = rangeTotals(
+      live,
+      [bottle],
+      (day) => day >= '2026-04-01' && day <= '2026-06-30',
+      TZ,
+    )
+    expect(viaQuarter).toEqual(viaRange)
   })
 })
 

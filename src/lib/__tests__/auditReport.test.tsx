@@ -53,7 +53,7 @@ describe('AuditReport — auditor pack smoke', () => {
     expect(screen.getByText('Compliance summary')).toBeTruthy()
     expect(screen.getByText('Cylinder register (in service)')).toBeTruthy()
     expect(
-      screen.getByText('Refrigerant movement log (this quarter)'),
+      screen.getByText('Refrigerant movement log (this period)'),
     ).toBeTruthy()
     // The seeded cylinder shows up in the register.
     expect(screen.getAllByText('CYL-9').length).toBeGreaterThan(0)

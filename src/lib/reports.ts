@@ -224,13 +224,14 @@ export interface QuarterTotals {
   rows: number
 }
 
-// Per-refrigerant totals for one calendar quarter. `live` must already be
-// the non-deleted transactions; `tz` is the business timezone (quarter
-// membership is a wall-calendar question, not a UTC one).
-export function quarterlyTotals(
+// Per-refrigerant totals over an arbitrary set of local calendar days,
+// chosen by `inRange` (a predicate on the YYYY-MM-DD business-timezone day).
+// `live` must already be the non-deleted transactions. This is the engine
+// behind both the per-quarter record and the year / custom-range pack.
+export function rangeTotals(
   live: Transaction[],
   bottles: Bottle[],
-  selectedKey: string,
+  inRange: (localDay: string) => boolean,
   tz: string,
 ): QuarterTotals[] {
   const dayOf = (t: Transaction) =>
@@ -260,8 +261,7 @@ export function quarterlyTotals(
   const superseded = supersededIds(live)
   for (const t of live) {
     if (superseded.has(t.id)) continue
-    const q = quarterOfDay(dayOf(t))
-    if (!q || quarterKey(q) !== selectedKey) continue
+    if (!inRange(dayOf(t))) continue
     const bottle = bottles.find((b) => b.id === t.bottleId)
     const b = bucket(
       t.bottleRefrigerantType ?? bottle?.refrigerantType ?? 'Unknown',
@@ -283,5 +283,25 @@ export function quarterlyTotals(
   }
   return [...byType.values()].sort((a, b) =>
     a.refrigerant.localeCompare(b.refrigerant),
+  )
+}
+
+// Per-refrigerant totals for one calendar quarter — the ARC quarterly
+// record. Thin wrapper over rangeTotals so the on-screen Quarterly report
+// keeps its API while the audit pack reuses the same engine.
+export function quarterlyTotals(
+  live: Transaction[],
+  bottles: Bottle[],
+  selectedKey: string,
+  tz: string,
+): QuarterTotals[] {
+  return rangeTotals(
+    live,
+    bottles,
+    (day) => {
+      const q = quarterOfDay(day)
+      return !!q && quarterKey(q) === selectedKey
+    },
+    tz,
   )
 }

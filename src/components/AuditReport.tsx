@@ -1,6 +1,7 @@
 import { useMemo, useState, type ReactNode } from 'react'
 import { Button, Field, Modal } from './ui'
 import { Picker, type PickerOption } from './Picker'
+import { DateInput } from './DateInput'
 import { IntegrityStamp } from './IntegrityStamp'
 import { useStore } from '../lib/store'
 import {
@@ -27,8 +28,10 @@ import {
 import {
   complianceRows,
   quarterlyTotals,
+  rangeTotals,
   worstLevel,
   type ComplianceLevel,
+  type QuarterTotals,
 } from '../lib/reports'
 import { profileFor } from '../lib/compliance'
 import { formatDateTime, formatPlainDate, localDateTimeInput } from '../lib/datetime'
@@ -93,35 +96,97 @@ function AuditReportModal({ onClose }: { onClose: () => void }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [live, tz])
 
+  // Period: a single quarter, a full calendar year (shown as its quarters),
+  // or a custom date range. The quarterly record stays quarter-by-quarter
+  // where the period aligns to quarters (the ARC unit); a custom range is
+  // aggregated over its exact days.
+  const [mode, setMode] = useState<'quarter' | 'year' | 'custom'>('quarter')
   const [selectedKey, setSelectedKey] = useState(() =>
     quarters.length > 0 ? quarterKey(quarters[0]) : '',
   )
-  const selected = quarters.find((q) => quarterKey(q) === selectedKey)
   const quarterOptions: PickerOption[] = quarters.map((q) => ({
     value: quarterKey(q),
     label: quarterLabel(q),
   }))
 
-  const totals = useMemo(
-    () => (selected ? quarterlyTotals(live, state.bottles, selectedKey, tz) : []),
-    [live, selected, selectedKey, state.bottles, tz],
-  )
-  const sumT = (f: (t: (typeof totals)[number]) => number) =>
-    totals.reduce((s, t) => s + f(t), 0)
+  const years = useMemo(() => {
+    const set = new Set<string>()
+    set.add(localDateTimeInput(new Date(), tz).slice(0, 4))
+    for (const q of quarters) set.add(String(q.year))
+    return [...set].sort((a, b) => b.localeCompare(a))
+  }, [quarters, tz])
+  const [selectedYear, setSelectedYear] = useState(() => years[0] ?? '')
+  const [fromDate, setFromDate] = useState('')
+  const [toDate, setToDate] = useState('')
 
-  // Movement log for the period: live rows whose local calendar day falls in
-  // the selected quarter, oldest first (the order an auditor reads events).
+  const selected = quarters.find((q) => quarterKey(q) === selectedKey)
+  const curQ = quarterOfDay(localDateTimeInput(new Date(), tz).slice(0, 10))
+
+  // The quarters that make up the period (empty for a custom range, which is
+  // aggregated as one table instead). A full year shows only quarters that
+  // aren't still in the future.
+  const periodQuarters = useMemo<Quarter[]>(() => {
+    if (mode === 'quarter') return selected ? [selected] : []
+    if (mode === 'year') {
+      const y = Number(selectedYear)
+      if (!y) return []
+      const QS: (1 | 2 | 3 | 4)[] = [1, 2, 3, 4]
+      return QS.map((q) => ({ year: y, q })).filter((q) =>
+        !curQ
+          ? true
+          : q.year < curQ.year || (q.year === curQ.year && q.q <= curQ.q),
+      )
+    }
+    return []
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, selected, selectedYear, curQ?.year, curQ?.q])
+
+  // Day-membership test for the movement log + custom aggregation.
+  const inRange = useMemo(() => {
+    if (mode === 'year') return (day: string) => day.slice(0, 4) === selectedYear
+    if (mode === 'custom') {
+      return (day: string) =>
+        (!fromDate || day >= fromDate) && (!toDate || day <= toDate)
+    }
+    return (day: string) => {
+      const q = quarterOfDay(day)
+      return !!q && quarterKey(q) === selectedKey
+    }
+  }, [mode, selectedYear, fromDate, toDate, selectedKey])
+
+  const periodLabel =
+    mode === 'quarter'
+      ? selected
+        ? quarterLabel(selected)
+        : 'No data'
+      : mode === 'year'
+        ? `Year ${selectedYear}`
+        : fromDate || toDate
+          ? `${fromDate || 'start'} to ${toDate || 'now'}`
+          : 'All records'
+
+  // The refrigerant-record tables to show: one per quarter when the period
+  // aligns to quarters, or a single aggregated table for a custom range.
+  const recordTables = useMemo(() => {
+    if (mode === 'custom') {
+      return [
+        { label: periodLabel, totals: rangeTotals(live, state.bottles, inRange, tz) },
+      ]
+    }
+    return periodQuarters.map((q) => ({
+      label: quarterLabel(q),
+      totals: quarterlyTotals(live, state.bottles, quarterKey(q), tz),
+    }))
+  }, [mode, periodQuarters, live, state.bottles, tz, inRange, periodLabel])
+
+  // Movement log for the period, oldest first (the order an auditor reads).
   const superseded = useMemo(() => supersededIds(live), [live])
   const periodRows = useMemo(() => {
-    if (!selected) return []
     return live
-      .filter((t) => {
-        const q = quarterOfDay(dayOf(t))
-        return q && quarterKey(q) === selectedKey
-      })
+      .filter((t) => inRange(dayOf(t)))
       .sort((a, b) => (a.date < b.date ? -1 : 1))
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [live, selected, selectedKey, tz])
+  }, [live, inRange, tz])
 
   const rows = useMemo(() => complianceRows(state), [state])
   const overall = worstLevel(rows.map((r) => r.level))
@@ -138,9 +203,28 @@ function AuditReportModal({ onClose }: { onClose: () => void }) {
 
   return (
     <Modal open onClose={onClose} title="Audit pack" size="lg">
-      <div className="no-print mb-3 flex flex-wrap items-end justify-between gap-2">
-        <div className="min-w-0 flex-1">
-          <Field label="Period (quarter)">
+      <div className="no-print mb-3 space-y-2">
+        <div className="flex flex-wrap items-end justify-between gap-2">
+          <div className="min-w-0 flex-1">
+            <Field label="Report period">
+              <Picker
+                title="Report period"
+                value={mode}
+                onChange={(v) => setMode(v as 'quarter' | 'year' | 'custom')}
+                options={[
+                  { value: 'quarter', label: 'By quarter (3 months)' },
+                  { value: 'year', label: 'Full year' },
+                  { value: 'custom', label: 'Custom date range' },
+                ]}
+              />
+            </Field>
+          </div>
+          <Button variant="secondary" onClick={() => window.print()}>
+            Print / Save PDF
+          </Button>
+        </div>
+        {mode === 'quarter' && (
+          <Field label="Quarter">
             <Picker
               title="Quarter"
               value={selectedKey}
@@ -148,10 +232,37 @@ function AuditReportModal({ onClose }: { onClose: () => void }) {
               options={quarterOptions}
             />
           </Field>
-        </div>
-        <Button variant="secondary" onClick={() => window.print()}>
-          Print / Save PDF
-        </Button>
+        )}
+        {mode === 'year' && (
+          <Field label="Year">
+            <Picker
+              title="Year"
+              value={selectedYear}
+              onChange={setSelectedYear}
+              options={years.map((y) => ({ value: y, label: y }))}
+            />
+          </Field>
+        )}
+        {mode === 'custom' && (
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <Field label="From" className="flex-1">
+              <DateInput
+                value={fromDate}
+                onChange={setFromDate}
+                max={toDate || undefined}
+                ariaLabel="Report from date"
+              />
+            </Field>
+            <Field label="To" className="flex-1">
+              <DateInput
+                value={toDate}
+                onChange={setToDate}
+                min={fromDate || undefined}
+                ariaLabel="Report to date"
+              />
+            </Field>
+          </div>
+        )}
       </div>
 
       <div className="print-region space-y-5 text-sm text-slate-900 dark:text-slate-100">
@@ -174,10 +285,7 @@ function AuditReportModal({ onClose }: { onClose: () => void }) {
                 v={state.arcAuthorisationNumber || 'Not set'}
               />
             )}
-            <Kv
-              label="Period"
-              v={selected ? quarterLabel(selected) : 'No data'}
-            />
+            <Kv label="Period" v={periodLabel} />
             <Kv label="Generated" v={generatedAt} />
           </div>
         </header>
@@ -218,51 +326,23 @@ function AuditReportModal({ onClose }: { onClose: () => void }) {
           </table>
         </Section>
 
-        {/* 4. ARC quarterly refrigerant record */}
-        <Section title={`Quarterly refrigerant record${selected ? ` — ${quarterLabel(selected)}` : ''}`}>
-          {totals.length === 0 ? (
+        {/* 4. ARC refrigerant record — one table per quarter (or a single
+            aggregated table for a custom range). */}
+        <Section
+          title={
+            mode === 'custom'
+              ? 'Refrigerant record (period totals)'
+              : 'Quarterly refrigerant record'
+          }
+        >
+          {recordTables.length === 0 ? (
             <p className="text-xs text-slate-500 dark:text-slate-400">
-              No refrigerant movements recorded in this quarter (nil return).
+              Choose a period above.
             </p>
           ) : (
-            <table className="w-full text-xs">
-              <thead className="border-b border-slate-400 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-500 dark:border-slate-600">
-                <tr>
-                  <th className="py-1 pr-2">Refrigerant</th>
-                  <Th>Purchased</Th>
-                  <Th>Charged</Th>
-                  <Th>Recovered</Th>
-                  <Th>Returned</Th>
-                  <Th>Adjust ±</Th>
-                  <Th last>Loss</Th>
-                </tr>
-              </thead>
-              <tbody>
-                {totals.map((r) => (
-                  <tr
-                    key={r.refrigerant}
-                    className="border-b border-slate-200 dark:border-slate-800"
-                  >
-                    <td className="py-1 pr-2 font-medium">{r.refrigerant}</td>
-                    <Num v={r.purchasedKg} />
-                    <Num v={r.chargedKg} />
-                    <Num v={r.recoveredKg} />
-                    <Num v={r.returnedKg} />
-                    <Num v={r.adjustKg} signed />
-                    <Num v={r.lossKg} last />
-                  </tr>
-                ))}
-                <tr className="border-t border-slate-400 font-semibold dark:border-slate-600">
-                  <td className="py-1 pr-2">Total (kg)</td>
-                  <Num v={sumT((t) => t.purchasedKg)} />
-                  <Num v={sumT((t) => t.chargedKg)} />
-                  <Num v={sumT((t) => t.recoveredKg)} />
-                  <Num v={sumT((t) => t.returnedKg)} />
-                  <Num v={sumT((t) => t.adjustKg)} signed />
-                  <Num v={sumT((t) => t.lossKg)} last />
-                </tr>
-              </tbody>
-            </table>
+            recordTables.map((rt) => (
+              <RefrigerantTable key={rt.label} label={rt.label} totals={rt.totals} />
+            ))
           )}
           <p className="mt-2 text-[10px] text-slate-500 dark:text-slate-400">
             Purchased = cylinders entering the system. Charged = into
@@ -275,7 +355,7 @@ function AuditReportModal({ onClose }: { onClose: () => void }) {
         </Section>
 
         {/* 5. Refrigerant movement log for the period */}
-        <Section title="Refrigerant movement log (this quarter)">
+        <Section title="Refrigerant movement log (this period)">
           {periodRows.length === 0 ? (
             <p className="text-xs text-slate-500 dark:text-slate-400">
               No movements recorded in this quarter.
@@ -561,6 +641,69 @@ const LEAK_LABEL: Record<string, string> = {
   watch: '⚠ Watch',
   suspected: '✕ Suspected leak',
   unknown: '— Charge not set',
+}
+
+// One refrigerant-record table (the ARC quarterly figures) for a single
+// quarter or aggregated period, captioned with its label. A nil period
+// prints "nil return" rather than an empty table.
+function RefrigerantTable({
+  label,
+  totals,
+}: {
+  label: string
+  totals: QuarterTotals[]
+}) {
+  const sum = (f: (t: QuarterTotals) => number) =>
+    totals.reduce((s, t) => s + f(t), 0)
+  return (
+    <div className="mb-3 break-inside-avoid last:mb-0">
+      <div className="mb-1 text-xs font-semibold">{label}</div>
+      {totals.length === 0 ? (
+        <p className="text-[11px] text-slate-500 dark:text-slate-400">
+          No refrigerant movements in this period (nil return).
+        </p>
+      ) : (
+        <table className="w-full text-xs">
+          <thead className="border-b border-slate-400 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-500 dark:border-slate-600">
+            <tr>
+              <th className="py-1 pr-2">Refrigerant</th>
+              <Th>Purchased</Th>
+              <Th>Charged</Th>
+              <Th>Recovered</Th>
+              <Th>Returned</Th>
+              <Th>Adjust ±</Th>
+              <Th last>Loss</Th>
+            </tr>
+          </thead>
+          <tbody>
+            {totals.map((r) => (
+              <tr
+                key={r.refrigerant}
+                className="border-b border-slate-200 dark:border-slate-800"
+              >
+                <td className="py-1 pr-2 font-medium">{r.refrigerant}</td>
+                <Num v={r.purchasedKg} />
+                <Num v={r.chargedKg} />
+                <Num v={r.recoveredKg} />
+                <Num v={r.returnedKg} />
+                <Num v={r.adjustKg} signed />
+                <Num v={r.lossKg} last />
+              </tr>
+            ))}
+            <tr className="border-t border-slate-400 font-semibold dark:border-slate-600">
+              <td className="py-1 pr-2">Total (kg)</td>
+              <Num v={sum((t) => t.purchasedKg)} />
+              <Num v={sum((t) => t.chargedKg)} />
+              <Num v={sum((t) => t.recoveredKg)} />
+              <Num v={sum((t) => t.returnedKg)} />
+              <Num v={sum((t) => t.adjustKg)} signed />
+              <Num v={sum((t) => t.lossKg)} last />
+            </tr>
+          </tbody>
+        </table>
+      )}
+    </div>
+  )
 }
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
