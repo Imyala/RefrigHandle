@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from 'react'
+import { useCallback, useMemo, useState, type ReactNode } from 'react'
 import { Button, Field, Modal } from './ui'
 import { Picker, type PickerOption } from './Picker'
 import { DateInput } from './DateInput'
@@ -100,7 +100,9 @@ function AuditReportModal({ onClose }: { onClose: () => void }) {
   // or a custom date range. The quarterly record stays quarter-by-quarter
   // where the period aligns to quarters (the ARC unit); a custom range is
   // aggregated over its exact days.
-  const [mode, setMode] = useState<'quarter' | 'year' | 'custom'>('quarter')
+  const [mode, setMode] = useState<'quarter' | 'year' | 'custom' | 'all'>(
+    'quarter',
+  )
   const [selectedKey, setSelectedKey] = useState(() =>
     quarters.length > 0 ? quarterKey(quarters[0]) : '',
   )
@@ -141,18 +143,21 @@ function AuditReportModal({ onClose }: { onClose: () => void }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode, selected, selectedYear, curQ?.year, curQ?.q])
 
-  // Day-membership test for the movement log + custom aggregation.
-  const inRange = useMemo(() => {
-    if (mode === 'year') return (day: string) => day.slice(0, 4) === selectedYear
-    if (mode === 'custom') {
-      return (day: string) =>
-        (!fromDate || day >= fromDate) && (!toDate || day <= toDate)
-    }
-    return (day: string) => {
+  // Day-membership test for the movement log + custom aggregation. One
+  // stable callback that branches internally (rather than a memo returning
+  // different closures, which the React Compiler can't preserve).
+  const inRange = useCallback(
+    (day: string): boolean => {
+      if (mode === 'all') return true
+      if (mode === 'year') return day.slice(0, 4) === selectedYear
+      if (mode === 'custom') {
+        return (!fromDate || day >= fromDate) && (!toDate || day <= toDate)
+      }
       const q = quarterOfDay(day)
       return !!q && quarterKey(q) === selectedKey
-    }
-  }, [mode, selectedYear, fromDate, toDate, selectedKey])
+    },
+    [mode, selectedYear, fromDate, toDate, selectedKey],
+  )
 
   const periodLabel =
     mode === 'quarter'
@@ -161,14 +166,16 @@ function AuditReportModal({ onClose }: { onClose: () => void }) {
         : 'No data'
       : mode === 'year'
         ? `Year ${selectedYear}`
-        : fromDate || toDate
-          ? `${fromDate || 'start'} to ${toDate || 'now'}`
-          : 'All records'
+        : mode === 'all'
+          ? 'All records (complete history)'
+          : fromDate || toDate
+            ? `${fromDate || 'start'} to ${toDate || 'now'}`
+            : 'All records'
 
   // The refrigerant-record tables to show: one per quarter when the period
   // aligns to quarters, or a single aggregated table for a custom range.
   const recordTables = useMemo(() => {
-    if (mode === 'custom') {
+    if (mode === 'custom' || mode === 'all') {
       return [
         { label: periodLabel, totals: rangeTotals(live, state.bottles, inRange, tz) },
       ]
@@ -210,10 +217,13 @@ function AuditReportModal({ onClose }: { onClose: () => void }) {
               <Picker
                 title="Report period"
                 value={mode}
-                onChange={(v) => setMode(v as 'quarter' | 'year' | 'custom')}
+                onChange={(v) =>
+                  setMode(v as 'quarter' | 'year' | 'custom' | 'all')
+                }
                 options={[
                   { value: 'quarter', label: 'By quarter (3 months)' },
                   { value: 'year', label: 'Full year' },
+                  { value: 'all', label: 'All history' },
                   { value: 'custom', label: 'Custom date range' },
                 ]}
               />
@@ -330,7 +340,7 @@ function AuditReportModal({ onClose }: { onClose: () => void }) {
             aggregated table for a custom range). */}
         <Section
           title={
-            mode === 'custom'
+            mode === 'custom' || mode === 'all'
               ? 'Refrigerant record (period totals)'
               : 'Quarterly refrigerant record'
           }
