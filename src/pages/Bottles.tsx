@@ -702,16 +702,16 @@ export default function Bottles() {
           editing
             ? async () => {
                 const ok = await confirm({
-                  title: 'Delete this bottle?',
+                  title: 'Remove this bottle?',
                   message:
-                    'The bottle is removed from your inventory, but its refrigerant log entries are kept (soft-deleted) for the audit trail — visible in Settings → Deleted transactions and the CSV/JSON export.',
-                  confirmLabel: 'Delete bottle',
+                    'The bottle moves to Recently deleted (Change log → Recently deleted), where a supervisor can restore it. Its refrigerant log entries are always kept for the audit trail — in the CSV/JSON export and Settings → Deleted transactions.',
+                  confirmLabel: 'Remove bottle',
                   danger: true,
                 })
                 if (ok) {
                   deleteBottle(editing.id)
                   setEditing(null)
-                  toast.show('Bottle deleted', 'info')
+                  toast.show('Bottle removed — restore it from Recently deleted', 'info')
                 }
               }
             : undefined
@@ -1549,7 +1549,7 @@ function BottleForm({
           </Button>
           {onDelete && (
             <Button type="button" variant="danger" onClick={onDelete}>
-              Delete
+              Remove
             </Button>
           )}
         </div>

@@ -516,20 +516,20 @@ function SiteDetail({
                 variant="danger"
                 onClick={async () => {
                   const ok = await confirm({
-                    title: 'Delete this site?',
+                    title: 'Remove this site?',
                     message:
-                      'All units at this site will be deleted, and any bottles currently assigned to it will be unassigned. This cannot be undone.',
-                    confirmLabel: 'Delete site',
+                      'The site and its units move to Recently deleted (Change log → Recently deleted), where a supervisor can restore them. Any bottles currently assigned to this site are unassigned.',
+                    confirmLabel: 'Remove site',
                     danger: true,
                   })
                   if (ok) {
                     deleteSite(site.id)
-                    toast.show('Site deleted', 'info')
+                    toast.show('Site removed — restore it from Recently deleted', 'info')
                     onClose()
                   }
                 }}
               >
-                Delete
+                Remove
               </Button>
             </div>
           </Card>
@@ -663,15 +663,15 @@ function SiteDetail({
                       }}
                       onDelete={async () => {
                         const ok = await confirm({
-                          title: `Permanently delete "${u.name}"?`,
+                          title: `Remove "${u.name}"?`,
                           message:
-                            'The unit will be removed from the record entirely. Past transactions referencing it stay in the log but lose their unit link. This cannot be undone.',
-                          confirmLabel: 'Delete',
+                            'The unit moves to Recently deleted (Change log → Recently deleted), where a supervisor can restore it. Past transactions referencing it stay in the log.',
+                          confirmLabel: 'Remove',
                           danger: true,
                         })
                         if (ok) {
                           deleteUnit(u.id)
-                          toast.show('Unit deleted', 'info')
+                          toast.show('Unit removed — restore it from Recently deleted', 'info')
                         }
                       }}
                     />
@@ -1084,7 +1084,7 @@ function DecommissionedUnitCard({
           Reactivate
         </Button>
         <Button variant="danger" onClick={onDelete}>
-          Delete record
+          Remove
         </Button>
       </div>
     </Card>
