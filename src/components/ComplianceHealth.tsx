@@ -3,14 +3,10 @@ import { Link } from 'react-router-dom'
 import { Card, Pill } from './ui'
 import { useStore } from '../lib/store'
 import {
-  expiryStatus,
-  hydroStatusFor,
-  isTechnicianActive,
-  leakStatusFor,
-} from '../lib/types'
-import { profileFor } from '../lib/compliance'
-import { backupStatus } from '../lib/backup'
-import { formatPlainDate } from '../lib/datetime'
+  complianceRows,
+  worstLevel,
+  type ComplianceLevel,
+} from '../lib/reports'
 import { isStoragePersisted, requestPersistentStorage } from '../lib/storage'
 
 // At-a-glance compliance overview for the whole business. Rolls the
@@ -23,30 +19,18 @@ import { isStoragePersisted, requestPersistentStorage } from '../lib/storage'
 // live in <Alerts/> below; this is the "are we OK?" summary a supervisor
 // can read in one glance and the headline demo of the app's value.
 
-type Level = 'ok' | 'attention' | 'action'
+// Compliance-row data (the five signals) is computed by complianceRows in
+// lib/reports so the printable Audit Pack reuses the identical numbers.
+// This component owns only the presentation of it.
 
-const RANK: Record<Level, number> = { ok: 0, attention: 1, action: 2 }
-function worst(levels: Level[]): Level {
-  return levels.reduce<Level>((a, b) => (RANK[b] > RANK[a] ? b : a), 'ok')
-}
-
-interface Row {
-  id: string
-  label: string
-  level: Level
-  summary: string
-  to: string
-  state?: Record<string, unknown>
-}
-
-const ROW_PILL: Record<Level, { tone: 'green' | 'amber' | 'red'; text: string }> = {
+const ROW_PILL: Record<ComplianceLevel, { tone: 'green' | 'amber' | 'red'; text: string }> = {
   ok: { tone: 'green', text: 'OK' },
   attention: { tone: 'amber', text: 'Due soon' },
   action: { tone: 'red', text: 'Action' },
 }
 
 const OVERALL: Record<
-  Level,
+  ComplianceLevel,
   { label: string; card: string; title: string; tone: 'green' | 'amber' | 'red' }
 > = {
   ok: {
@@ -75,7 +59,6 @@ function joinParts(parts: (string | false | 0)[]): string {
 
 export function ComplianceHealth() {
   const { state } = useStore()
-  const profile = profileFor(state.jurisdiction)
 
   // Once real records exist, quietly ask the browser to keep storage so the
   // origin isn't evicted under pressure (harmless to ask; auto-granted for
@@ -94,175 +77,9 @@ export function ComplianceHealth() {
     }
   }, [hasData])
 
-  const rows = useMemo<Row[]>(() => {
-    const out: Row[] = []
+  const rows = useMemo(() => complianceRows(state), [state])
 
-    // 1. Technician licences (RHL) — active technicians only.
-    const actives = state.technicians.filter(isTechnicianActive)
-    let licExpired = 0
-    let licDueSoon = 0
-    let licMissing = 0
-    for (const t of actives) {
-      if (!t.licenceExpiry) {
-        licMissing += 1
-        continue
-      }
-      const ex = expiryStatus(t.licenceExpiry)
-      if (ex.level === 'expired') licExpired += 1
-      else if (ex.level === 'due_soon') licDueSoon += 1
-    }
-    const licLevel: Level = licExpired
-      ? 'action'
-      : licDueSoon || licMissing
-        ? 'attention'
-        : 'ok'
-    out.push({
-      id: 'licences',
-      label: `Technician ${profile.techLicenceShort}`,
-      level: licLevel,
-      summary:
-        actives.length === 0
-          ? 'No active technicians'
-          : licExpired || licDueSoon || licMissing
-            ? joinParts([
-                licExpired && `${licExpired} expired`,
-                licDueSoon && `${licDueSoon} due soon`,
-                licMissing && `${licMissing} missing a date`,
-              ])
-            : `All ${actives.length} current`,
-      to: '/settings',
-      state: { scrollTo: 'business' },
-    })
-
-    // 2. Business authorisation (RTA) — only where the scheme has one.
-    if (profile.hasBusinessAuthorisation) {
-      let rtaLevel: Level = 'ok'
-      let rtaSummary: string
-      if (!state.arcAuthorisationExpiry) {
-        rtaLevel = 'attention'
-        rtaSummary = 'No expiry recorded'
-      } else {
-        const ex = expiryStatus(state.arcAuthorisationExpiry)
-        if (ex.level === 'expired') {
-          rtaLevel = 'action'
-          rtaSummary = `Expired ${formatPlainDate(state.arcAuthorisationExpiry)}`
-        } else if (ex.level === 'due_soon') {
-          rtaLevel = 'attention'
-          rtaSummary =
-            ex.daysLeft === 0
-              ? 'Expires today'
-              : `Expires in ${ex.daysLeft} day${ex.daysLeft === 1 ? '' : 's'}`
-        } else {
-          rtaSummary = `Current${ex.daysLeft != null ? ` · ${ex.daysLeft} days left` : ''}`
-        }
-      }
-      out.push({
-        id: 'rta',
-        label: `Business ${profile.businessAuthShort}`,
-        level: rtaLevel,
-        summary: rtaSummary,
-        to: '/settings',
-        state: { scrollTo: 'business' },
-      })
-    }
-
-    // 3. Cylinder periodic testing (AS 2030) — cylinders still in service
-    // (a returned cylinder has left our possession).
-    const inService = state.bottles.filter((b) => b.status !== 'returned')
-    let cOver = 0
-    let cDue = 0
-    let cUnknown = 0
-    for (const b of inService) {
-      const h = hydroStatusFor(b)
-      if (h.status === 'overdue') cOver += 1
-      else if (h.status === 'due_soon') cDue += 1
-      else if (h.status === 'unknown') cUnknown += 1
-    }
-    const cylLevel: Level = cOver ? 'action' : cDue ? 'attention' : 'ok'
-    out.push({
-      id: 'cylinders',
-      label: 'Cylinder testing (AS 2030)',
-      level: cylLevel,
-      summary:
-        inService.length === 0
-          ? 'No cylinders in service'
-          : cOver || cDue
-            ? joinParts([
-                cOver && `${cOver} overdue`,
-                cDue && `${cDue} due soon`,
-                cUnknown && `${cUnknown} no date`,
-              ])
-            : cUnknown === inService.length
-              ? 'No test dates recorded'
-              : joinParts([
-                  `All ${inService.length - cUnknown} in date`,
-                  cUnknown && `${cUnknown} no date`,
-                ]),
-      to: '/bottles',
-    })
-
-    // 4. Equipment leak rate (AIRAH DA19) — active units topped up above
-    // the leak-rate threshold over the trailing 12 months. A suspected
-    // leak is a reportable refrigerant-loss concern, so it belongs on the
-    // compliance summary, not just the separate leak-watch card.
-    const activeUnits = state.units.filter((u) => u.status === 'active')
-    let leakSuspected = 0
-    let leakWatch = 0
-    for (const u of activeUnits) {
-      const lk = leakStatusFor(u, state.transactions)
-      if (lk.level === 'suspected') leakSuspected += 1
-      else if (lk.level === 'watch') leakWatch += 1
-    }
-    const leakLevel: Level = leakSuspected
-      ? 'action'
-      : leakWatch
-        ? 'attention'
-        : 'ok'
-    out.push({
-      id: 'leaks',
-      label: 'Equipment leak rate (DA19)',
-      level: leakLevel,
-      summary:
-        activeUnits.length === 0
-          ? 'No equipment in service'
-          : leakSuspected || leakWatch
-            ? joinParts([
-                leakSuspected &&
-                  `${leakSuspected} suspected leak${leakSuspected === 1 ? '' : 's'}`,
-                leakWatch && `${leakWatch} to watch`,
-              ])
-            : `All ${activeUnits.length} within range`,
-      to: '/sites',
-    })
-
-    // 5. Records backup.
-    const bs = backupStatus(state)
-    let bkLevel: Level = 'ok'
-    let bkSummary: string
-    if (state.sync.enabled) {
-      bkSummary = 'Syncing to your backend'
-    } else if (bs.due) {
-      bkLevel = 'attention'
-      bkSummary = bs.lastBackupAt
-        ? `Overdue · ${bs.daysSinceBackup} days since last`
-        : 'No backup saved yet'
-    } else {
-      bkSummary = bs.lastBackupAt
-        ? `Backed up ${bs.daysSinceBackup === 0 ? 'today' : `${bs.daysSinceBackup} days ago`}`
-        : 'No records to back up yet'
-    }
-    out.push({
-      id: 'backup',
-      label: 'Records backup',
-      level: bkLevel,
-      summary: bkSummary,
-      to: '/settings',
-    })
-
-    return out
-  }, [state, profile])
-
-  const overall = worst(rows.map((r) => r.level))
+  const overall = worstLevel(rows.map((r) => r.level))
   const o = OVERALL[overall]
 
   // At-a-glance counts so the header is scannable before the rows are read.

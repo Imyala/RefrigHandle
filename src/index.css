@@ -133,11 +133,24 @@ input[type='number'] {
   /* Tighten table density on paper */
   .print-region table {
     page-break-inside: auto;
+    width: 100%;
+    border-collapse: collapse;
   }
   .print-region tr {
     page-break-inside: avoid;
   }
   .print-region thead {
     display: table-header-group;
+  }
+  /* Keep a report section (heading + its table) together where it fits on
+     one page, so a heading never strands at the foot of a page away from
+     its content. Long tables still flow across pages, with their header row
+     repeating (table-header-group above). */
+  .print-region .break-inside-avoid {
+    break-inside: avoid;
+  }
+  /* Headings shouldn't be the last thing on a page. */
+  .print-region h3 {
+    break-after: avoid;
   }
 }

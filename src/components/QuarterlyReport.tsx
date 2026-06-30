@@ -7,11 +7,10 @@ import {
   quarterKey,
   quarterLabel,
   quarterOfDay,
-  supersededIds,
   type Quarter,
   type Transaction,
-  transactionLoss,
 } from '../lib/types'
+import { quarterlyTotals, type QuarterTotals } from '../lib/reports'
 import { formatDateTime, localDateTimeInput } from '../lib/datetime'
 
 // ARC quarterly refrigerant record (Refrigerant Trading Authorisation
@@ -21,17 +20,6 @@ import { formatDateTime, localDateTimeInput } from '../lib/datetime'
 // checks ask for the last two quarters. This report produces those
 // numbers per refrigerant for a chosen calendar quarter, printable via
 // the same print stylesheet as the equipment logbook.
-
-interface QuarterTotals {
-  refrigerant: string
-  purchasedKg: number // intake rows (new cylinders entering the system)
-  chargedKg: number // charge rows, equipment side
-  recoveredKg: number // recover rows from equipment (bottle-to-bottle decants excluded)
-  returnedKg: number // net refrigerant in cylinders at the time they were returned
-  adjustKg: number // signed manual adjustments
-  lossKg: number // hose / decant losses recorded on charge & recover rows
-  rows: number
-}
 
 export function QuarterlyReportCard() {
   const [open, setOpen] = useState(false)
@@ -88,67 +76,11 @@ function QuarterlyReportModal({ onClose }: { onClose: () => void }) {
   )
   const selected = quarters.find((q) => quarterKey(q) === selectedKey)
 
-  const totals = useMemo(() => {
-    if (!selected) return []
-    const byType = new Map<string, QuarterTotals>()
-    const bucket = (refrigerant: string): QuarterTotals => {
-      let b = byType.get(refrigerant)
-      if (!b) {
-        b = {
-          refrigerant,
-          purchasedKg: 0,
-          chargedKg: 0,
-          recoveredKg: 0,
-          returnedKg: 0,
-          adjustKg: 0,
-          lossKg: 0,
-          rows: 0,
-        }
-        byType.set(refrigerant, b)
-      }
-      return b
-    }
-    // Originals superseded by a re-statement correction are skipped —
-    // the correction row carries the true amount on the same work date,
-    // so it lands in the right quarter bucket. The set is built from ALL
-    // live rows: a correction logged in a later quarter still voids its
-    // original here.
-    const superseded = supersededIds(live)
-    for (const t of live) {
-      if (superseded.has(t.id)) continue
-      const q = quarterOfDay(dayOf(t))
-      if (!q || quarterKey(q) !== selectedKey) continue
-      const bottle = state.bottles.find((b) => b.id === t.bottleId)
-      // Prefer the refrigerant/tare frozen onto the row — they survive the
-      // bottle record being deleted, where the live lookup would not.
-      const b = bucket(
-        t.bottleRefrigerantType ?? bottle?.refrigerantType ?? 'Unknown',
-      )
-      b.rows += 1
-      if (t.kind === 'intake') b.purchasedKg += t.amount
-      else if (t.kind === 'charge') b.chargedKg += t.amount
-      else if (t.kind === 'recover') {
-        // Bottle-to-bottle decants move refrigerant between our own
-        // cylinders — they aren't recovery from equipment.
-        if (!t.sourceBottleId) b.recoveredKg += t.amount
-      } else if (t.kind === 'return') {
-        // Net refrigerant leaving our books inside the returned
-        // cylinder: gross at return minus the cylinder's tare. Uses the
-        // frozen tare so a since-deleted bottle doesn't zero the figure.
-        const tare = t.bottleTareWeight ?? bottle?.tareWeight
-        if (tare != null) {
-          b.returnedKg += Math.max(0, t.weightBefore - tare)
-        }
-      } else if (t.kind === 'adjust') {
-        b.adjustKg += t.amount
-      }
-      b.lossKg += transactionLoss(t)
-    }
-    return [...byType.values()].sort((a, b) =>
-      a.refrigerant.localeCompare(b.refrigerant),
-    )
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [live, selectedKey, selected, state.bottles, tz])
+  const totals = useMemo<QuarterTotals[]>(
+    () =>
+      selected ? quarterlyTotals(live, state.bottles, selectedKey, tz) : [],
+    [live, selectedKey, selected, state.bottles, tz],
+  )
 
   const sum = (f: (t: QuarterTotals) => number) =>
     totals.reduce((s, t) => s + f(t), 0)

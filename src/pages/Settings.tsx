@@ -14,6 +14,7 @@ import { LocationFields } from '../components/LocationFields'
 import { InstallAppButton } from '../components/InstallAppButton'
 import { DiagnosticsCard } from '../components/Diagnostics'
 import { QuarterlyReportCard } from '../components/QuarterlyReport'
+import { AuditReportCard } from '../components/AuditReport'
 import { useStore } from '../lib/store'
 import {
   expiryStatus,
@@ -430,6 +431,11 @@ export default function Settings() {
         defaultOpen
         resetOnMount
       >
+      {/* The one-tap auditor hand-off — the headline of this section. */}
+      <Card className="!border-brand-300 !bg-brand-50 dark:!border-brand-900/50 dark:!bg-brand-900/20">
+        <AuditReportCard />
+      </Card>
+
       {/* The quarterly record matches the ARC RTA permit conditions. */}
       <QuarterlyReportCard />
 
