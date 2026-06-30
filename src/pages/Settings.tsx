@@ -12,6 +12,7 @@ import { Picker } from '../components/Picker'
 import { DateInput } from '../components/DateInput'
 import { LocationFields } from '../components/LocationFields'
 import { InstallAppButton } from '../components/InstallAppButton'
+import { DiagnosticsCard } from '../components/Diagnostics'
 import { QuarterlyReportCard } from '../components/QuarterlyReport'
 import { useStore } from '../lib/store'
 import {
@@ -1069,6 +1070,10 @@ export default function Settings() {
           device.
         </p>
         <InstallAppButton variant="full" />
+      </Card>
+
+      <Card>
+        <DiagnosticsCard />
       </Card>
       </CollapsibleSection>
 
