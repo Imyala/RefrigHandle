@@ -275,11 +275,26 @@ export default function Settings() {
     }
   }
 
-  function exportJson() {
+  // A full JSON backup (and a restore) serialises every photo / signature
+  // as a data URL, which on a multi-year device with attachments takes a
+  // visible beat. Track which one is running so the buttons can show a
+  // spinner and lock, rather than appearing to do nothing.
+  const [backupBusy, setBackupBusy] = useState<null | 'export' | 'import'>(null)
+
+  async function exportJson() {
+    if (backupBusy) return
     // Shared with the overdue-backup alert — stamps the device-local
     // "last backup" marker that drives the nudge. Bundles photos and
     // signatures from the attachment store.
-    void downloadBackup(state).then(() => setLastBackupAt(getLastBackupAt()))
+    setBackupBusy('export')
+    try {
+      await downloadBackup(state)
+      setLastBackupAt(getLastBackupAt())
+    } catch {
+      toast.show('Could not create the backup file.', 'error')
+    } finally {
+      setBackupBusy(null)
+    }
   }
 
   // Optional date range on the CSV export (inclusive local calendar
@@ -346,6 +361,7 @@ export default function Settings() {
     })
     if (!ok) return
 
+    setBackupBusy('import')
     // Safety net: snapshot the current data before it's overwritten, so an
     // accidental or wrong-file import is always recoverable.
     if (current > 0) {
@@ -361,7 +377,10 @@ export default function Settings() {
           confirmLabel: 'Import without a backup',
           danger: true,
         })
-        if (!stillGo) return
+        if (!stillGo) {
+          setBackupBusy(null)
+          return
+        }
       }
     }
 
@@ -393,6 +412,8 @@ export default function Settings() {
       }
     } catch {
       toast.show('Could not apply that file.', 'error')
+    } finally {
+      setBackupBusy(null)
     }
   }
 
@@ -474,14 +495,26 @@ export default function Settings() {
           </Field>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button variant="secondary" onClick={exportJson}>
-            Export JSON
+          <Button
+            variant="secondary"
+            onClick={exportJson}
+            disabled={backupBusy !== null}
+          >
+            {backupBusy === 'export' ? 'Exporting…' : 'Export JSON'}
           </Button>
-          <Button variant="secondary" onClick={exportCsv}>
+          <Button
+            variant="secondary"
+            onClick={exportCsv}
+            disabled={backupBusy !== null}
+          >
             Export log CSV
           </Button>
-          <Button variant="secondary" onClick={() => fileRef.current?.click()}>
-            Import JSON
+          <Button
+            variant="secondary"
+            onClick={() => fileRef.current?.click()}
+            disabled={backupBusy !== null}
+          >
+            {backupBusy === 'import' ? 'Importing…' : 'Import JSON'}
           </Button>
           <input
             ref={fileRef}
