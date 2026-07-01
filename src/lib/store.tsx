@@ -60,6 +60,7 @@ import {
 import {
   loadState,
   normalizeState,
+  secureCorruptedBlob,
   requestPersistentStorage,
   saveState,
   uid,
@@ -271,8 +272,8 @@ interface StoreApi {
   ) => BottlePreset
   removeCustomBottlePreset: (id: string) => void
   toggleFavoriteBottlePreset: (id: string) => void
-  // bulk
-  importState: (s: AppState) => void
+  // bulk. Returns false when the role gate refuses (its own toast shows).
+  importState: (s: AppState) => boolean
 }
 
 const StoreContext = createContext<StoreApi | null>(null)
@@ -283,8 +284,19 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   // initializer is the React-blessed place to do this work; we capture
   // the corruption flag on the side via useState rather than a ref so
   // we never read a ref during render.
-  const [{ state: initialState, status: initialStatus }] = useState(loadState)
+  const [
+    {
+      state: initialState,
+      status: initialStatus,
+      corruptedUnsecured: initialUnsecured,
+    },
+  ] = useState(loadState)
   const [state, setState] = useState<AppState>(initialState)
+  // True while a damaged blob is still sitting at the live storage key
+  // (couldn't be moved aside at load — storage full). Saving over it
+  // would destroy the only copy, so the save effect retries the move
+  // first and holds off persisting until it succeeds.
+  const corruptedAtKeyRef = useRef(!!initialUnsecured)
 
   // One-time: surface a corrupted-load to the user, request persistent
   // storage. Both happen exactly once per app load.
@@ -305,6 +317,25 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   // tech who's mid-form. We don't want to spam them on every keystroke.
   const lastQuotaToastRef = useRef(0)
   useEffect(() => {
+    if (corruptedAtKeyRef.current) {
+      // The damaged (unparseable) blob is still at the live key. Try to
+      // move it aside again — space may have been freed since load — and
+      // never write over it: it's the only copy of the old records.
+      if (secureCorruptedBlob()) {
+        corruptedAtKeyRef.current = false
+      } else {
+        const now = Date.now()
+        if (now - lastQuotaToastRef.current >= 60_000) {
+          lastQuotaToastRef.current = now
+          toast.show(
+            'Changes are only in memory — storage is full and the damaged saved data is being protected. Free up space, then see Settings → Storage health.',
+            'error',
+            12000,
+          )
+        }
+        return
+      }
+    }
     const result = saveState(state)
     if (result.ok) return
     const now = Date.now()
@@ -2395,7 +2426,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const importState = useCallback((nextRaw: AppState) => {
-    if (!ensureRole('supervisor', 'Importing a backup')) return
+    if (!ensureRole('supervisor', 'Importing a backup')) return false
     // Importing replaces the whole dataset (a restore-from-backup). We
     // keep the imported file's own history and prepend an 'import' entry
     // so the join point is visible in the trail. The file runs through
@@ -2424,6 +2455,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         summary: 'Imported data from a backup file',
       }),
     }))
+    return true
   }, [ensureRole])
 
   const api = useMemo<StoreApi>(

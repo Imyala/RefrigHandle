@@ -13,6 +13,7 @@ import { DateInput } from '../components/DateInput'
 import { LocationFields } from '../components/LocationFields'
 import { InstallAppButton } from '../components/InstallAppButton'
 import { DiagnosticsCard } from '../components/Diagnostics'
+import { StorageHealthCard } from '../components/StorageHealth'
 import { QuarterlyReportCard } from '../components/QuarterlyReport'
 import { AuditReportCard } from '../components/AuditReport'
 import { useStore } from '../lib/store'
@@ -1076,6 +1077,10 @@ export default function Settings() {
           device.
         </p>
         <InstallAppButton variant="full" />
+      </Card>
+
+      <Card>
+        <StorageHealthCard />
       </Card>
 
       <Card>
