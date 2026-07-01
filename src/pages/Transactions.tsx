@@ -390,7 +390,7 @@ export default function Transactions() {
                       return (
                         <button
                           onClick={() => setAttachFor(t)}
-                          className="rounded-lg px-2 py-1 text-xs font-medium text-slate-500 hover:bg-slate-100 hover:text-brand-600 dark:hover:bg-slate-800"
+                          className="min-h-11 rounded-lg px-2.5 py-1 text-xs font-medium text-slate-500 hover:bg-slate-100 hover:text-brand-600 dark:hover:bg-slate-800"
                           aria-label="Photos and sign-off for this transaction"
                         >
                           📎 {n > 0 ? n : 'Attach'}
@@ -407,7 +407,7 @@ export default function Transactions() {
                       !(t.correctsId && t.kind === 'adjust') && (
                         <button
                           onClick={() => setCorrecting(t)}
-                          className="rounded-lg px-2 py-1 text-xs font-medium text-slate-500 hover:bg-slate-100 hover:text-brand-600 dark:hover:bg-slate-800"
+                          className="min-h-11 rounded-lg px-2.5 py-1 text-xs font-medium text-slate-500 hover:bg-slate-100 hover:text-brand-600 dark:hover:bg-slate-800"
                           aria-label="Log a correction for this transaction"
                         >
                           Correct
@@ -416,7 +416,7 @@ export default function Transactions() {
                     {mayDelete && (
                       <button
                         onClick={() => setDeleting({ id: t.id, reason: '' })}
-                        className="rounded-lg px-2 py-1 text-xs font-medium text-slate-500 hover:bg-slate-100 hover:text-red-600 dark:hover:bg-slate-800"
+                        className="min-h-11 rounded-lg px-2.5 py-1 text-xs font-medium text-slate-500 hover:bg-slate-100 hover:text-red-600 dark:hover:bg-slate-800"
                         aria-label="Delete transaction"
                       >
                         Delete
@@ -466,6 +466,13 @@ export default function Transactions() {
             setCorrecting(null)
             toast.show(correcting ? 'Correction logged' : `${transactionLabel(data.kind)} logged`)
             if (share) setShareTx(result)
+          } else {
+            // The store refused the row (bottle deleted on another device
+            // between open and save) — say so instead of a silent no-op.
+            toast.show(
+              'Could not log — that bottle no longer exists. Re-pick the bottle and try again.',
+              'error',
+            )
           }
         }}
       />

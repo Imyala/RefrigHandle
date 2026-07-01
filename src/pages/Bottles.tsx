@@ -598,6 +598,13 @@ export default function Bottles() {
             setLogKind(null)
             setSheetBottleId(null)
             if (share) setShareTx(result)
+          } else {
+            // The store refused the row (bottle deleted on another device
+            // between open and save) — say so instead of a silent no-op.
+            toast.show(
+              'Could not log — that bottle no longer exists. Re-pick the bottle and try again.',
+              'error',
+            )
           }
         }}
       />

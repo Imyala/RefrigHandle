@@ -36,10 +36,15 @@ export function LocationFields({
   loc,
   setLoc,
   errors,
+  requireTimezone,
 }: {
   loc: LocationSettings
   setLoc: SetLoc
   errors?: LocationErrors
+  // First-run setup requires an explicit timezone (quarterly figures are
+  // bucketed in it). Settings leaves it optional, where empty genuinely
+  // means "follow this device" — the empty option's label must say which.
+  requireTimezone?: boolean
 }) {
   const timezoneOptions = useMemo<PickerOption[]>(
     () =>
@@ -87,7 +92,9 @@ export function LocationFields({
           onChange={(v) =>
             setLoc((l) => ({ ...l, country: 'Australia', timezone: v }))
           }
-          emptyLabel="— follow this device —"
+          emptyLabel={
+            requireTimezone ? '— pick a timezone —' : '— follow this device —'
+          }
           options={timezoneOptions}
         />
       </Field>

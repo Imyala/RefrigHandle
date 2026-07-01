@@ -25,6 +25,7 @@ import {
 } from '../lib/types'
 import { computeLog } from '../lib/logCalc'
 import { useToast } from '../lib/toast'
+import { useConfirm } from '../lib/confirm'
 import { displayToKg, formatWeight, kgToDisplay } from '../lib/units'
 import { SiteForm, UnitForm } from '../pages/Sites'
 import { BottleQuickAdd } from './QuickAdd'
@@ -129,6 +130,7 @@ export function LogForm({
   const clock = state.clock
   const tzLabel = tzAbbrev(new Date().toISOString(), tz)
   const toast = useToast()
+  const confirm = useConfirm()
 
   const allRefrigerantTypes = useMemo(
     () =>
@@ -213,6 +215,37 @@ export function LogForm({
   const [addingJob, setAddingJob] = useState(false)
   const [newJobRef, setNewJobRef] = useState('')
 
+  // Signature of the fields where the tech has invested typing or answers.
+  // Compared against a baseline captured at open to know whether closing
+  // the sheet would throw work away (see requestClose).
+  const typedSig = (v: {
+    amount: string
+    bottleAmount: string
+    newGross: string
+    equipment: string
+    reason: string
+    leakTest: boolean | null
+    notes: string
+    correctionReason: string
+    returnDestination: string
+    docketNumber: string
+    photos: number
+  }) => JSON.stringify(v)
+  const EMPTY_SIG = typedSig({
+    amount: '',
+    bottleAmount: '',
+    newGross: '',
+    equipment: '',
+    reason: '',
+    leakTest: null,
+    notes: '',
+    correctionReason: '',
+    returnDestination: '',
+    docketNumber: '',
+    photos: 0,
+  })
+  const [baselineSig, setBaselineSig] = useState(EMPTY_SIG)
+
   const openJobs = useMemo(
     () =>
       state.jobs
@@ -282,18 +315,18 @@ export function LogForm({
     setSourceBottleId('')
     setCorrectionReason('')
     const round3 = (n: number) => Math.round(n * 1000) / 1000
-    setAmount(
-      restating ? String(round3(kgToDisplay(correcting.amount, unit))) : '',
-    )
+    const initAmount = restating
+      ? String(round3(kgToDisplay(correcting.amount, unit)))
+      : ''
+    setAmount(initAmount)
     const restateBottleAmount =
       restating &&
       correcting.bottleAmount != null &&
       correcting.bottleAmount !== correcting.amount
-    setBottleAmount(
-      restateBottleAmount
-        ? String(round3(kgToDisplay(correcting.bottleAmount!, unit)))
-        : '',
-    )
+    const initBottleAmount = restateBottleAmount
+      ? String(round3(kgToDisplay(correcting.bottleAmount!, unit)))
+      : ''
+    setBottleAmount(initBottleAmount)
     setShowLoss(restateBottleAmount)
     setEntryMode('amount')
     setNewGross('')
@@ -310,18 +343,45 @@ export function LogForm({
     setAddingTech(false)
     setNewTechName('')
     setNewTechRhl('')
-    setEquipment(restating ? (correcting.equipment ?? '') : '')
-    setReason(restating ? (correcting.reason ?? '') : '')
-    setLeakTest(restating ? (correcting.leakTestPerformed ?? null) : null)
+    const initEquipment = restating ? (correcting.equipment ?? '') : ''
+    const initReason = restating ? (correcting.reason ?? '') : ''
+    const initLeakTest = restating
+      ? (correcting.leakTestPerformed ?? null)
+      : null
+    setEquipment(initEquipment)
+    setReason(initReason)
+    setLeakTest(initLeakTest)
     setReturnDestination('')
     setDocketNumber('')
     setNotes('')
     setPendingPhotos([])
-    // Keep a correction on its original's job; otherwise default to the
-    // most recent open job (the visit you're working) if there is one.
-    setJobId(correcting ? (correcting.jobId ?? '') : (openJobs[0]?.id ?? ''))
+    // Keep a correction on its original's job; otherwise default to an
+    // open job dated TODAY (the visit you're working). A job forgotten
+    // open from last week must not silently swallow unrelated movements
+    // into its service report.
+    const today = localDateTimeInput(new Date(), tz).slice(0, 10)
+    const todayJob = openJobs.find(
+      (j) => localDateTimeInput(new Date(j.date), tz).slice(0, 10) === today,
+    )
+    setJobId(correcting ? (correcting.jobId ?? '') : (todayJob?.id ?? ''))
     setAddingJob(false)
     setNewJobRef('')
+    // Baseline for the discard guard — the prefill itself isn't "work".
+    setBaselineSig(
+      typedSig({
+        amount: initAmount,
+        bottleAmount: initBottleAmount,
+        newGross: '',
+        equipment: initEquipment,
+        reason: initReason,
+        leakTest: initLeakTest,
+        notes: '',
+        correctionReason: '',
+        returnDestination: '',
+        docketNumber: '',
+        photos: 0,
+      }),
+    )
   } else if (!open && lastOpen) {
     setLastOpen(false)
   }
@@ -349,6 +409,28 @@ export function LogForm({
   const scaleMode =
     entryMode === 'scale' && scaleKinds && !!bottle && !isBottleToBottleRecover
   const scaleReadingKg = displayToKg(parseFloat(newGross) || 0, unit)
+
+  // The scale-derived amount depends on (kind, bottle, reading). If the
+  // kind or bottle changes after a reading was typed, the amount on screen
+  // is stale — a charge's derived 5 kg OUT would save as an adjust's
+  // +5 kg IN. Re-derive it from the same reading against the new context,
+  // or clear the pair when scale entry no longer applies.
+  const [scaleCtx, setScaleCtx] = useState({ kind, bottleId })
+  if (scaleCtx.kind !== kind || scaleCtx.bottleId !== bottleId) {
+    setScaleCtx({ kind, bottleId })
+    if (entryMode === 'scale' && newGross) {
+      const b = bottles.find((x) => x.id === bottleId)
+      if (scaleKinds && b) {
+        const g = displayToKg(parseFloat(newGross) || 0, unit)
+        const d = scaleDeltaKg(kind, b.grossWeight, g)
+        if (kind === 'adjust') setAmount(kgToDisplay(d, unit).toFixed(2))
+        else setAmount(d > 0 ? kgToDisplay(d, unit).toFixed(2) : '')
+      } else {
+        setNewGross('')
+        setAmount('')
+      }
+    }
+  }
 
   const showAmount = kind !== 'transfer' && kind !== 'return'
   const showSite = kind !== 'adjust' && !isBottleToBottleRecover
@@ -472,8 +554,12 @@ export function LogForm({
       tz,
       technician: stampedTechName,
       technicianLicence: stampedRhl,
-      equipment: equipment.trim() || undefined,
-      reason: reason || undefined,
+      // Only stamp fields their sections actually showed for this kind —
+      // a reason picked for a charge must not ride along onto a transfer
+      // or decant after the tech switches what happened.
+      equipment:
+        showCompliance && !unitId ? equipment.trim() || undefined : undefined,
+      reason: showCompliance && reason ? reason : undefined,
       leakTestPerformed: showCompliance && leakTest !== null ? leakTest : undefined,
       returnDestination:
         kind === 'return' && returnDestination.trim()
@@ -507,6 +593,37 @@ export function LogForm({
     }, share)
   }
 
+  // A stray backdrop tap must never silently throw away a half-filled
+  // entry — the top of a phone screen is one big discard zone otherwise.
+  // Closing is free while nothing's been typed; once there's work in the
+  // form it takes an explicit confirm.
+  const formDirty =
+    typedSig({
+      amount,
+      bottleAmount,
+      newGross,
+      equipment,
+      reason,
+      leakTest,
+      notes,
+      correctionReason,
+      returnDestination,
+      docketNumber,
+      photos: pendingPhotos.length,
+    }) !== baselineSig
+  async function requestClose() {
+    if (formDirty) {
+      const ok = await confirm({
+        title: 'Discard this entry?',
+        message: 'What you’ve filled in on this log entry will be lost.',
+        confirmLabel: 'Discard',
+        danger: true,
+      })
+      if (!ok) return
+    }
+    onClose()
+  }
+
   function commitNewJob() {
     const ref = newJobRef.trim()
     if (!ref) return
@@ -538,7 +655,7 @@ export function LogForm({
     <Modal
       open={open}
       title={correcting ? 'Log correction' : 'Log transaction'}
-      onClose={onClose}
+      onClose={() => void requestClose()}
     >
       <form
         onSubmit={(e) => {
@@ -739,12 +856,26 @@ export function LogForm({
                     if (showCompliance && !reason && lastJob.reason) {
                       setReason(lastJob.reason)
                     }
+                    // Carry the leak answer too (still an explicit tap to
+                    // apply, and the Yes/No stays on screen to override) —
+                    // a string of top-ups shouldn't re-ask what the tech
+                    // just answered.
+                    if (
+                      showCompliance &&
+                      leakTest === null &&
+                      lastJob.leakTestPerformed != null
+                    ) {
+                      setLeakTest(lastJob.leakTestPerformed)
+                    }
                   }}
-                  className="text-left text-xs font-medium text-brand-600 hover:underline"
+                  className="min-h-11 text-left text-xs font-medium text-brand-600 hover:underline"
                 >
                   Same as last job: {ls.name}
                   {lu ? ` · ${lu.name}` : ''}
                   {lastJob.reason ? ` · ${REASON_LABELS[lastJob.reason]}` : ''}
+                  {showCompliance && lastJob.leakTestPerformed != null
+                    ? ` · leak test ${lastJob.leakTestPerformed ? 'Yes' : 'No'}`
+                    : ''}
                 </button>
               )
             })()}
@@ -861,12 +992,13 @@ export function LogForm({
                 stocktake delta where a preset makes no sense. */}
             {!scaleMode && kind !== 'adjust' && (
               <div className="mt-1.5 flex flex-wrap gap-1.5">
+                {/* min-h-11 ≈ 44px — these are THE gloved-thumb targets. */}
                 {(unit === 'lb' ? [1, 2, 5, 10] : [0.5, 1, 2, 5]).map((n) => (
                   <button
                     key={n}
                     type="button"
                     onClick={() => setAmount(String(n))}
-                    className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700 transition hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+                    className="min-h-11 rounded-full bg-slate-100 px-4 text-sm font-medium text-slate-700 transition hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
                   >
                     {n} {unit}
                   </button>
@@ -880,7 +1012,7 @@ export function LogForm({
           <button
             type="button"
             onClick={() => setShowLoss((v) => !v)}
-            className="text-left text-xs font-medium text-brand-600 hover:underline"
+            className="min-h-11 text-left text-xs font-medium text-brand-600 hover:underline"
           >
             {showLoss
               ? 'Hide hose / decant loss field'
@@ -1179,6 +1311,18 @@ export function LogForm({
             emptyLabel="— none —"
             placeholder="— none —"
             options={[
+              // A correction stays on its original's job even if that job
+              // has since been closed — surface it (marked) instead of
+              // rendering the placeholder while silently keeping the link.
+              ...(jobId && !openJobs.some((j) => j.id === jobId)
+                ? state.jobs
+                    .filter((j) => j.id === jobId)
+                    .map((j) => ({
+                      value: j.id,
+                      label: `${j.reference} (closed)`,
+                      hint: j.siteName || undefined,
+                    }))
+                : []),
               ...openJobs.map((j) => ({
                 value: j.id,
                 label: j.reference,

@@ -25,7 +25,7 @@ export function ShareTxButton({
 
   const triggerCls =
     className ??
-    'rounded-lg px-2 py-1 text-xs font-medium text-slate-500 hover:bg-slate-100 hover:text-brand-600 dark:hover:bg-slate-800'
+    'min-h-11 rounded-lg px-2.5 py-1 text-xs font-medium text-slate-500 hover:bg-slate-100 hover:text-brand-600 dark:hover:bg-slate-800'
 
   return (
     <>
