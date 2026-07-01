@@ -42,6 +42,7 @@ import {
 } from './types'
 import {
   BOTTLE_FIELDS,
+  JOB_FIELDS,
   SITE_FIELDS,
   TECH_FIELDS,
   UNIT_FIELDS,
@@ -691,28 +692,20 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     if (!ensureRole('supervisor', 'Deleting a cylinder')) return
     setState((s) => {
       const before = s.bottles.find((b) => b.id === id)
-      const activeTech = s.technicians.find(
-        (x) => x.id === s.activeTechnicianId,
-      )
       const now = new Date().toISOString()
-      // The bottle row is removed, but its refrigerant log entries are
-      // PRESERVED for the audit trail — soft-deleted rather than purged,
-      // so the trail isn't broken when a cylinder is retired. We stamp
-      // the bottle number into deletedReason so the rows still identify
-      // their cylinder in the export once the bottle record is gone.
-      // Rows already soft-deleted keep their original reason untouched.
+      // The bottle row is removed, but its refrigerant log entries stay
+      // LIVE — they are historical facts an ARC audit must be able to
+      // reproduce, so quarterly figures, leak stats and logbooks keep
+      // counting them exactly as when the cylinder was in service.
+      // (Rows carry the cylinder's number/tare/refrigerant frozen at the
+      // time of work, so they read standalone without the bottle record.
+      // Cascading a soft-delete here used to silently rewrite already-
+      // reported quarterly figures — never again.)
       const transactions = s.transactions.map((t) =>
-        t.bottleId === id && !t.deletedAt
-          ? {
-              ...t,
-              deletedAt: now,
-              deletedBy: activeTech?.name || s.technician || undefined,
-              deletedByLicence:
-                activeTech?.arcLicenceNumber || s.arcLicenceNumber || undefined,
-              deletedReason: before
-                ? `Bottle ${before.bottleNumber} deleted`
-                : 'Bottle deleted',
-            }
+        t.bottleId === id && !t.deletedAt && !t.bottleNumber && before
+          ? // Backfill the frozen number onto pre-freeze rows while the
+            // bottle record is still here to read it from.
+            { ...t, bottleNumber: before.bottleNumber }
           : t,
       )
       return {
@@ -742,7 +735,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
               entity: 'bottle',
               entityId: id,
               target: before.bottleNumber,
-              summary: `Removed bottle ${before.bottleNumber} — recoverable from the recycle bin; its log entries are kept (soft-deleted) for the audit trail`,
+              summary: `Removed bottle ${before.bottleNumber} — recoverable from the recycle bin; its log entries stay on the record and keep counting in reports`,
             })
           : s.auditLog,
       }
@@ -1064,10 +1057,32 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const updateJob: StoreApi['updateJob'] = useCallback((id, patch) => {
     setState((s) => {
       const before = s.jobs.find((j) => j.id === id)
+      if (!before) return s
+      // Re-freeze the site/client snapshot when the site link changes, so
+      // the job (and its printed service report) reads standalone against
+      // the site it now belongs to — same freezing addJob does.
+      let effective = patch
+      if ('siteId' in patch && patch.siteId !== before.siteId) {
+        const site = patch.siteId
+          ? s.sites.find((x) => x.id === patch.siteId)
+          : undefined
+        effective = { ...patch, siteName: site?.name, clientName: site?.client }
+      }
+      const siteName = (v: unknown) =>
+        v ? (s.sites.find((x) => x.id === v)?.name ?? String(v)) : '—'
+      const labelled = diffFields(before, effective, JOB_FIELDS, {
+        siteId: siteName,
+      })
+      // Catch-all so no field change is ever silently unlogged; skip the
+      // frozen snapshot fields the site re-link derives.
+      const all = rawChanges(before, effective, ['siteName', 'clientName'])
+      // Nothing actually changed (form saved untouched) — no empty edit.
+      if (all.length === 0 && labelled.length === 0) return s
       const jobs = s.jobs.map((j) =>
-        j.id === id ? { ...j, ...patch, updatedAt: new Date().toISOString() } : j,
+        j.id === id
+          ? { ...j, ...effective, updatedAt: new Date().toISOString() }
+          : j,
       )
-      if (!before) return { ...s, jobs }
       return {
         ...s,
         jobs,
@@ -1075,8 +1090,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           action: 'update',
           entity: 'job',
           entityId: id,
-          target: patch.reference ?? before.reference,
+          target: effective.reference ?? before.reference,
           summary: `Edited job ${before.reference}`,
+          changes: labelled.length ? labelled : all,
         }),
       }
     })
@@ -1203,8 +1219,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         weightAfter: after,
         sourceWeightBefore: sourceBefore,
         sourceWeightAfter: sourceAfter,
-        // Freeze the cylinder's tare + refrigerant so quarterly / CSV
-        // figures survive the bottle later being deleted (see Transaction).
+        // Freeze the cylinder's number, tare + refrigerant so quarterly /
+        // CSV figures and row display survive the bottle later being
+        // deleted (see Transaction).
+        bottleNumber: t.bottleNumber ?? bottle.bottleNumber,
+        sourceBottleNumber: t.sourceBottleNumber ?? sourceBottle?.bottleNumber,
         bottleTareWeight: t.bottleTareWeight ?? bottle.tareWeight,
         bottleRefrigerantType:
           t.bottleRefrigerantType ?? bottle.refrigerantType,
@@ -1285,6 +1304,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         const target = s.transactions.find((t) => t.id === id)
         const bottleNo =
           s.bottles.find((b) => b.id === target?.bottleId)?.bottleNumber ??
+          target?.bottleNumber ??
           '(deleted bottle)'
         return {
           ...s,
@@ -1331,6 +1351,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         if (!target || !target.deletedAt) return s
         const bottleNo =
           s.bottles.find((b) => b.id === target.bottleId)?.bottleNumber ??
+          target.bottleNumber ??
           '(deleted bottle)'
         return {
           ...s,
@@ -1463,7 +1484,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           target = s.jobs.find((j) => j.id === entityId)?.reference ?? target
         } else if (entityType === 'transaction') {
           const t = s.transactions.find((x) => x.id === entityId)
-          const bottleNo = t && s.bottles.find((b) => b.id === t.bottleId)?.bottleNumber
+          const bottleNo =
+            t &&
+            (s.bottles.find((b) => b.id === t.bottleId)?.bottleNumber ??
+              t.bottleNumber)
           target = t
             ? `${transactionLabel(t.kind)}${bottleNo ? ` · ${bottleNo}` : ''}`
             : target

@@ -16,6 +16,7 @@ import {
   REASON_LABELS,
   canDeleteRecords,
   siteLabel,
+  supersededIds,
   transactionLabel,
 } from '../lib/types'
 import { profileFor } from '../lib/compliance'
@@ -69,7 +70,7 @@ export default function Jobs() {
         A job groups one visit's charges, recoveries, photos and customer
         sign-off into a single record — and a service report you can hand the
         customer. Attach a movement to a job when you log it (the{' '}
-        <Link to="/" className="font-medium text-brand-600 hover:underline">
+        <Link to="/bottles" className="font-medium text-brand-600 hover:underline">
           bottle quick-log
         </Link>{' '}
         and Refrigerant log both have a Job field).
@@ -105,10 +106,14 @@ export default function Jobs() {
   )
 }
 
-// Live movements logged against a job (newest first), excluding soft-deleted.
+// Live movements logged against a job (newest first), excluding soft-deleted
+// rows and originals superseded by a re-statement correction — the linked
+// correction carries the true amount and appears in their place, matching
+// every other aggregate (logbook, site totals, quarterly figures).
 function jobTransactions(job: Job, all: Transaction[]): Transaction[] {
+  const superseded = supersededIds(all)
   return all
-    .filter((t) => t.jobId === job.id && !t.deletedAt)
+    .filter((t) => t.jobId === job.id && !t.deletedAt && !superseded.has(t.id))
     .sort((a, b) => (a.date < b.date ? 1 : -1))
 }
 
@@ -119,7 +124,7 @@ function JobCard({ job, onOpen }: { job: Job; onOpen: () => void }) {
     .filter((t) => t.kind === 'charge')
     .reduce((s, t) => s + t.amount, 0)
   const recovered = txs
-    .filter((t) => t.kind === 'recover')
+    .filter((t) => t.kind === 'recover' && !t.sourceBottleId)
     .reduce((s, t) => s + t.amount, 0)
   return (
     <Card className="!p-0">
@@ -484,7 +489,9 @@ function ServiceReport({ job, onClose }: { job: Job; onClose: () => void }) {
                           localDateTimeInput(new Date(t.date), tz).slice(0, 10),
                         )}
                       </td>
-                      <td className="py-1 pr-2">{bottle?.bottleNumber ?? '—'}</td>
+                      <td className="py-1 pr-2">
+                        {bottle?.bottleNumber ?? t.bottleNumber ?? '—'}
+                      </td>
                       <td className="py-1 pr-2">
                         {t.bottleRefrigerantType ?? bottle?.refrigerantType ?? '—'}
                       </td>

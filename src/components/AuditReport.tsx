@@ -412,7 +412,7 @@ function AuditReportModal({ onClose }: { onClose: () => void }) {
                         {formatPlainDate(dayOf(t))}
                       </td>
                       <td className="py-1 pr-1.5">
-                        {bottle?.bottleNumber ?? '—'}
+                        {bottle?.bottleNumber ?? t.bottleNumber ?? '—'}
                       </td>
                       <td className="py-1 pr-1.5">
                         {t.bottleRefrigerantType ?? bottle?.refrigerantType ?? '—'}

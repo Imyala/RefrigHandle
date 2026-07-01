@@ -305,6 +305,14 @@ export interface Transaction {
   // back to the live bottle lookup.
   bottleTareWeight?: number
   bottleRefrigerantType?: string
+  // Cylinder number(s) frozen at the time of work, so the row still
+  // identifies its cylinder(s) in every view and report after the bottle
+  // record is deleted. A deleted bottle's movements stay LIVE — they are
+  // historical facts that quarterly figures and logbooks must keep
+  // counting — so they can't rely on the live bottle lookup. Optional:
+  // older rows fall back to that lookup.
+  bottleNumber?: string
+  sourceBottleNumber?: string
   date: string // ISO date
   technician?: string
   // ARC Refrigerant Handling Licence number stamped at the time of

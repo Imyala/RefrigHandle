@@ -126,8 +126,11 @@ export function TransactionDetails({
         </div>
       )}
       <div className="mt-1 text-sm text-slate-700 dark:text-slate-300">
-        {bottle?.bottleNumber ?? '(deleted)'}
-        {sourceBottle && ` ← ${sourceBottle.bottleNumber}`}
+        {/* Fall back to the number frozen on the row when the bottle
+            record was deleted (its movements stay on the record). */}
+        {bottle?.bottleNumber ?? t.bottleNumber ?? '(deleted)'}
+        {(sourceBottle || t.sourceBottleNumber) &&
+          ` ← ${sourceBottle?.bottleNumber ?? t.sourceBottleNumber}`}
         {/* Fall back to the name frozen on the row when the
             site record was deleted. */}
         {!move && (site?.name ?? t.siteName)

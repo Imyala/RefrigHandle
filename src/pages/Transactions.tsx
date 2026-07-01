@@ -114,7 +114,7 @@ export default function Transactions() {
             ? state.units.find((u) => u.id === t.unitId)
             : undefined
           return [
-            bottle?.bottleNumber,
+            bottle?.bottleNumber ?? t.bottleNumber,
             txUnit?.name,
             t.unitName,
             t.equipment,

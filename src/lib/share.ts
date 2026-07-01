@@ -132,8 +132,12 @@ export function transactionShareText(
   const amount = t.amount > 0 ? formatWeight(t.amount, state.unit) : ''
   const subject = [
     transactionLabel(t.kind),
-    [amount, bottle?.refrigerantType].filter(Boolean).join(' '),
-    (site ? siteLabel(site) : t.siteName) || bottle?.bottleNumber,
+    [amount, t.bottleRefrigerantType ?? bottle?.refrigerantType]
+      .filter(Boolean)
+      .join(' '),
+    (site ? siteLabel(site) : t.siteName) ||
+      bottle?.bottleNumber ||
+      t.bottleNumber,
   ]
     .filter(Boolean)
     .join(' · ')

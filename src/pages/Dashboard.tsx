@@ -247,7 +247,8 @@ function RecentActivityItem({ t }: { t: Transaction }) {
             {t.amount > 0 && ` · ${formatWeight(t.amount, unit)}`}
           </div>
           <div className="truncate text-sm text-slate-500">
-            {bottle?.bottleNumber ?? '?'} · {bottle?.refrigerantType ?? '?'}
+            {bottle?.bottleNumber ?? t.bottleNumber ?? '?'} ·{' '}
+            {t.bottleRefrigerantType ?? bottle?.refrigerantType ?? '?'}
             {move
               ? ` · ${move.from} → ${move.to}`
               : (site?.name ?? t.siteName)

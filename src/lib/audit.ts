@@ -9,6 +9,7 @@ import type {
   AuditChange,
   AuditEntity,
   Bottle,
+  Job,
   Site,
   Technician,
   Unit,
@@ -105,6 +106,14 @@ export const UNIT_FIELDS: FieldLabels<Unit> = {
   installDate: 'Install date',
   status: 'Status',
   notes: 'Notes',
+}
+
+export const JOB_FIELDS: FieldLabels<Job> = {
+  reference: 'Reference',
+  siteId: 'Site',
+  date: 'Date',
+  notes: 'Notes',
+  status: 'Status',
 }
 
 export const TECH_FIELDS: FieldLabels<Technician> = {
