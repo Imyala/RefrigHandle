@@ -427,11 +427,112 @@ describe('role enforcement at the store layer', () => {
     act(() => api.current.deleteTransaction(txId, 'nope'))
     expect(api.current.state.transactions.find((t) => t.id === txId)!.deletedAt).toBeFalsy()
   })
+
+  it('signing out does NOT raise privileges once a crew exists', () => {
+    const api = setup()
+    const b = addBottle(api.current, { bottleNumber: 'SIGNOUT1' })
+    addActiveTech(api, 'apprentice')
+    // "Sign out" of the profile — the old escape hatch.
+    act(() => api.current.setActiveTechnicianId(undefined))
+    act(() => api.current.deleteBottle(b.id))
+    // Still blocked: signed-out is the least privileged state, not the most.
+    expect(api.current.state.bottles.some((x) => x.id === b.id)).toBe(true)
+    expect(api.current.state.recycleBin.length).toBe(0)
+  })
+
+  it('an apprentice cannot promote themselves to owner', () => {
+    const api = setup()
+    addActiveTech(api, 'apprentice')
+    const me = api.current.state.technicians[0]
+    act(() => api.current.updateTechnician(me.id, { role: 'owner' }))
+    expect(
+      api.current.state.technicians.find((t) => t.id === me.id)!.role,
+    ).toBe('apprentice')
+  })
+
+  it('a technician cannot re-role a peer, but an owner can', () => {
+    const api = setup()
+    addActiveTech(api, 'owner')
+    let peerId = ''
+    act(() => {
+      peerId = api.current.addTechnician({
+        name: 'Peer',
+        firstName: 'Peer',
+        lastName: 'Tech',
+        arcLicenceNumber: 'L-2',
+        role: 'technician',
+      }).id
+    })
+    // Owner CAN re-role.
+    act(() => api.current.updateTechnician(peerId, { role: 'lead_tech' }))
+    expect(
+      api.current.state.technicians.find((t) => t.id === peerId)!.role,
+    ).toBe('lead_tech')
+    // A technician acting on a lead tech (above their tier) is blocked.
+    addActiveTech(api, 'technician')
+    act(() => api.current.updateTechnician(peerId, { role: 'apprentice' }))
+    expect(
+      api.current.state.technicians.find((t) => t.id === peerId)!.role,
+    ).toBe('lead_tech')
+  })
+
+  it('an apprentice cannot log a correction (fresh movements stay open)', () => {
+    const api = setup()
+    const b = addBottle(api.current)
+    act(() => {
+      api.current.addTransaction({ bottleId: b.id, kind: 'charge', amount: 5, date: DATE })
+    })
+    const originalId = txIdFor(api.current, b.id)
+    addActiveTech(api, 'apprentice')
+    // Fresh work still logs fine…
+    act(() => {
+      api.current.addTransaction({ bottleId: b.id, kind: 'charge', amount: 1, date: DATE })
+    })
+    expect(
+      api.current.state.transactions.filter(
+        (t) => t.bottleId === b.id && t.kind === 'charge',
+      ).length,
+    ).toBe(2)
+    // …but a correction is refused.
+    act(() => {
+      api.current.addTransaction({
+        bottleId: b.id,
+        kind: 'charge',
+        amount: 3,
+        date: DATE,
+        correctsId: originalId,
+        correctionReason: 'was wrong',
+      })
+    })
+    expect(
+      api.current.state.transactions.some((t) => t.correctsId === originalId),
+    ).toBe(false)
+  })
+
+  it('an apprentice cannot delete a photo or signature attachment', async () => {
+    const api = setup()
+    const b = addBottle(api.current)
+    addActiveTech(api, 'apprentice')
+    let result = true
+    await act(async () => {
+      result = await api.current.removeAttachment(
+        'any-id',
+        'bottle',
+        b.id,
+        'signature',
+        'Jane Smith',
+      )
+    })
+    // Denied at the gate — resolves false before the blob is touched.
+    expect(result).toBe(false)
+  })
 })
 
 describe('audit logging gaps closed', () => {
   it('changing a technician role is logged', () => {
     const api = setup()
+    // The role change must come from someone allowed to make it.
+    addActiveTech(api, 'owner')
     let id = ''
     act(() => {
       const t = api.current.addTechnician({ name: 'Pat', firstName: 'Pat', lastName: 'Lee', arcLicenceNumber: 'L-9', role: 'apprentice' })

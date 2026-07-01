@@ -34,6 +34,9 @@ import {
   composeName,
   roleAtLeast,
   roleInfo,
+  canAssignRole,
+  canManageTech,
+  isTechnicianActive,
   expiryStatus,
   DEFAULT_TECHNICIAN_ROLE,
   TECHNICIAN_PURGE_DAYS,
@@ -49,7 +52,11 @@ import {
   diffFields,
   rawChanges,
 } from './audit'
-import type { AttachmentEntity, AttachmentKind } from './attachments'
+import {
+  deleteAttachment,
+  type AttachmentEntity,
+  type AttachmentKind,
+} from './attachments'
 import {
   loadState,
   normalizeState,
@@ -175,6 +182,19 @@ interface StoreApi {
     kind: AttachmentKind,
     descriptor?: string,
   ) => void
+  // Delete a photo / signature blob AND write the change-log entry, behind
+  // the supervisor gate (canDeleteRecords). Attachments are the one record
+  // class that can't go through the recycle bin (the blob is gone), so the
+  // gate + the logged removal are the whole protection — a signature is
+  // customer-facing legal evidence and must not be an apprentice's tap
+  // away from destruction. Resolves false when the gate denies.
+  removeAttachment: (
+    attachmentId: string,
+    entityType: AttachmentEntity,
+    entityId: string,
+    kind: AttachmentKind,
+    descriptor?: string,
+  ) => Promise<boolean>
   // technician profiles
   addTechnician: (t: Omit<Technician, 'id' | 'createdAt'>) => Technician
   updateTechnician: (id: string, patch: Partial<Technician>) => void
@@ -513,18 +533,28 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   // Role enforcement at the mutation layer — defence in depth behind the
   // UI's button-hiding. Returns true (allowed) when the active profile
-  // sits at or above `min`. When there is NO active profile (a solo /
-  // first-run / demo device with no per-tech identity) there is no role
-  // boundary to enforce, so the action is allowed — matching how the app
-  // behaves before a crew is set up. A denied action is a no-op and tells
-  // the user which tier it needs. Real, unspoofable enforcement still
-  // needs server-side per-tech sign-in; this stops accidental misuse and
-  // honours the permissions the UI advertises.
+  // sits at or above `min`. When the device has NO technician profiles at
+  // all (a solo / first-run device before a crew is set up) there is no
+  // role boundary to enforce, so the action is allowed. Once profiles
+  // exist, being signed OUT is the LEAST privileged state, not the most —
+  // otherwise "sign out" would be a one-tap escape from every gate on a
+  // shared device. A denied action is a no-op and tells the user which
+  // tier it needs. Real, unspoofable enforcement still needs server-side
+  // per-tech sign-in; this stops accidental misuse and honours the
+  // permissions the UI advertises.
   const ensureRole = useCallback(
     (min: TechnicianRole, action: string): boolean => {
       const s = stateRef.current
+      if (s.technicians.length === 0) return true
       const tech = s.technicians.find((t) => t.id === s.activeTechnicianId)
-      if (!tech) return true
+      if (!tech) {
+        toast.show(
+          `${action} needs ${roleInfo(min).label} access or higher — pick your profile first (no one is signed in).`,
+          'error',
+          6000,
+        )
+        return false
+      }
       if (roleAtLeast(tech.role, min)) return true
       toast.show(
         `${action} needs ${roleInfo(min).label} access or higher — you're signed in as ${roleInfo(tech.role).label}.`,
@@ -954,6 +984,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const decommissionUnit: StoreApi['decommissionUnit'] = useCallback(
     (id, reason) => {
+      // Taking equipment off the leak-tracking radar is a senior call.
+      if (!ensureRole('lead_tech', 'Decommissioning a unit')) return
       setState((s) => {
         const before = s.units.find((u) => u.id === id)
         const units = s.units.map((u) =>
@@ -983,7 +1015,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         }
       })
     },
-    [],
+    [ensureRole],
   )
 
   const reactivateUnit: StoreApi['reactivateUnit'] = useCallback((id) => {
@@ -1158,6 +1190,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, [ensureRole])
 
   const addTransaction: StoreApi['addTransaction'] = useCallback((t) => {
+    // Fresh movements are open to every tier — logging work is the job.
+    // A correction re-states the record, so it carries the same gate the
+    // UI advertises (canCorrectRecords: lead tech and above).
+    if (t.correctsId && !ensureRole('lead_tech', 'Correcting a log entry')) {
+      return null
+    }
     let result: Transaction | null = null
     setState((s) => {
       const bottle = s.bottles.find((b) => b.id === t.bottleId)
@@ -1291,7 +1329,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       }
     })
     return result
-  }, [])
+  }, [ensureRole])
 
   const deleteTransaction: StoreApi['deleteTransaction'] = useCallback(
     (id, reason) => {
@@ -1511,6 +1549,18 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     [],
   )
 
+  const removeAttachment: StoreApi['removeAttachment'] = useCallback(
+    async (attachmentId, entityType, entityId, kind, descriptor) => {
+      const noun = kind === 'signature' ? 'a customer signature' : 'a photo'
+      if (!ensureRole('supervisor', `Deleting ${noun}`)) return false
+      await deleteAttachment(attachmentId)
+      // Record the removal only after the blob is actually gone.
+      logAttachmentRemoved(entityType, entityId, kind, descriptor)
+      return true
+    },
+    [ensureRole, logAttachmentRemoved],
+  )
+
   const addTechnician: StoreApi['addTechnician'] = useCallback((t) => {
     const tech: Technician = {
       ...t,
@@ -1547,6 +1597,42 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const updateTechnician: StoreApi['updateTechnician'] = useCallback(
     (id, patch) => {
+      // Data-layer gate mirroring the UI's rules (canManageTech /
+      // canAssignRole): you may edit yourself, but a role change — yours
+      // or anyone's — needs the right to assign that role, and editing
+      // someone else needs manage rights over their tier. Without this,
+      // one updateTechnician(myId, { role: 'owner' }) from any caller
+      // would hand out full access.
+      {
+        const s = stateRef.current
+        const target = s.technicians.find((t) => t.id === id)
+        if (target && s.technicians.length > 0) {
+          const actor = s.technicians.find(
+            (t) => t.id === s.activeTechnicianId,
+          )
+          const self = !!actor && actor.id === id
+          const roleChanging =
+            patch.role !== undefined && patch.role !== target.role
+          const ownerExists = s.technicians.some(
+            (t) => t.role === 'owner' && isTechnicianActive(t),
+          )
+          const roleOk =
+            !roleChanging || canAssignRole(actor?.role, patch.role!, ownerExists)
+          const allowed = self
+            ? roleOk
+            : canManageTech(actor?.role, target.role) && roleOk
+          if (!allowed) {
+            toast.show(
+              actor
+                ? `Editing ${self ? 'your role' : `${target.name}'s account`} needs a higher access tier than ${roleInfo(actor.role).label}.`
+                : `Editing ${target.name}'s account needs a signed-in profile with manager access.`,
+              'error',
+              6000,
+            )
+            return
+          }
+        }
+      }
       setState((s) => {
         const before = s.technicians.find((t) => t.id === id)
         const technicians = s.technicians.map((t) =>
@@ -1601,7 +1687,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         }
       })
     },
-    [],
+    [toast],
   )
 
   const deleteTechnician: StoreApi['deleteTechnician'] = useCallback((id) => {
@@ -2363,6 +2449,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       restoreTransaction,
       restoreFromRecycleBin,
       logAttachmentRemoved,
+      removeAttachment,
       addTechnician,
       updateTechnician,
       deactivateTechnician,
@@ -2418,6 +2505,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       restoreTransaction,
       restoreFromRecycleBin,
       logAttachmentRemoved,
+      removeAttachment,
       addTechnician,
       updateTechnician,
       deactivateTechnician,

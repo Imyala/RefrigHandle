@@ -4,13 +4,13 @@ import { useToast } from '../lib/toast'
 import { useConfirm } from '../lib/confirm'
 import {
   addSignature,
-  deleteAttachment,
   listAttachments,
   type Attachment,
   type AttachmentEntity,
 } from '../lib/attachments'
 import { formatDateTime } from '../lib/datetime'
 import { useStore } from '../lib/store'
+import { canDeleteRecords } from '../lib/types'
 
 // On-device sign-off. The customer (or site contact) signs the job on
 // the phone right after the work; the signature is stored against the
@@ -31,9 +31,16 @@ export function SignatureSection({
   entityId: string
   onCountChange?: (n: number) => void
 }) {
-  const { state, logAttachmentRemoved } = useStore()
+  const { state, removeAttachment } = useStore()
   const toast = useToast()
   const confirm = useConfirm()
+  // Mirror the store's supervisor gate so the link doesn't invite a tap
+  // the save layer will refuse (no crew set up = no boundary to enforce).
+  const mayDelete =
+    state.technicians.length === 0 ||
+    canDeleteRecords(
+      state.technicians.find((t) => t.id === state.activeTechnicianId)?.role,
+    )
   const [signatures, setSignatures] = useState<LoadedSignature[]>([])
   const [capturing, setCapturing] = useState(false)
 
@@ -87,10 +94,16 @@ export function SignatureSection({
     })
     if (!ok) return
     try {
-      await deleteAttachment(s.a.id)
-      // Record the removal on the change log so a sign-off can't be deleted
-      // off the record — only after the blob is actually gone.
-      logAttachmentRemoved(entityType, entityId, 'signature', s.a.signedBy)
+      // Deletes the blob and writes the change-log entry behind the
+      // supervisor gate — resolves false (with its own toast) if denied.
+      const deleted = await removeAttachment(
+        s.a.id,
+        entityType,
+        entityId,
+        'signature',
+        s.a.signedBy,
+      )
+      if (!deleted) return
       URL.revokeObjectURL(s.url)
       setSignatures((list) => list.filter((x) => x.a.id !== s.a.id))
     } catch {
@@ -115,13 +128,15 @@ export function SignatureSection({
               {s.a.signedBy ? <strong>{s.a.signedBy}</strong> : 'Unnamed'} ·{' '}
               {formatDateTime(s.a.createdAt, state.location.timezone, state.clock)}
             </span>
-            <button
-              type="button"
-              onClick={() => onDelete(s)}
-              className="font-medium text-slate-500 hover:text-red-600"
-            >
-              Delete
-            </button>
+            {mayDelete && (
+              <button
+                type="button"
+                onClick={() => void onDelete(s)}
+                className="font-medium text-slate-500 hover:text-red-600"
+              >
+                Delete
+              </button>
+            )}
           </div>
         </div>
       ))}
