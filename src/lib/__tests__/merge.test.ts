@@ -242,6 +242,51 @@ describe('reference lists', () => {
     expect(merged.customRefrigerants).toEqual(['R-ABC'])
   })
 
+  it('a RESTORED custom refrigerant survives merging with a device that still holds the tombstone', () => {
+    // Device A deleted R-XYZ, device B restored it from the recycle bin
+    // (tombstone revoked in place — refrigerants have no timestamps of
+    // their own to out-date a tombstone with).
+    const restored = makeState({
+      customRefrigerants: ['R-XYZ'],
+      tombstones: [
+        {
+          entity: 'refrigerant',
+          id: 'R-XYZ',
+          at: '2026-06-02T00:00:00.000Z',
+          revokedAt: '2026-06-03T00:00:00.000Z',
+        },
+      ],
+    })
+    const stale = makeState({
+      tombstones: [
+        { entity: 'refrigerant', id: 'R-XYZ', at: '2026-06-02T00:00:00.000Z' },
+      ],
+    })
+    // Survives from both directions (merge is commutative)…
+    expect(mergeStates(restored, stale).customRefrigerants).toEqual(['R-XYZ'])
+    expect(mergeStates(stale, restored).customRefrigerants).toEqual(['R-XYZ'])
+    // …and the revocation itself propagates for the next round.
+    expect(
+      mergeStates(stale, restored).tombstones.find((t) => t.id === 'R-XYZ')
+        ?.revokedAt,
+    ).toBe('2026-06-03T00:00:00.000Z')
+  })
+
+  it('a re-delete AFTER the restore wins again', () => {
+    const restoredThenDeleted = makeState({
+      tombstones: [
+        {
+          entity: 'refrigerant',
+          id: 'R-XYZ',
+          at: '2026-06-05T00:00:00.000Z', // fresh delete
+          revokedAt: '2026-06-03T00:00:00.000Z', // older restore
+        },
+      ],
+    })
+    const other = makeState({ customRefrigerants: ['R-XYZ'] })
+    expect(mergeStates(other, restoredThenDeleted).customRefrigerants).toEqual([])
+  })
+
   it('favourite presets keep built-ins, drop favourites whose custom preset is gone', () => {
     const a = makeState({ favoriteBottlePresets: ['au-rec-22wc', 'custom-zombie'] })
     const merged = mergeStates(a, makeState({}))

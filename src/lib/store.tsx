@@ -989,7 +989,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           })),
         ],
         bottles: s.bottles.map((b) =>
-          b.currentSiteId === id ? { ...b, currentSiteId: undefined } : b,
+          b.currentSiteId === id
+            ? {
+                ...b,
+                currentSiteId: undefined,
+                // A bottle can't stay "on site" at a site that no longer
+                // exists — it's back in the tech's hands.
+                status: b.status === 'on_site' ? 'in_stock' : b.status,
+                updatedAt: new Date().toISOString(),
+              }
+            : b,
         ),
         transactions: s.transactions.map((t) => {
           const siteHit = t.siteId === id
@@ -1552,13 +1561,42 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         const entry = s.recycleBin.find((e) => e.id === binId)
         if (!entry) return s
         const now = new Date().toISOString()
-        // Drop the bin entry and the record's tombstone. Removing the
-        // tombstone (plus the bumped updatedAt below) is what stops the
-        // next sync merge from immediately re-deleting the record.
+        // Drop the bin entry and neutralise the record's tombstone.
+        // Stamped records (bottle/site/unit/job/technician) get the
+        // tombstone removed AND updatedAt bumped — the bump out-dates any
+        // copy of the tombstone still on another device. Custom
+        // refrigerants and presets carry no timestamps, so their
+        // tombstone is REVOKED in place instead (revokedAt): the
+        // revocation merges to every device and stops the restored item
+        // being re-deleted forever, while a later re-delete writes a
+        // fresh tombstone that beats it.
         const recycleBin = s.recycleBin.filter((e) => e.id !== binId)
-        const tombstones = s.tombstones.filter(
-          (t) => !(t.entity === entry.entity && t.id === entry.recordId),
+        const timestampless =
+          entry.entity === 'refrigerant' || entry.entity === 'preset'
+        const hadStone = s.tombstones.some(
+          (t) => t.entity === entry.entity && t.id === entry.recordId,
         )
+        const tombstones = timestampless
+          ? hadStone
+            ? s.tombstones.map((t) =>
+                t.entity === entry.entity && t.id === entry.recordId
+                  ? { ...t, revokedAt: now }
+                  : t,
+              )
+            : [
+                // No local copy (it arrived elsewhere) — write a revoked
+                // one so the merge revocation still propagates.
+                ...s.tombstones,
+                {
+                  entity: entry.entity,
+                  id: entry.recordId,
+                  at: now,
+                  revokedAt: now,
+                },
+              ]
+          : s.tombstones.filter(
+              (t) => !(t.entity === entry.entity && t.id === entry.recordId),
+            )
         const base = { ...s, recycleBin, tombstones }
         const log = (target: string): AuditEntry[] =>
           withAudit(s, {

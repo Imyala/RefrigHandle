@@ -215,7 +215,15 @@ export async function addPhoto(
   file: Blob,
   caption?: string,
 ): Promise<Attachment> {
-  const blob = await compressImage(file)
+  // Compression is best-effort: a format the browser can't decode to a
+  // canvas (e.g. HEIC in some engines) must still be KEPT — a full-size
+  // docket photo beats a rejected one every time.
+  let blob: Blob
+  try {
+    blob = await compressImage(file)
+  } catch {
+    blob = file
+  }
   const a: Attachment = {
     id: uid(),
     kind: 'photo',
