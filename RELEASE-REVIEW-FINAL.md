@@ -42,6 +42,21 @@ the commits following this review:
   update trap; standalone eviction warning; absolute og:image + robots.txt;
   version 1.0.0-rc.1.
 
+**Second sprint (also landed, 2 July 2026):** an adversarial review of the
+first sprint surfaced and fixed one new blocker — a legacy migration was
+stripping `Transaction.jobId` on every app load, silently emptying the
+Jobs feature (and the new sync path would have spread the loss team-wide)
+— plus: failed sync pulls no longer permit a stale blind push; a poll
+watermark bug that could swallow updates; a device-lockout hole (the last
+manager profile could deactivate itself with no way back under the new
+role gates — now guarded); short pre-hardening Team IDs get a clear
+migration path instead of an endless failed-push loop; denied restores no
+longer half-apply; the chunk-reload handler is loop-guarded. Ease-of-use
+round: a "+ Log refrigerant" button on the home screen, Notes/Photos fold
+away on the everyday form, filter status lines + one-tap clears on every
+list, Jobs search/pagination, the last "Delete"-for-restorable verb fixed,
+and the attach action labelled plainly. 210 tests green.
+
 **Remaining before launch:** the APP/privacy legal sign-off (§1 B4), the
 pilot (§5), pruning internal review docs from the public repo, and the
 minor polish list in §3.
