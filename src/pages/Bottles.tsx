@@ -942,7 +942,9 @@ function BottleActionSheet({
             </div>
           ) : null}
 
-          <div className="mt-3 grid grid-cols-2 gap-2">
+          {/* Labels like "Update test dates" don't fit two-across on a
+              phone — stack there, two columns from sm: up. */}
+          <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
             <Button
               type="button"
               variant="secondary"
@@ -1016,7 +1018,7 @@ function BottleActionSheet({
           )}
         </div>
 
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
           <Button onClick={onEdit} variant="ghost" full>
             Edit details
           </Button>

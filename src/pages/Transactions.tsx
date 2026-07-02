@@ -181,11 +181,11 @@ export default function Transactions() {
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between gap-2">
-        <h2 className="text-xl font-semibold text-slate-900 dark:text-slate-100">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h2 className="min-w-0 text-xl font-semibold text-slate-900 dark:text-slate-100">
           Refrigerant movements
         </h2>
-        <div className="flex items-center gap-2">
+        <div className="flex shrink-0 items-center gap-2">
           {transactions.some((t) => !t.deletedAt) && (
             <SharePeriodButton
               label="Share…"

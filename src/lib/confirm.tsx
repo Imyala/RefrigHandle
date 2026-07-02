@@ -83,7 +83,9 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
             </Field>
           </div>
         )}
-        <div className="mt-4 flex gap-2">
+        {/* Long confirm labels ("Clear sample data & set up") don't fit
+            two-across on a phone — stack there, primary action on top. */}
+        <div className="mt-4 flex flex-col-reverse gap-2 sm:flex-row">
           <Button
             variant="secondary"
             full

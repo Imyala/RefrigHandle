@@ -95,7 +95,9 @@ function QuarterlyReportModal({ onClose }: { onClose: () => void }) {
   return (
     <Modal open onClose={onClose} title="ARC quarterly record" size="lg">
       <div className="no-print mb-3 flex flex-wrap items-end justify-between gap-2">
-        <div className="min-w-0 flex-1">
+        {/* min-w keeps the quarter label readable — when the Print button
+            no longer fits beside it (phones), it wraps below instead. */}
+        <div className="min-w-[14rem] flex-1">
           <Field label="Quarter">
             <Picker
               title="Quarter"

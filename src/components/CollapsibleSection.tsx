@@ -47,7 +47,7 @@ export function CollapsibleSection({
 
   return (
     <section>
-      <div className="mb-2 flex items-center justify-between gap-2 px-1">
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-2 px-1">
         <button
           type="button"
           onClick={() => setOpen((v) => !v)}

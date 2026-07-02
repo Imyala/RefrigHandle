@@ -14,8 +14,11 @@ export function Button({
   type = 'button',
   ...rest
 }: ButtonProps) {
+  // whitespace-nowrap: a button label must never break onto two lines —
+  // where space is tight the surrounding layout stacks or wraps whole
+  // buttons instead (see the grid-cols-1 sm:grid-cols-2 action rows).
   const base =
-    'inline-flex items-center justify-center gap-2 rounded-xl px-4 py-3 text-base font-medium transition active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed'
+    'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-xl px-4 py-3 text-base font-medium transition active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed'
   const variants: Record<string, string> = {
     primary:
       'bg-brand-600 text-white shadow-sm hover:bg-brand-700',

@@ -823,7 +823,9 @@ function SectionHeader({
   children?: React.ReactNode
 }) {
   return (
-    <div className="mb-2 flex items-center justify-between gap-2 px-1">
+    // flex-wrap: on a phone the action buttons drop to their own row
+    // instead of squeezing the title into "BOTTLE…".
+    <div className="mb-2 flex flex-wrap items-center justify-between gap-2 px-1">
       <button
         type="button"
         onClick={onToggle}
