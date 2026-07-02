@@ -28,17 +28,28 @@ import { SYNCED_SETTINGS_FIELDS } from './types'
 // The merge is deterministic and commutative on the record level —
 // both devices converge on the same superset after exchanging states.
 
+// The merged view of a record's tombstone(s): the latest deletion
+// moment and the latest revocation (restore) across both sides.
+interface StoneState {
+  at: string
+  revokedAt?: string
+}
+
 // True when a tombstone kills this record: the deletion happened after
-// the record's last write. A record edited AFTER its tombstone (clock
-// skew, or genuinely re-created elsewhere) survives.
+// the record's last write, and hasn't itself been revoked by a restore.
+// A record edited AFTER its tombstone (clock skew, or genuinely
+// re-created elsewhere) survives; so does a timestampless record whose
+// tombstone was revoked (custom refrigerants / presets have no
+// updatedAt to out-date the tombstone with).
 function killedByTombstone(
-  stones: Map<string, string>,
+  stones: Map<string, StoneState>,
   key: string,
   lastWrite: string | undefined,
 ): boolean {
-  const at = stones.get(key)
-  if (!at) return false
-  return !lastWrite || lastWrite <= at
+  const st = stones.get(key)
+  if (!st) return false
+  if (st.revokedAt && st.revokedAt >= st.at) return false
+  return !lastWrite || lastWrite <= st.at
 }
 
 // True when the OTHER side's reset watermark erases a record that only
@@ -67,7 +78,7 @@ function lastWriteOf(r: Stamped): string | undefined {
 function mergeCollection<T extends Stamped>(
   local: readonly T[],
   remote: readonly T[],
-  stones: Map<string, string>,
+  stones: Map<string, StoneState>,
   entity: Tombstone['entity'],
   localResetAt: string | undefined,
   remoteResetAt: string | undefined,
@@ -212,16 +223,29 @@ function unionStrings(a: readonly string[], b: readonly string[]): string[] {
 }
 
 export function mergeStates(local: AppState, remote: AppState): AppState {
-  const stones = new Map<string, string>()
+  const stones = new Map<string, StoneState>()
   for (const t of [...local.tombstones, ...remote.tombstones]) {
     const k = stoneKey(t)
     const prev = stones.get(k)
-    // Keep the latest deletion moment for the record.
-    if (!prev || t.at > prev) stones.set(k, t.at)
+    // Keep the latest deletion moment AND the latest revocation — both
+    // maxes make the merge commutative, and "which is later" decides
+    // whether the tombstone still kills (see killedByTombstone).
+    stones.set(k, {
+      at: !prev || t.at > prev.at ? t.at : prev.at,
+      revokedAt:
+        (t.revokedAt ?? '') > (prev?.revokedAt ?? '')
+          ? t.revokedAt
+          : prev?.revokedAt,
+    })
   }
-  const tombstones: Tombstone[] = [...stones.entries()].map(([k, at]) => {
+  const tombstones: Tombstone[] = [...stones.entries()].map(([k, st]) => {
     const [entity, id] = splitKey(k)
-    return { entity: entity as Tombstone['entity'], id, at }
+    return {
+      entity: entity as Tombstone['entity'],
+      id,
+      at: st.at,
+      ...(st.revokedAt ? { revokedAt: st.revokedAt } : {}),
+    }
   })
 
   const lReset = local.dataResetAt
@@ -258,12 +282,15 @@ export function mergeStates(local: AppState, remote: AppState): AppState {
     if (!mergedFieldStamps[k] || v > mergedFieldStamps[k]) mergedFieldStamps[k] = v
   }
 
-  // Custom refrigerants: union minus tombstones. Plain strings carry no
-  // timestamp, so a tombstone always wins for them.
+  // Custom refrigerants: union minus ACTIVE tombstones. Plain strings
+  // carry no timestamp, so an unrevoked tombstone always wins for them —
+  // and a revoked one (restored from the recycle bin) never does.
   const customRefrigerants = unionStrings(
     local.customRefrigerants,
     remote.customRefrigerants,
-  ).filter((name) => !stones.has(`refrigerant${KEY_SEP}${name}`))
+  ).filter(
+    (name) => !killedByTombstone(stones, `refrigerant${KEY_SEP}${name}`, undefined),
+  )
 
   const customBottlePresets = mergeCollection(
     local.customBottlePresets,

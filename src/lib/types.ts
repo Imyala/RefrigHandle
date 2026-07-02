@@ -519,6 +519,14 @@ export interface Tombstone {
     | 'refrigerant'
   id: string
   at: string // ISO timestamp of the deletion
+  // Set when the deletion was undone (restore from the recycle bin).
+  // Needed for records that carry NO timestamps of their own (custom
+  // refrigerants are plain strings, presets are unstamped): without it,
+  // the other device's copy of the tombstone would win every merge and
+  // re-delete the restored item forever. A revoked tombstone
+  // (revokedAt >= at) no longer kills; a LATER re-delete writes a fresh
+  // tombstone whose at beats the old revocation.
+  revokedAt?: string
 }
 
 // Entities that can be sent to (and recovered from) the recycle bin.
