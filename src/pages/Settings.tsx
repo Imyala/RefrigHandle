@@ -392,7 +392,13 @@ export default function Settings() {
       // Photos/signatures ride in the backup under __attachments — restore
       // them to the attachment store and keep the key out of the app state.
       const { __attachments, ...stateOnly } = data
-      importState(stateOnly as unknown as AppState)
+      // The role gate can refuse (its own toast shows) — nothing else in
+      // the restore may proceed, or denied users would still get the
+      // file's photo blobs written into the attachment store.
+      if (!importState(stateOnly as unknown as AppState)) {
+        setBackupBusy(null)
+        return
+      }
       if (Array.isArray(__attachments) && __attachments.length > 0) {
         const n = await importAttachments(__attachments)
         if (n > 0) {
@@ -1045,19 +1051,37 @@ export default function Settings() {
                 />
                 <Button
                   onClick={() => {
+                    const id = teamIdInput.trim()
+                    // The server refuses IDs under 12 characters (they're
+                    // guessable and collide) — catch it here with a clear
+                    // message instead of an endless failed-push loop.
+                    if (id && id.length < 12) {
+                      toast.show(
+                        'Team ID too short — tap “Generate a secure Team ID” and share that with your team.',
+                        'error',
+                        7000,
+                      )
+                      return
+                    }
                     setSyncSettings({
-                      enabled: !!teamIdInput.trim(),
-                      teamId: teamIdInput.trim(),
+                      enabled: !!id,
+                      teamId: id,
                     })
-                    toast.show(
-                      teamIdInput.trim() ? 'Cloud sync enabled' : 'Cloud sync paused',
-                    )
+                    toast.show(id ? 'Cloud sync enabled' : 'Cloud sync paused')
                   }}
                 >
                   {state.sync.enabled ? 'Update' : 'Connect'}
                 </Button>
               </div>
-              {!state.sync.enabled && (
+              {state.sync.enabled && state.sync.teamId.length < 12 && (
+                <p className="mt-1.5 rounded-lg bg-red-50 p-2 text-xs text-red-800 dark:bg-red-900/20 dark:text-red-200">
+                  Your current Team ID is too short for the hardened server
+                  setup and pushes will be refused. Generate a secure ID
+                  below, connect with it here first (this device holds the
+                  data), then switch every other device to the same new ID.
+                </p>
+              )}
+              {(!state.sync.enabled || state.sync.teamId.length < 12) && (
                 <button
                   type="button"
                   className="mt-1.5 min-h-11 text-left text-xs font-medium text-brand-600 hover:underline"
@@ -1183,7 +1207,7 @@ export default function Settings() {
               ? { passwordHash: data.passwordChange.hash }
               : {}
           if (editingTech) {
-            updateTechnician(editingTech.id, {
+            const updated = updateTechnician(editingTech.id, {
               firstName: data.firstName,
               middleName: data.middleName,
               lastName: data.lastName,
@@ -1193,7 +1217,8 @@ export default function Settings() {
               licenceExpiry: data.licenceExpiry,
               ...passwordHashPatch,
             })
-            toast.show('Tech updated')
+            // The gate shows its own denial toast — no false success here.
+            if (updated) toast.show('Tech updated')
           } else {
             const created = addTechnician({
               firstName: data.firstName,

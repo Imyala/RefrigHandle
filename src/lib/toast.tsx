@@ -3,6 +3,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useMemo,
   useRef,
   useState,
   type ReactNode,
@@ -35,8 +36,13 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     [],
   )
 
+  // Stable context value: every toast re-renders this provider, and a
+  // fresh `{ show }` object each time would re-run every effect that
+  // lists `toast` as a dependency (the store's sync push effect among
+  // them) on every toast shown anywhere.
+  const api = useMemo<ToastApi>(() => ({ show }), [show])
   return (
-    <ToastContext.Provider value={{ show }}>
+    <ToastContext.Provider value={api}>
       {children}
       <div
         className="pointer-events-none fixed inset-x-0 top-3 z-[60] flex flex-col items-center gap-2 px-4"

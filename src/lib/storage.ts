@@ -142,15 +142,34 @@ function normalize(parsed: LegacyState): AppState {
     }
   })
 
+  // ANCIENT blobs (before the `sites` array existed) used `jobId` /
+  // `locationId` on a transaction as the SITE link — those fold into
+  // siteId. Modern blobs always serialize `sites` (even empty), and on
+  // them `jobId` is the WORK-ORDER link (Transaction.jobId) and must be
+  // preserved untouched — stripping it here would sever every
+  // transaction→job link on every single load and empty out the Jobs
+  // feature (service reports, job totals) app-wide.
+  const ancientSiteLink = parsed.sites == null
   const transactions: Transaction[] = (parsed.transactions ?? []).map((t) => {
-    const { jobId, locationId, ...rest } = t
+    const retiredKind = (next: Transaction) =>
+      // The 'station' kind was retired alongside the 'stationed' status —
+      // treat legacy rows as a plain transfer to a site.
+      (next.kind as string) === 'station' ? ('transfer' as const) : next.kind
+    if (ancientSiteLink) {
+      const { jobId, locationId, ...rest } = t
+      const next = rest as unknown as Transaction
+      return {
+        ...next,
+        kind: retiredKind(next),
+        siteId: next.siteId ?? jobId ?? locationId,
+      }
+    }
+    const { locationId, ...rest } = t
     const next = rest as unknown as Transaction
     return {
       ...next,
-      // The 'station' kind was retired alongside the 'stationed' status —
-      // treat legacy rows as a plain transfer to a site.
-      kind: (next.kind as string) === 'station' ? 'transfer' : next.kind,
-      siteId: next.siteId ?? jobId ?? locationId,
+      kind: retiredKind(next),
+      siteId: next.siteId ?? locationId,
     }
   })
 

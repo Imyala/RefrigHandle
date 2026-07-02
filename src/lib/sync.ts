@@ -36,15 +36,31 @@ async function getClient(): Promise<SupabaseClient | null> {
   return clientPromise
 }
 
-export async function pullState(teamId: string): Promise<AppState | null> {
+// "No row yet" and "the pull FAILED" are very different answers: a
+// failed pull must never be treated as an empty server — the caller
+// would then blind-push stale state over the row it couldn't see.
+export type PullResult =
+  | { ok: true; state: AppState | null } // null = no row for this team yet
+  | { ok: false }
+
+export async function pullState(teamId: string): Promise<PullResult> {
   const c = await getClient()
-  if (!c || !teamId) return null
-  const { data, error } = await c.rpc('rh_get_state', { p_team_id: teamId })
-  if (error) {
-    logDiagnostic('sync', 'Cloud sync pull failed', error.message)
-    return null
+  if (!c || !teamId) return { ok: false }
+  try {
+    const { data, error } = await c.rpc('rh_get_state', { p_team_id: teamId })
+    if (error) {
+      logDiagnostic('sync', 'Cloud sync pull failed', error.message)
+      return { ok: false }
+    }
+    return { ok: true, state: (data as AppState | null) ?? null }
+  } catch (e) {
+    logDiagnostic(
+      'sync',
+      'Cloud sync pull failed',
+      e instanceof Error ? e.message : String(e),
+    )
+    return { ok: false }
   }
-  return (data as AppState | null) ?? null
 }
 
 // True when the row was written. A failed push must NEVER be silent —
@@ -107,9 +123,13 @@ export function subscribeToState(
       if (error || data == null) return
       const stamp = String(data)
       if (stamp === lastSeen) return
+      const r = await pullState(teamId)
+      if (!r.ok) return // pull failed — leave lastSeen so the next tick retries
+      // Only a delivered body advances the watermark; otherwise a
+      // one-off failed pull would swallow the update until the NEXT
+      // remote write.
       lastSeen = stamp
-      const s = await pullState(teamId)
-      if (s && !stopped) onRemote(s)
+      if (r.state && !stopped) onRemote(r.state)
     } catch {
       // Offline — the next tick retries.
     } finally {

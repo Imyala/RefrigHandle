@@ -509,6 +509,32 @@ describe('role enforcement at the store layer', () => {
     ).toBe(false)
   })
 
+  it('the last active supervisor/owner cannot be deactivated (lockout guard)', () => {
+    const api = setup()
+    addActiveTech(api, 'owner')
+    const me = api.current.state.technicians[0]
+    act(() => api.current.deactivateTechnician(me.id))
+    // Blocked — deactivating the only manager would strand the device
+    // with every gated action (including reactivation) denied.
+    expect(
+      api.current.state.technicians.find((t) => t.id === me.id)!.deactivatedAt,
+    ).toBeFalsy()
+    // With a second manager present, the same deactivation proceeds.
+    act(() => {
+      api.current.addTechnician({
+        name: 'Backup',
+        firstName: 'Back',
+        lastName: 'Up',
+        arcLicenceNumber: 'L-3',
+        role: 'supervisor',
+      })
+    })
+    act(() => api.current.deactivateTechnician(me.id))
+    expect(
+      api.current.state.technicians.find((t) => t.id === me.id)!.deactivatedAt,
+    ).toBeTruthy()
+  })
+
   it('an apprentice cannot delete a photo or signature attachment', async () => {
     const api = setup()
     const b = addBottle(api.current)

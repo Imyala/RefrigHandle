@@ -201,7 +201,8 @@ interface StoreApi {
   ) => Promise<boolean>
   // technician profiles
   addTechnician: (t: Omit<Technician, 'id' | 'createdAt'>) => Technician
-  updateTechnician: (id: string, patch: Partial<Technician>) => void
+  // Returns false when the role gate refuses (its own toast shows).
+  updateTechnician: (id: string, patch: Partial<Technician>) => boolean
   // Soft-disable a profile (a tech who left). Kept for the retention
   // window, then purged. Reassigns the active seat if needed.
   deactivateTechnician: (id: string) => void
@@ -621,8 +622,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     if (!isSyncConfigured()) return
     if (!state.sync.enabled || !state.sync.teamId) return
     let cancelled = false
-    pullState(state.sync.teamId).then((remote) => {
-      if (!cancelled && remote) applyRemote(remote)
+    pullState(state.sync.teamId).then((r) => {
+      if (!cancelled && r.ok && r.state) applyRemote(r.state)
     })
     const unsub = subscribeToState(state.sync.teamId, (remote) => {
       applyRemote(remote)
@@ -656,24 +657,38 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         // device still holding them. Merge the server row in first; if
         // that changes local state, adopt it and let the re-run of this
         // effect push the merged superset.
-        try {
-          const remote = await pullState(teamId)
-          if (remote) {
-            const merged = mergeStates(
-              stateRef.current,
-              normalizeState(remote),
+        const pulled = await pullState(teamId)
+        if (!pulled.ok) {
+          // Can't see the server row — pushing anyway would blind-upsert
+          // stale state over work this device hasn't merged. Treat it
+          // like a failed push: surface, keep unpushed, retry.
+          const now = Date.now()
+          if (now - lastSyncToastRef.current >= 60_000) {
+            lastSyncToastRef.current = now
+            toast.show(
+              'Cloud sync could not reach the server — changes are saved on this device and will retry.',
+              'error',
+              8000,
             )
-            if (
-              JSON.stringify(merged) !== JSON.stringify(stateRef.current)
-            ) {
-              remoteApplyRef.current = false
-              setState(merged)
-              return
-            }
           }
-        } catch {
-          // Pull failed (offline) — fall through and try the push; a
-          // failure there is surfaced below.
+          if (pushRetryHandleRef.current) {
+            clearTimeout(pushRetryHandleRef.current)
+          }
+          pushRetryHandleRef.current = setTimeout(() => {
+            setPushRetryTick((t) => t + 1)
+          }, 30_000)
+          return
+        }
+        if (pulled.state) {
+          const merged = mergeStates(
+            stateRef.current,
+            normalizeState(pulled.state),
+          )
+          if (JSON.stringify(merged) !== JSON.stringify(stateRef.current)) {
+            remoteApplyRef.current = false
+            setState(merged)
+            return
+          }
         }
         const snapshot = stateRef.current
         const ok = await pushState(teamId, snapshot)
@@ -700,7 +715,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         }
       })()
     }, 800)
-    return () => clearTimeout(handle)
+    return () => {
+      clearTimeout(handle)
+      // A pending failure-retry must not fire into an unmounted provider
+      // (or across a team change / sync toggle).
+      if (pushRetryHandleRef.current) {
+        clearTimeout(pushRetryHandleRef.current)
+        pushRetryHandleRef.current = null
+      }
+    }
   }, [state, pushRetryTick, toast])
 
   const addBottle: StoreApi['addBottle'] = useCallback((b) => {
@@ -819,13 +842,25 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       // time of work, so they read standalone without the bottle record.
       // Cascading a soft-delete here used to silently rewrite already-
       // reported quarterly figures — never again.)
-      const transactions = s.transactions.map((t) =>
-        t.bottleId === id && !t.deletedAt && !t.bottleNumber && before
-          ? // Backfill the frozen number onto pre-freeze rows while the
-            // bottle record is still here to read it from.
-            { ...t, bottleNumber: before.bottleNumber }
-          : t,
-      )
+      // Backfill the frozen number onto pre-freeze rows while the bottle
+      // record is still here to read it from — both where this cylinder
+      // is the row's bottle and where it was the SOURCE of a decant.
+      const transactions = before
+        ? s.transactions.map((t) => {
+            let next = t
+            if (t.bottleId === id && !t.deletedAt && !t.bottleNumber) {
+              next = { ...next, bottleNumber: before.bottleNumber }
+            }
+            if (
+              t.sourceBottleId === id &&
+              !t.deletedAt &&
+              !t.sourceBottleNumber
+            ) {
+              next = { ...next, sourceBottleNumber: before.bottleNumber }
+            }
+            return next
+          })
+        : s.transactions
       return {
         ...s,
         bottles: s.bottles.filter((b) => b.id !== id),
@@ -1717,7 +1752,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
               'error',
               6000,
             )
-            return
+            return false
           }
         }
       }
@@ -1774,12 +1809,41 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           }),
         }
       })
+      return true
     },
     [toast],
   )
 
+  // True when removing/disabling `id` would leave the device with NO
+  // usable supervisor-or-above profile. With ensureRole denying gated
+  // actions to lower tiers and to the signed-out state, that device
+  // would be permanently locked out of reactivating anyone, restoring
+  // backups and every other manager action — an unrecoverable state a
+  // single mis-tap must not be able to reach.
+  const wouldOrphanDevice = useCallback((id: string): boolean => {
+    const s = stateRef.current
+    const target = s.technicians.find((t) => t.id === id)
+    if (!target || !roleAtLeast(target.role, 'supervisor')) return false
+    if (target.deactivatedAt || target.suspendedAt) return false
+    return !s.technicians.some(
+      (t) =>
+        t.id !== id &&
+        !t.deactivatedAt &&
+        !t.suspendedAt &&
+        roleAtLeast(t.role, 'supervisor'),
+    )
+  }, [])
+
   const deleteTechnician: StoreApi['deleteTechnician'] = useCallback((id) => {
     if (!ensureRole('supervisor', 'Removing a technician')) return
+    if (wouldOrphanDevice(id)) {
+      toast.show(
+        'This is the last active supervisor/owner profile — appoint another manager before removing it, or the device locks itself out.',
+        'error',
+        8000,
+      )
+      return
+    }
     setState((s) => {
       const before = s.technicians.find((t) => t.id === id)
       const remaining = s.technicians.filter((t) => t.id !== id)
@@ -1810,11 +1874,19 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           : s.auditLog,
       }
     })
-  }, [ensureRole])
+  }, [ensureRole, wouldOrphanDevice, toast])
 
   const deactivateTechnician: StoreApi['deactivateTechnician'] = useCallback(
     (id) => {
       if (!ensureRole('supervisor', 'Deactivating a technician')) return
+      if (wouldOrphanDevice(id)) {
+        toast.show(
+          'This is the last active supervisor/owner profile — appoint another manager before deactivating it, or the device locks itself out.',
+          'error',
+          8000,
+        )
+        return
+      }
       setState((s) => {
         const target = s.technicians.find((t) => t.id === id)
         if (!target || target.deactivatedAt) return s
@@ -1842,7 +1914,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         }
       })
     },
-    [ensureRole],
+    [ensureRole, wouldOrphanDevice, toast],
   )
 
   const reactivateTechnician: StoreApi['reactivateTechnician'] = useCallback(
@@ -1872,6 +1944,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const suspendTechnician: StoreApi['suspendTechnician'] = useCallback((id) => {
     if (!ensureRole('supervisor', 'Suspending a technician')) return
+    if (wouldOrphanDevice(id)) {
+      toast.show(
+        'This is the last active supervisor/owner profile — appoint another manager before suspending it, or the device locks itself out.',
+        'error',
+        8000,
+      )
+      return
+    }
     setState((s) => {
       const target = s.technicians.find((t) => t.id === id)
       if (!target || target.suspendedAt) return s
@@ -1899,7 +1979,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         }),
       }
     })
-  }, [ensureRole])
+  }, [ensureRole, wouldOrphanDevice, toast])
 
   const unsuspendTechnician: StoreApi['unsuspendTechnician'] = useCallback(
     (id) => {
@@ -1991,6 +2071,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         by,
         byLicence,
         tz: deviceTimeZone() || s.location.timezone || undefined,
+        // Same origin stamping as withAudit — only this device may seal.
+        origin: deviceChainId(),
       })
       const entries: AuditEntry[] = [
         mk({

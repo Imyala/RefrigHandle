@@ -13,7 +13,17 @@ installGlobalErrorHandlers()
 // an old chunk the new SW no longer precaches. Vite surfaces that failed
 // dynamic import as `vite:preloadError`; a full reload picks up the fresh
 // app instead of leaving the tab stuck on a Suspense fallback forever.
+// One-shot per session: if the chunk is missing for a real reason (an
+// offline device with a partial cache), reloading forever would brick the
+// tab — after one attempt, let the failure surface normally.
 window.addEventListener('vite:preloadError', (event) => {
+  const FLAG = 'refrighandle.reloadedForChunk'
+  try {
+    if (sessionStorage.getItem(FLAG)) return
+    sessionStorage.setItem(FLAG, '1')
+  } catch {
+    return
+  }
   event.preventDefault()
   window.location.reload()
 })

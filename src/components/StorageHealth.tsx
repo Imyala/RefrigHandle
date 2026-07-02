@@ -15,6 +15,7 @@ import {
   type StorageEstimate,
 } from '../lib/storage'
 import { formatDateTime } from '../lib/datetime'
+import { canDeleteRecords } from '../lib/types'
 
 // Settings → Storage health. The recovery surface the corrupted-load
 // toast points at: how much storage the app is using, whether the
@@ -34,6 +35,14 @@ export function StorageHealthCard() {
   const { state, importState } = useStore()
   const toast = useToast()
   const confirm = useConfirm()
+  // Deleting a preserved copy is destructive — the blob may be the only
+  // copy of the records — so it carries the same supervisor gate as every
+  // other destructive action (no crew set up = no boundary to enforce).
+  const mayDelete =
+    state.technicians.length === 0 ||
+    canDeleteRecords(
+      state.technicians.find((t) => t.id === state.activeTechnicianId)?.role,
+    )
   const [estimate, setEstimate] = useState<StorageEstimate>({})
   const [persisted, setPersisted] = useState<boolean | null>(null)
   const [backups, setBackups] = useState<CorruptedBackup[]>(() =>
@@ -187,9 +196,11 @@ export function StorageHealthCard() {
                 <Button variant="secondary" onClick={() => void tryRestore(b)}>
                   Try restore
                 </Button>
-                <Button variant="ghost" onClick={() => void remove(b)}>
-                  Delete
-                </Button>
+                {mayDelete && (
+                  <Button variant="ghost" onClick={() => void remove(b)}>
+                    Delete
+                  </Button>
+                )}
               </div>
             </div>
           ))}
