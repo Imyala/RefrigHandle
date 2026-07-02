@@ -9,6 +9,45 @@ lint clean, production build succeeds, bundle properly code-split**
 
 ---
 
+## Status update — blocker sprint landed (2 July 2026)
+
+All six blockers and the serious tier below were fixed on this branch in
+the commits following this review:
+
+- **B1 (sync)** — sync is now a labelled **beta** with a locked-down access
+  model: RLS with no policies + SECURITY DEFINER RPCs keyed by the Team ID,
+  generated random Team IDs in the UI, pull-merge-push (no more stale-device
+  server overwrite), surfaced+retried push failures, loggedAt-based reset
+  watermark, and origin-stamped audit entries (no more double-seal
+  divergence). SYNC.md carries the hardened SQL + a migration for existing
+  projects. *Still not for launch marketing; the authenticated backend
+  remains the real fix.*
+- **B2** — bottle deletion no longer touches its movement rows; cylinder
+  numbers are frozen onto rows; regression-tested.
+- **B3** — jobs/service report exclude superseded corrections; job site
+  re-snapshot + field-diffed change log; tested.
+- **B4** — privacy policy and account closure rewritten to describe the
+  real product (APP legal review still required — non-engineering).
+- **B5** — Settings → Storage health exists (usage, persistence,
+  preserved-copy download/restore/delete); the quota-path overwrite of the
+  preserved blob is fixed.
+- **B6** — scale-entry amounts re-derive on kind/bottle switch; hidden
+  fields no longer stamp across mode switches.
+- **Serious tier** — dirty-form discard confirm; onboarding timezone
+  prefill + fixed picker; 44px tap targets; sign-out no longer raises
+  privileges; updateTechnician/correction/decommission/attachment gates
+  enforced at the data layer (tested); same-day-only job default;
+  closed-job correction display; vanished-bottle toast; CI now runs
+  lint+tests before deploy; vite:preloadError reload closes the SW
+  update trap; standalone eviction warning; absolute og:image + robots.txt;
+  version 1.0.0-rc.1.
+
+**Remaining before launch:** the APP/privacy legal sign-off (§1 B4), the
+pilot (§5), pruning internal review docs from the public repo, and the
+minor polish list in §3.
+
+---
+
 ## 0. Verdict
 
 **The prior blocker list is genuinely closed** — the unified LogForm, logged
