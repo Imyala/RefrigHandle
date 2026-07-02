@@ -421,7 +421,7 @@ export default function Bottles() {
         </div>
       )}
 
-      <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
+      <div className="no-scrollbar -mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
         {(['all', 'in_stock', 'on_site', 'returned', 'empty'] as const).map(
           (f) => {
             const count =
@@ -503,7 +503,7 @@ export default function Bottles() {
             onClick={() => setLabelsFor(visible)}
             className="text-xs font-medium text-brand-600 hover:underline dark:text-brand-400"
           >
-            🏷 Print QR labels ({visible.length})
+            🏷 Print scannable labels ({visible.length})
           </button>
         </div>
       )}
@@ -1021,7 +1021,7 @@ function BottleActionSheet({
             Edit details
           </Button>
           <Button onClick={onLabel} variant="ghost" full>
-            Print label
+            🏷 New scannable label
           </Button>
         </div>
 
@@ -1347,8 +1347,8 @@ function BottleForm({
         </div>
 
         <Field
-          label={`W.C — water capacity (${unit})`}
-          hint="Stamped water capacity. Safe fill is calculated automatically from W.C × the selected refrigerant's filling ratio."
+          label={`Water capacity (${unit})`}
+          hint="The W.C figure stamped on the cylinder. Safe fill is worked out automatically from it and the refrigerant's filling ratio."
         >
           <TextInput
             type="number"

@@ -51,6 +51,7 @@ import { useDevicePrefs, setDevicePref } from '../lib/devicePrefs'
 import { hashPassword, MIN_PASSWORD_LENGTH } from '../lib/auth'
 import { screenNewPassword } from '../lib/passwordStrength'
 import { PasswordPromptModal } from '../components/PasswordPromptModal'
+import { BottleLabels } from '../components/BottleLabels'
 import { isSyncConfigured } from '../lib/sync'
 import {
   getRecordedHead,
@@ -284,6 +285,9 @@ export default function Settings() {
   // visible beat. Track which one is running so the buttons can show a
   // spinner and lock, rather than appearing to do nothing.
   const [backupBusy, setBackupBusy] = useState<null | 'export' | 'import'>(null)
+  // Print-labels modal for every cylinder (Settings entry point; the
+  // Bottles page has its own for the filtered list / a single bottle).
+  const [showLabels, setShowLabels] = useState(false)
 
   async function exportJson() {
     if (backupBusy) return
@@ -452,15 +456,9 @@ export default function Settings() {
           Change log
         </div>
         <p className="mb-3 text-xs text-slate-500">
-          A complete, time-stamped record of every change made in the app —
-          bottles, sites and equipment added or edited, transactions corrected
-          or deleted, and technicians or settings changed — each stamped with
-          who did it and when. It's the audit history owners and supervisors
-          use to review the team's activity. Anyone on this device can open and
-          read it — no one, not even an owner or supervisor, can edit or
-          permanently delete an individual entry. (Closing the account clears
-          everything on the device at once, but only after you've been handed a
-          full records export.)
+          A complete, time-stamped record of every change made in the app,
+          stamped with who did it and when. Anyone can read it; no one — not
+          even an owner — can edit or delete an individual entry.
         </p>
         <Link to="/history" className="inline-block">
           <Button variant="secondary">Open change log</Button>
@@ -1008,6 +1006,31 @@ export default function Settings() {
         </div>
       </Card>
 
+      <Card>
+        <div className="mb-1 text-sm font-semibold text-slate-700 dark:text-slate-200">
+          Cylinder labels
+        </div>
+        <p className="mb-3 text-xs text-slate-500">
+          Print a scannable QR sticker for every cylinder. Scanning a sticker
+          (Bottles → Scan) opens that cylinder straight away — no typing bottle
+          numbers on site. You can also print a single label from any bottle's
+          action sheet.
+        </p>
+        <Button
+          variant="secondary"
+          onClick={() => setShowLabels(true)}
+          disabled={state.bottles.length === 0}
+        >
+          🏷 Print scannable labels
+          {state.bottles.length > 0 ? ` (${state.bottles.length})` : ''}
+        </Button>
+        {state.bottles.length === 0 && (
+          <p className="mt-1.5 text-xs text-slate-500">
+            Add a bottle first — labels are printed from your bottle list.
+          </p>
+        )}
+      </Card>
+
       {/* Cloud sync is an optional, self-hosted (Supabase) feature. It only
           appears once it's actually configured — until then it's a dormant
           capability, so the card stays hidden to keep Settings uncluttered.
@@ -1325,6 +1348,14 @@ export default function Settings() {
           setPwPromptTech(null)
         }}
       />
+
+      {showLabels && (
+        <BottleLabels
+          bottles={state.bottles}
+          unit={state.unit}
+          onClose={() => setShowLabels(false)}
+        />
+      )}
     </div>
   )
 }

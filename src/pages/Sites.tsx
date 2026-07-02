@@ -222,7 +222,7 @@ export default function Sites() {
       )}
 
       {stateChips.length > 0 && (
-        <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
+        <div className="no-scrollbar -mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
           <button
             onClick={() => setStateFilter('all')}
             className={`shrink-0 rounded-full px-3 py-1.5 text-sm font-medium transition ${
@@ -1268,13 +1268,13 @@ export function SiteForm({
           />
         </Field>
         <Field
-          label="Functional location"
-          hint="Optional — a FLOC / asset code, if your business uses one."
+          label="Site name / label"
+          hint="Optional — what your team calls this site. A FLOC / asset code works too, if your business uses one."
         >
           <TextInput
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="e.g. BN-ASAC-ATSC"
+            placeholder="e.g. Airport cool rooms, or BN-ASAC-ATSC"
           />
         </Field>
         <Field label="Address">

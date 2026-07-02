@@ -1,4 +1,4 @@
-import { useState, type ComponentType, type ReactNode } from 'react'
+import { useRef, useState, type ComponentType, type ReactNode } from 'react'
 import { Button, Card, Field, Modal, TextInput } from './ui'
 import { Picker } from './Picker'
 import { DateInput } from './DateInput'
@@ -15,6 +15,8 @@ import { useStore } from '../lib/store'
 import { useToast } from '../lib/toast'
 import { hashPassword, MIN_PASSWORD_LENGTH } from '../lib/auth'
 import { screenNewPassword } from '../lib/passwordStrength'
+import { importAttachments } from '../lib/attachments'
+import type { AppState } from '../lib/types'
 import {
   AU_REGION_TIMEZONE,
   AU_REGIONS,
@@ -90,17 +92,20 @@ export function OnboardingGate({ children }: { children: ReactNode }) {
 }
 
 function OnboardingScreen() {
-  const { completeSetup, startDemo } = useStore()
+  const { completeSetup, startDemo, importState } = useStore()
   const toast = useToast()
 
   // Australia-only product: the jurisdiction is fixed to AU rather than
   // picked, so every install runs on the ARC (RHL/RTA) profile.
   const jurisdiction: Jurisdiction = 'AU'
   // Lead with a choice, not a 15-field wall: a fresh launch shows a welcome
-  // screen where "Explore now" opens the app on sample data in one tap and
-  // "Set up my business" reveals the setup form. Value first, setup when
-  // they're ready to keep real records.
-  const [view, setView] = useState<'welcome' | 'setup'>('welcome')
+  // screen with three doors — sign in (restore existing records), create
+  // an account (the setup form), or a guest test drive on sample data.
+  const [view, setView] = useState<'welcome' | 'signin' | 'setup'>('welcome')
+  // "Sign in" on a device with no data means bringing your records here —
+  // restoring the backup file exported from the previous device.
+  const restoreFileRef = useRef<HTMLInputElement | null>(null)
+  const [restoring, setRestoring] = useState(false)
   const [businessName, setBusinessName] = useState('')
   const [abn, setAbn] = useState('')
   const [arcAuth, setArcAuth] = useState('')
@@ -288,8 +293,56 @@ function OnboardingScreen() {
     toast.show('Setup complete — welcome aboard', 'success')
   }
 
-  // Welcome screen — the very first thing a new user sees. One tap to a
-  // working app (sample data), or start real setup when ready.
+  // "Sign in" from the welcome screen = restore this business's records
+  // onto this device from a backup file. A light version of Settings →
+  // Import: the device is empty here, so there's nothing to back up or
+  // overwrite first.
+  async function restoreFromFile(file: File) {
+    if (restoring) return
+    setRestoring(true)
+    try {
+      let data: Record<string, unknown>
+      try {
+        data = JSON.parse(await file.text())
+      } catch {
+        toast.show(
+          'That file is not valid JSON — it may be corrupt or only partly downloaded.',
+          'error',
+        )
+        return
+      }
+      // A genuine export carries the core record arrays; requiring them
+      // guards against restoring a truncated or unrelated file.
+      const required = ['bottles', 'transactions']
+      const missing =
+        !data || typeof data !== 'object'
+          ? required
+          : required.filter((k) => !Array.isArray(data[k]))
+      if (missing.length > 0) {
+        toast.show(
+          `That file does not look like a RefrigHandle backup (missing: ${missing.join(', ')}).`,
+          'error',
+        )
+        return
+      }
+      // Photos/signatures ride in the backup under __attachments — restore
+      // them to the attachment store and keep the key out of the app state.
+      const { __attachments, ...stateOnly } = data
+      if (!importState(stateOnly as unknown as AppState)) return
+      if (Array.isArray(__attachments) && __attachments.length > 0) {
+        await importAttachments(__attachments)
+      }
+      toast.show('Signed in — your records are on this device.', 'success')
+    } catch {
+      toast.show('Could not apply that file.', 'error')
+    } finally {
+      setRestoring(false)
+    }
+  }
+
+  // Welcome screen — the very first thing a new user sees. Three doors:
+  // sign in (bring existing records here), create an account (setup), or
+  // a guest test drive on sample data.
   if (view === 'welcome') {
     return (
       <div className="flex min-h-svh flex-col bg-slate-50 dark:bg-slate-950">
@@ -306,12 +359,18 @@ function OnboardingScreen() {
           </div>
 
           <div className="mt-8 space-y-3">
-            <Button full onClick={() => startDemo()}>
-              Explore now — no sign-up
+            <Button full onClick={() => setView('signin')}>
+              Sign in
             </Button>
             <p className="text-center text-[11px] text-slate-400">
-              Opens the app on sample data so you can log a charge and see the
-              compliance scorecard. Nothing is saved as a real record.
+              Already use RefrigHandle? Bring your records onto this device.
+            </p>
+            <Button full variant="secondary" onClick={() => setView('setup')}>
+              Create account
+            </Button>
+            <p className="text-center text-[11px] text-slate-400">
+              New here? Enter your business and licence details to start
+              keeping real records.
             </p>
             <div className="flex items-center gap-3 py-1">
               <span className="h-px flex-1 bg-slate-200 dark:bg-slate-800" />
@@ -320,13 +379,66 @@ function OnboardingScreen() {
               </span>
               <span className="h-px flex-1 bg-slate-200 dark:bg-slate-800" />
             </div>
-            <Button full variant="secondary" onClick={() => setView('setup')}>
-              Set up my business
+            <Button full variant="secondary" onClick={() => startDemo()}>
+              Guest test drive — no sign-up
             </Button>
             <p className="text-center text-[11px] text-slate-400">
-              Enter your business, licence and authorisation details to start
-              keeping real records.
+              Opens the app on sample data so you can log a charge and see the
+              compliance scorecard. Nothing is saved as a real record.
             </p>
+          </div>
+        </main>
+      </div>
+    )
+  }
+
+  if (view === 'signin') {
+    return (
+      <div className="flex min-h-svh flex-col bg-slate-50 dark:bg-slate-950">
+        <main className="mx-auto flex w-full max-w-md flex-1 flex-col justify-center px-5 py-10">
+          <div className="text-center">
+            <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
+              Sign in
+            </h1>
+            <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
+              Your business's records live on your own devices — not on a
+              RefrigHandle server. To sign in here, restore the backup file
+              exported from your other device (Settings → Backup &amp;
+              export → Export JSON).
+            </p>
+          </div>
+
+          <div className="mt-8 space-y-3">
+            <Button
+              full
+              onClick={() => restoreFileRef.current?.click()}
+              disabled={restoring}
+            >
+              {restoring ? 'Restoring…' : 'Restore from backup file'}
+            </Button>
+            <input
+              ref={restoreFileRef}
+              type="file"
+              accept="application/json"
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0]
+                if (f) void restoreFromFile(f)
+                e.target.value = ''
+              }}
+            />
+            <p className="text-center text-[11px] text-slate-400">
+              Everything comes across — cylinders, sites, the full log, photos
+              and signatures — and you sign in with the same profiles and
+              passwords as before.
+            </p>
+            <p className="text-center text-[11px] text-slate-400">
+              Team on cloud sync? Restore a backup (or create the account)
+              first, then join with your Team ID in Settings → Cloud sync.
+            </p>
+            <Button full variant="secondary" onClick={() => setView('welcome')}>
+              ← Back
+            </Button>
           </div>
         </main>
       </div>
@@ -352,7 +464,7 @@ function OnboardingScreen() {
             Refrigerant Handling
           </h1>
           <p className="mt-0.5 text-[11px] font-medium uppercase tracking-[0.18em] text-brand-600 dark:text-brand-400">
-            First-time setup
+            Create account
           </p>
         </div>
       </header>

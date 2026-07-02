@@ -1,5 +1,4 @@
 import { useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
 import { Button, Card, EmptyState, Field, Modal, Pill, TextArea, TextInput } from '../components/ui'
 import { Picker } from '../components/Picker'
 import { DateTimeInput } from '../components/DateTimeInput'
@@ -83,13 +82,9 @@ export default function Jobs() {
         <Button onClick={() => setCreating(true)}>+ New job</Button>
       </div>
       <p className="-mt-1 text-xs text-slate-500">
-        A job groups one visit's charges, recoveries, photos and customer
-        sign-off into a single record — and a service report you can hand the
-        customer. Attach a movement to a job when you log it (the{' '}
-        <Link to="/bottles" className="font-medium text-brand-600 hover:underline">
-          bottle quick-log
-        </Link>{' '}
-        and Refrigerant log both have a Job field).
+        A job groups one visit's work into a single record, with a service
+        report you can hand the customer — pick the job in the Job field when
+        you log a charge or recovery.
       </p>
 
       {jobs.length > 3 && (
