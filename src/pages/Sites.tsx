@@ -249,6 +249,29 @@ export default function Sites() {
         </div>
       )}
 
+      {/* When a filter/search is narrowing the list, say so explicitly so
+          nobody thinks sites went missing — one tap back to the full list
+          (same pattern as the Bottles page). */}
+      {sites.length > 0 &&
+        (stateFilter !== 'all' || query.trim() !== '') && (
+          <div className="flex items-center justify-between gap-2 px-1 text-xs text-slate-500 dark:text-slate-400">
+            <span>
+              Showing {filteredSites.length} of {sites.length}{' '}
+              {sites.length === 1 ? 'site' : 'sites'}
+            </span>
+            <button
+              type="button"
+              onClick={() => {
+                setStateFilter('all')
+                setQuery('')
+              }}
+              className="shrink-0 font-medium text-brand-600 hover:underline dark:text-brand-400"
+            >
+              Clear filter
+            </button>
+          </div>
+        )}
+
       {sites.length === 0 ? (
         <EmptyState
           title="No sites yet"
@@ -259,11 +282,27 @@ export default function Sites() {
         <EmptyState
           title="No matches"
           body="No site matches that address or functional location. Try a different search."
+          action={
+            <Button variant="secondary" onClick={() => setQuery('')}>
+              Clear search
+            </Button>
+          }
         />
       ) : filteredSites.length === 0 ? (
         <EmptyState
           title={`No sites in ${stateFilter}`}
           body="No site matches that state and search. Pick another state or tap All."
+          action={
+            <Button
+              variant="secondary"
+              onClick={() => {
+                setStateFilter('all')
+                setQuery('')
+              }}
+            >
+              Show all sites
+            </Button>
+          }
         />
       ) : !hasGroups ? (
         <div className="space-y-2">

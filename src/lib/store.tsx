@@ -34,6 +34,9 @@ import {
   composeName,
   roleAtLeast,
   roleInfo,
+  canAssignRole,
+  canManageTech,
+  isTechnicianActive,
   expiryStatus,
   DEFAULT_TECHNICIAN_ROLE,
   TECHNICIAN_PURGE_DAYS,
@@ -42,16 +45,22 @@ import {
 } from './types'
 import {
   BOTTLE_FIELDS,
+  JOB_FIELDS,
   SITE_FIELDS,
   TECH_FIELDS,
   UNIT_FIELDS,
   diffFields,
   rawChanges,
 } from './audit'
-import type { AttachmentEntity, AttachmentKind } from './attachments'
+import {
+  deleteAttachment,
+  type AttachmentEntity,
+  type AttachmentKind,
+} from './attachments'
 import {
   loadState,
   normalizeState,
+  secureCorruptedBlob,
   requestPersistentStorage,
   saveState,
   uid,
@@ -63,7 +72,7 @@ import {
   subscribeToState,
 } from './sync'
 import { mergeStates } from './merge'
-import { rebaseChainHead, sealAuditLog } from './auditChain'
+import { deviceChainId, rebaseChainHead, sealAuditLog } from './auditChain'
 import { buildDemoState } from './demo'
 import { profileFor } from './compliance'
 import { deviceTimeZone } from './datetime'
@@ -89,6 +98,9 @@ function withAudit(
     // Local zone of the device that made the change, for unambiguous
     // display on the change log. Not part of the sealed hash.
     tz: deviceTimeZone() || s.location.timezone || undefined,
+    // Which device wrote this — only that device may seal it (see
+    // AuditEntry.origin / auditChain.sealAuditLog).
+    origin: deviceChainId(),
   }
   return [entry, ...s.auditLog]
 }
@@ -174,9 +186,23 @@ interface StoreApi {
     kind: AttachmentKind,
     descriptor?: string,
   ) => void
+  // Delete a photo / signature blob AND write the change-log entry, behind
+  // the supervisor gate (canDeleteRecords). Attachments are the one record
+  // class that can't go through the recycle bin (the blob is gone), so the
+  // gate + the logged removal are the whole protection — a signature is
+  // customer-facing legal evidence and must not be an apprentice's tap
+  // away from destruction. Resolves false when the gate denies.
+  removeAttachment: (
+    attachmentId: string,
+    entityType: AttachmentEntity,
+    entityId: string,
+    kind: AttachmentKind,
+    descriptor?: string,
+  ) => Promise<boolean>
   // technician profiles
   addTechnician: (t: Omit<Technician, 'id' | 'createdAt'>) => Technician
-  updateTechnician: (id: string, patch: Partial<Technician>) => void
+  // Returns false when the role gate refuses (its own toast shows).
+  updateTechnician: (id: string, patch: Partial<Technician>) => boolean
   // Soft-disable a profile (a tech who left). Kept for the retention
   // window, then purged. Reassigns the active seat if needed.
   deactivateTechnician: (id: string) => void
@@ -250,8 +276,8 @@ interface StoreApi {
   ) => BottlePreset
   removeCustomBottlePreset: (id: string) => void
   toggleFavoriteBottlePreset: (id: string) => void
-  // bulk
-  importState: (s: AppState) => void
+  // bulk. Returns false when the role gate refuses (its own toast shows).
+  importState: (s: AppState) => boolean
 }
 
 const StoreContext = createContext<StoreApi | null>(null)
@@ -262,8 +288,19 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   // initializer is the React-blessed place to do this work; we capture
   // the corruption flag on the side via useState rather than a ref so
   // we never read a ref during render.
-  const [{ state: initialState, status: initialStatus }] = useState(loadState)
+  const [
+    {
+      state: initialState,
+      status: initialStatus,
+      corruptedUnsecured: initialUnsecured,
+    },
+  ] = useState(loadState)
   const [state, setState] = useState<AppState>(initialState)
+  // True while a damaged blob is still sitting at the live storage key
+  // (couldn't be moved aside at load — storage full). Saving over it
+  // would destroy the only copy, so the save effect retries the move
+  // first and holds off persisting until it succeeds.
+  const corruptedAtKeyRef = useRef(!!initialUnsecured)
 
   // One-time: surface a corrupted-load to the user, request persistent
   // storage. Both happen exactly once per app load.
@@ -284,6 +321,25 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   // tech who's mid-form. We don't want to spam them on every keystroke.
   const lastQuotaToastRef = useRef(0)
   useEffect(() => {
+    if (corruptedAtKeyRef.current) {
+      // The damaged (unparseable) blob is still at the live key. Try to
+      // move it aside again — space may have been freed since load — and
+      // never write over it: it's the only copy of the old records.
+      if (secureCorruptedBlob()) {
+        corruptedAtKeyRef.current = false
+      } else {
+        const now = Date.now()
+        if (now - lastQuotaToastRef.current >= 60_000) {
+          lastQuotaToastRef.current = now
+          toast.show(
+            'Changes are only in memory — storage is full and the damaged saved data is being protected. Free up space, then see Settings → Storage health.',
+            'error',
+            12000,
+          )
+        }
+        return
+      }
+    }
     const result = saveState(state)
     if (result.ok) return
     const now = Date.now()
@@ -512,18 +568,28 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   // Role enforcement at the mutation layer — defence in depth behind the
   // UI's button-hiding. Returns true (allowed) when the active profile
-  // sits at or above `min`. When there is NO active profile (a solo /
-  // first-run / demo device with no per-tech identity) there is no role
-  // boundary to enforce, so the action is allowed — matching how the app
-  // behaves before a crew is set up. A denied action is a no-op and tells
-  // the user which tier it needs. Real, unspoofable enforcement still
-  // needs server-side per-tech sign-in; this stops accidental misuse and
-  // honours the permissions the UI advertises.
+  // sits at or above `min`. When the device has NO technician profiles at
+  // all (a solo / first-run device before a crew is set up) there is no
+  // role boundary to enforce, so the action is allowed. Once profiles
+  // exist, being signed OUT is the LEAST privileged state, not the most —
+  // otherwise "sign out" would be a one-tap escape from every gate on a
+  // shared device. A denied action is a no-op and tells the user which
+  // tier it needs. Real, unspoofable enforcement still needs server-side
+  // per-tech sign-in; this stops accidental misuse and honours the
+  // permissions the UI advertises.
   const ensureRole = useCallback(
     (min: TechnicianRole, action: string): boolean => {
       const s = stateRef.current
+      if (s.technicians.length === 0) return true
       const tech = s.technicians.find((t) => t.id === s.activeTechnicianId)
-      if (!tech) return true
+      if (!tech) {
+        toast.show(
+          `${action} needs ${roleInfo(min).label} access or higher — pick your profile first (no one is signed in).`,
+          'error',
+          6000,
+        )
+        return false
+      }
       if (roleAtLeast(tech.role, min)) return true
       toast.show(
         `${action} needs ${roleInfo(min).label} access or higher — you're signed in as ${roleInfo(tech.role).label}.`,
@@ -556,8 +622,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     if (!isSyncConfigured()) return
     if (!state.sync.enabled || !state.sync.teamId) return
     let cancelled = false
-    pullState(state.sync.teamId).then((remote) => {
-      if (!cancelled && remote) applyRemote(remote)
+    pullState(state.sync.teamId).then((r) => {
+      if (!cancelled && r.ok && r.state) applyRemote(r.state)
     })
     const unsub = subscribeToState(state.sync.teamId, (remote) => {
       applyRemote(remote)
@@ -568,6 +634,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     }
   }, [state.sync.enabled, state.sync.teamId, applyRemote])
 
+  // Bumped after a failed push to re-arm this effect for a retry.
+  const [pushRetryTick, setPushRetryTick] = useState(0)
+  const pushRetryHandleRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const lastSyncToastRef = useRef(0)
   useEffect(() => {
     if (!isSyncConfigured()) return
     if (!state.sync.enabled || !state.sync.teamId) return
@@ -577,12 +647,84 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     }
     const serialized = JSON.stringify(state)
     if (serialized === lastPushedRef.current) return
-    lastPushedRef.current = serialized
+    const teamId = state.sync.teamId
     const handle = setTimeout(() => {
-      void pushState(state.sync.teamId, state)
+      void (async () => {
+        // PULL-MERGE-PUSH. A device that was offline (realtime events are
+        // not replayed) must never blind-upsert its stale state over the
+        // server row — that destroys every record the rest of the team
+        // wrote in the meantime, with recovery depending on some other
+        // device still holding them. Merge the server row in first; if
+        // that changes local state, adopt it and let the re-run of this
+        // effect push the merged superset.
+        const pulled = await pullState(teamId)
+        if (!pulled.ok) {
+          // Can't see the server row — pushing anyway would blind-upsert
+          // stale state over work this device hasn't merged. Treat it
+          // like a failed push: surface, keep unpushed, retry.
+          const now = Date.now()
+          if (now - lastSyncToastRef.current >= 60_000) {
+            lastSyncToastRef.current = now
+            toast.show(
+              'Cloud sync could not reach the server — changes are saved on this device and will retry.',
+              'error',
+              8000,
+            )
+          }
+          if (pushRetryHandleRef.current) {
+            clearTimeout(pushRetryHandleRef.current)
+          }
+          pushRetryHandleRef.current = setTimeout(() => {
+            setPushRetryTick((t) => t + 1)
+          }, 30_000)
+          return
+        }
+        if (pulled.state) {
+          const merged = mergeStates(
+            stateRef.current,
+            normalizeState(pulled.state),
+          )
+          if (JSON.stringify(merged) !== JSON.stringify(stateRef.current)) {
+            remoteApplyRef.current = false
+            setState(merged)
+            return
+          }
+        }
+        const snapshot = stateRef.current
+        const ok = await pushState(teamId, snapshot)
+        if (ok) {
+          // Only a confirmed write counts as pushed — a failure must
+          // leave the door open for a retry, not read as replicated.
+          lastPushedRef.current = JSON.stringify(snapshot)
+        } else {
+          const now = Date.now()
+          if (now - lastSyncToastRef.current >= 60_000) {
+            lastSyncToastRef.current = now
+            toast.show(
+              'Cloud sync could not reach the server — changes are saved on this device and will retry.',
+              'error',
+              8000,
+            )
+          }
+          if (pushRetryHandleRef.current) {
+            clearTimeout(pushRetryHandleRef.current)
+          }
+          pushRetryHandleRef.current = setTimeout(() => {
+            setPushRetryTick((t) => t + 1)
+          }, 30_000)
+        }
+      })()
     }, 800)
-    return () => clearTimeout(handle)
-  }, [state])
+    return () => {
+      clearTimeout(handle)
+      // A pending failure-retry must not fire into an unmounted provider
+      // (or across a team change / sync toggle).
+      if (pushRetryHandleRef.current) {
+        clearTimeout(pushRetryHandleRef.current)
+        pushRetryHandleRef.current = null
+      }
+    }
+  }, [state, pushRetryTick, toast])
 
   const addBottle: StoreApi['addBottle'] = useCallback((b) => {
     const now = new Date().toISOString()
@@ -691,30 +833,34 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     if (!ensureRole('supervisor', 'Deleting a cylinder')) return
     setState((s) => {
       const before = s.bottles.find((b) => b.id === id)
-      const activeTech = s.technicians.find(
-        (x) => x.id === s.activeTechnicianId,
-      )
       const now = new Date().toISOString()
-      // The bottle row is removed, but its refrigerant log entries are
-      // PRESERVED for the audit trail — soft-deleted rather than purged,
-      // so the trail isn't broken when a cylinder is retired. We stamp
-      // the bottle number into deletedReason so the rows still identify
-      // their cylinder in the export once the bottle record is gone.
-      // Rows already soft-deleted keep their original reason untouched.
-      const transactions = s.transactions.map((t) =>
-        t.bottleId === id && !t.deletedAt
-          ? {
-              ...t,
-              deletedAt: now,
-              deletedBy: activeTech?.name || s.technician || undefined,
-              deletedByLicence:
-                activeTech?.arcLicenceNumber || s.arcLicenceNumber || undefined,
-              deletedReason: before
-                ? `Bottle ${before.bottleNumber} deleted`
-                : 'Bottle deleted',
+      // The bottle row is removed, but its refrigerant log entries stay
+      // LIVE — they are historical facts an ARC audit must be able to
+      // reproduce, so quarterly figures, leak stats and logbooks keep
+      // counting them exactly as when the cylinder was in service.
+      // (Rows carry the cylinder's number/tare/refrigerant frozen at the
+      // time of work, so they read standalone without the bottle record.
+      // Cascading a soft-delete here used to silently rewrite already-
+      // reported quarterly figures — never again.)
+      // Backfill the frozen number onto pre-freeze rows while the bottle
+      // record is still here to read it from — both where this cylinder
+      // is the row's bottle and where it was the SOURCE of a decant.
+      const transactions = before
+        ? s.transactions.map((t) => {
+            let next = t
+            if (t.bottleId === id && !t.deletedAt && !t.bottleNumber) {
+              next = { ...next, bottleNumber: before.bottleNumber }
             }
-          : t,
-      )
+            if (
+              t.sourceBottleId === id &&
+              !t.deletedAt &&
+              !t.sourceBottleNumber
+            ) {
+              next = { ...next, sourceBottleNumber: before.bottleNumber }
+            }
+            return next
+          })
+        : s.transactions
       return {
         ...s,
         bottles: s.bottles.filter((b) => b.id !== id),
@@ -742,7 +888,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
               entity: 'bottle',
               entityId: id,
               target: before.bottleNumber,
-              summary: `Removed bottle ${before.bottleNumber} — recoverable from the recycle bin; its log entries are kept (soft-deleted) for the audit trail`,
+              summary: `Removed bottle ${before.bottleNumber} — recoverable from the recycle bin; its log entries stay on the record and keep counting in reports`,
             })
           : s.auditLog,
       }
@@ -961,6 +1107,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const decommissionUnit: StoreApi['decommissionUnit'] = useCallback(
     (id, reason) => {
+      // Taking equipment off the leak-tracking radar is a senior call.
+      if (!ensureRole('lead_tech', 'Decommissioning a unit')) return
       setState((s) => {
         const before = s.units.find((u) => u.id === id)
         const units = s.units.map((u) =>
@@ -990,7 +1138,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         }
       })
     },
-    [],
+    [ensureRole],
   )
 
   const reactivateUnit: StoreApi['reactivateUnit'] = useCallback((id) => {
@@ -1064,10 +1212,32 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const updateJob: StoreApi['updateJob'] = useCallback((id, patch) => {
     setState((s) => {
       const before = s.jobs.find((j) => j.id === id)
+      if (!before) return s
+      // Re-freeze the site/client snapshot when the site link changes, so
+      // the job (and its printed service report) reads standalone against
+      // the site it now belongs to — same freezing addJob does.
+      let effective = patch
+      if ('siteId' in patch && patch.siteId !== before.siteId) {
+        const site = patch.siteId
+          ? s.sites.find((x) => x.id === patch.siteId)
+          : undefined
+        effective = { ...patch, siteName: site?.name, clientName: site?.client }
+      }
+      const siteName = (v: unknown) =>
+        v ? (s.sites.find((x) => x.id === v)?.name ?? String(v)) : '—'
+      const labelled = diffFields(before, effective, JOB_FIELDS, {
+        siteId: siteName,
+      })
+      // Catch-all so no field change is ever silently unlogged; skip the
+      // frozen snapshot fields the site re-link derives.
+      const all = rawChanges(before, effective, ['siteName', 'clientName'])
+      // Nothing actually changed (form saved untouched) — no empty edit.
+      if (all.length === 0 && labelled.length === 0) return s
       const jobs = s.jobs.map((j) =>
-        j.id === id ? { ...j, ...patch, updatedAt: new Date().toISOString() } : j,
+        j.id === id
+          ? { ...j, ...effective, updatedAt: new Date().toISOString() }
+          : j,
       )
-      if (!before) return { ...s, jobs }
       return {
         ...s,
         jobs,
@@ -1075,8 +1245,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           action: 'update',
           entity: 'job',
           entityId: id,
-          target: patch.reference ?? before.reference,
+          target: effective.reference ?? before.reference,
           summary: `Edited job ${before.reference}`,
+          changes: labelled.length ? labelled : all,
         }),
       }
     })
@@ -1142,6 +1313,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, [ensureRole])
 
   const addTransaction: StoreApi['addTransaction'] = useCallback((t) => {
+    // Fresh movements are open to every tier — logging work is the job.
+    // A correction re-states the record, so it carries the same gate the
+    // UI advertises (canCorrectRecords: lead tech and above).
+    if (t.correctsId && !ensureRole('lead_tech', 'Correcting a log entry')) {
+      return null
+    }
     let result: Transaction | null = null
     setState((s) => {
       const bottle = s.bottles.find((b) => b.id === t.bottleId)
@@ -1203,8 +1380,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         weightAfter: after,
         sourceWeightBefore: sourceBefore,
         sourceWeightAfter: sourceAfter,
-        // Freeze the cylinder's tare + refrigerant so quarterly / CSV
-        // figures survive the bottle later being deleted (see Transaction).
+        // Freeze the cylinder's number, tare + refrigerant so quarterly /
+        // CSV figures and row display survive the bottle later being
+        // deleted (see Transaction).
+        bottleNumber: t.bottleNumber ?? bottle.bottleNumber,
+        sourceBottleNumber: t.sourceBottleNumber ?? sourceBottle?.bottleNumber,
         bottleTareWeight: t.bottleTareWeight ?? bottle.tareWeight,
         bottleRefrigerantType:
           t.bottleRefrigerantType ?? bottle.refrigerantType,
@@ -1272,7 +1452,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       }
     })
     return result
-  }, [])
+  }, [ensureRole])
 
   const deleteTransaction: StoreApi['deleteTransaction'] = useCallback(
     (id, reason) => {
@@ -1285,6 +1465,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         const target = s.transactions.find((t) => t.id === id)
         const bottleNo =
           s.bottles.find((b) => b.id === target?.bottleId)?.bottleNumber ??
+          target?.bottleNumber ??
           '(deleted bottle)'
         return {
           ...s,
@@ -1331,6 +1512,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         if (!target || !target.deletedAt) return s
         const bottleNo =
           s.bottles.find((b) => b.id === target.bottleId)?.bottleNumber ??
+          target.bottleNumber ??
           '(deleted bottle)'
         return {
           ...s,
@@ -1463,7 +1645,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           target = s.jobs.find((j) => j.id === entityId)?.reference ?? target
         } else if (entityType === 'transaction') {
           const t = s.transactions.find((x) => x.id === entityId)
-          const bottleNo = t && s.bottles.find((b) => b.id === t.bottleId)?.bottleNumber
+          const bottleNo =
+            t &&
+            (s.bottles.find((b) => b.id === t.bottleId)?.bottleNumber ??
+              t.bottleNumber)
           target = t
             ? `${transactionLabel(t.kind)}${bottleNo ? ` · ${bottleNo}` : ''}`
             : target
@@ -1485,6 +1670,18 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       })
     },
     [],
+  )
+
+  const removeAttachment: StoreApi['removeAttachment'] = useCallback(
+    async (attachmentId, entityType, entityId, kind, descriptor) => {
+      const noun = kind === 'signature' ? 'a customer signature' : 'a photo'
+      if (!ensureRole('supervisor', `Deleting ${noun}`)) return false
+      await deleteAttachment(attachmentId)
+      // Record the removal only after the blob is actually gone.
+      logAttachmentRemoved(entityType, entityId, kind, descriptor)
+      return true
+    },
+    [ensureRole, logAttachmentRemoved],
   )
 
   const addTechnician: StoreApi['addTechnician'] = useCallback((t) => {
@@ -1523,6 +1720,42 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const updateTechnician: StoreApi['updateTechnician'] = useCallback(
     (id, patch) => {
+      // Data-layer gate mirroring the UI's rules (canManageTech /
+      // canAssignRole): you may edit yourself, but a role change — yours
+      // or anyone's — needs the right to assign that role, and editing
+      // someone else needs manage rights over their tier. Without this,
+      // one updateTechnician(myId, { role: 'owner' }) from any caller
+      // would hand out full access.
+      {
+        const s = stateRef.current
+        const target = s.technicians.find((t) => t.id === id)
+        if (target && s.technicians.length > 0) {
+          const actor = s.technicians.find(
+            (t) => t.id === s.activeTechnicianId,
+          )
+          const self = !!actor && actor.id === id
+          const roleChanging =
+            patch.role !== undefined && patch.role !== target.role
+          const ownerExists = s.technicians.some(
+            (t) => t.role === 'owner' && isTechnicianActive(t),
+          )
+          const roleOk =
+            !roleChanging || canAssignRole(actor?.role, patch.role!, ownerExists)
+          const allowed = self
+            ? roleOk
+            : canManageTech(actor?.role, target.role) && roleOk
+          if (!allowed) {
+            toast.show(
+              actor
+                ? `Editing ${self ? 'your role' : `${target.name}'s account`} needs a higher access tier than ${roleInfo(actor.role).label}.`
+                : `Editing ${target.name}'s account needs a signed-in profile with manager access.`,
+              'error',
+              6000,
+            )
+            return false
+          }
+        }
+      }
       setState((s) => {
         const before = s.technicians.find((t) => t.id === id)
         const technicians = s.technicians.map((t) =>
@@ -1576,12 +1809,41 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           }),
         }
       })
+      return true
     },
-    [],
+    [toast],
   )
+
+  // True when removing/disabling `id` would leave the device with NO
+  // usable supervisor-or-above profile. With ensureRole denying gated
+  // actions to lower tiers and to the signed-out state, that device
+  // would be permanently locked out of reactivating anyone, restoring
+  // backups and every other manager action — an unrecoverable state a
+  // single mis-tap must not be able to reach.
+  const wouldOrphanDevice = useCallback((id: string): boolean => {
+    const s = stateRef.current
+    const target = s.technicians.find((t) => t.id === id)
+    if (!target || !roleAtLeast(target.role, 'supervisor')) return false
+    if (target.deactivatedAt || target.suspendedAt) return false
+    return !s.technicians.some(
+      (t) =>
+        t.id !== id &&
+        !t.deactivatedAt &&
+        !t.suspendedAt &&
+        roleAtLeast(t.role, 'supervisor'),
+    )
+  }, [])
 
   const deleteTechnician: StoreApi['deleteTechnician'] = useCallback((id) => {
     if (!ensureRole('supervisor', 'Removing a technician')) return
+    if (wouldOrphanDevice(id)) {
+      toast.show(
+        'This is the last active supervisor/owner profile — appoint another manager before removing it, or the device locks itself out.',
+        'error',
+        8000,
+      )
+      return
+    }
     setState((s) => {
       const before = s.technicians.find((t) => t.id === id)
       const remaining = s.technicians.filter((t) => t.id !== id)
@@ -1612,11 +1874,19 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           : s.auditLog,
       }
     })
-  }, [ensureRole])
+  }, [ensureRole, wouldOrphanDevice, toast])
 
   const deactivateTechnician: StoreApi['deactivateTechnician'] = useCallback(
     (id) => {
       if (!ensureRole('supervisor', 'Deactivating a technician')) return
+      if (wouldOrphanDevice(id)) {
+        toast.show(
+          'This is the last active supervisor/owner profile — appoint another manager before deactivating it, or the device locks itself out.',
+          'error',
+          8000,
+        )
+        return
+      }
       setState((s) => {
         const target = s.technicians.find((t) => t.id === id)
         if (!target || target.deactivatedAt) return s
@@ -1644,7 +1914,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         }
       })
     },
-    [ensureRole],
+    [ensureRole, wouldOrphanDevice, toast],
   )
 
   const reactivateTechnician: StoreApi['reactivateTechnician'] = useCallback(
@@ -1674,6 +1944,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const suspendTechnician: StoreApi['suspendTechnician'] = useCallback((id) => {
     if (!ensureRole('supervisor', 'Suspending a technician')) return
+    if (wouldOrphanDevice(id)) {
+      toast.show(
+        'This is the last active supervisor/owner profile — appoint another manager before suspending it, or the device locks itself out.',
+        'error',
+        8000,
+      )
+      return
+    }
     setState((s) => {
       const target = s.technicians.find((t) => t.id === id)
       if (!target || target.suspendedAt) return s
@@ -1701,7 +1979,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         }),
       }
     })
-  }, [ensureRole])
+  }, [ensureRole, wouldOrphanDevice, toast])
 
   const unsuspendTechnician: StoreApi['unsuspendTechnician'] = useCallback(
     (id) => {
@@ -1793,6 +2071,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         by,
         byLicence,
         tz: deviceTimeZone() || s.location.timezone || undefined,
+        // Same origin stamping as withAudit — only this device may seal.
+        origin: deviceChainId(),
       })
       const entries: AuditEntry[] = [
         mk({
@@ -2285,7 +2565,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const importState = useCallback((nextRaw: AppState) => {
-    if (!ensureRole('supervisor', 'Importing a backup')) return
+    if (!ensureRole('supervisor', 'Importing a backup')) return false
     // Importing replaces the whole dataset (a restore-from-backup). We
     // keep the imported file's own history and prepend an 'import' entry
     // so the join point is visible in the trail. The file runs through
@@ -2314,6 +2594,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         summary: 'Imported data from a backup file',
       }),
     }))
+    return true
   }, [ensureRole])
 
   const api = useMemo<StoreApi>(
@@ -2339,6 +2620,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       restoreTransaction,
       restoreFromRecycleBin,
       logAttachmentRemoved,
+      removeAttachment,
       addTechnician,
       updateTechnician,
       deactivateTechnician,
@@ -2394,6 +2676,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       restoreTransaction,
       restoreFromRecycleBin,
       logAttachmentRemoved,
+      removeAttachment,
       addTechnician,
       updateTechnician,
       deactivateTechnician,

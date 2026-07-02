@@ -73,7 +73,48 @@ function BackupAlert() {
     }
   }, [hasData])
 
-  if (!status.due) return null
+  if (!status.due) {
+    // Even with a fresh backup, an unpersisted origin (typical for a
+    // non-installed iOS Safari user) can be evicted after ~7 days of not
+    // opening the site — the tech must hear about that BEFORE it happens,
+    // not only when the backup nag next fires.
+    if (!hasData || persisted) return null
+    return (
+      <Card className="!border-amber-300 !bg-amber-50 dark:!border-amber-900/50 dark:!bg-amber-900/20">
+        <div className="flex items-center justify-between gap-2">
+          <div className="text-sm font-semibold text-amber-900 dark:text-amber-200">
+            Records not protected from browser cleanup
+          </div>
+          <Link
+            to="/settings"
+            className="text-xs font-medium text-amber-900 hover:underline dark:text-amber-200"
+          >
+            Settings
+          </Link>
+        </div>
+        <p className="mt-1 text-xs text-amber-900/80 dark:text-amber-100/80">
+          This browser hasn't guaranteed it won't clear this site's data
+          under storage pressure — on iPhone/iPad, Safari can erase it after
+          about 7 days of not opening the app. Installing the app to your
+          home screen (Settings → Install on this device) protects it, and a
+          saved backup is always the safe copy.
+        </p>
+        <div className="mt-2">
+          <Button
+            variant="secondary"
+            onClick={() => {
+              void downloadBackup(state).then(() => {
+                setRefresh((n) => n + 1)
+                toast.show('Backup saved — keep the file somewhere safe', 'success')
+              })
+            }}
+          >
+            Back up now
+          </Button>
+        </div>
+      </Card>
+    )
+  }
 
   return (
     <Card className="!border-amber-300 !bg-amber-50 dark:!border-amber-900/50 dark:!bg-amber-900/20">

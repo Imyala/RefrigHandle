@@ -4,6 +4,7 @@ import { act, cleanup, render } from '@testing-library/react'
 import { StoreProvider, useStore } from '../store'
 import { ToastProvider } from '../toast'
 import { ConfirmProvider } from '../confirm'
+import { rangeTotals } from '../reports'
 import type { Bottle } from '../types'
 
 // Tests the REAL store provider end-to-end (no mocks of the reducer) — the
@@ -248,6 +249,41 @@ describe('recycle bin — nothing is permanently deleted', () => {
     expect(api.current.state.tombstones.some((t) => t.id === b.id)).toBe(false)
   })
 
+  it('deleting a bottle keeps its log entries live — past report figures never change', () => {
+    const api = setup()
+    const b = addBottle(api.current, { bottleNumber: 'RB2' })
+    act(() => {
+      api.current.addTransaction({ bottleId: b.id, kind: 'charge', amount: 3, date: DATE })
+    })
+    const txId = txIdFor(api.current, b.id)
+    // The new row carries the cylinder's number frozen at time of work.
+    expect(api.current.state.transactions.find((t) => t.id === txId)!.bottleNumber).toBe('RB2')
+
+    const totalsBefore = rangeTotals(
+      api.current.state.transactions.filter((t) => !t.deletedAt),
+      api.current.state.bottles,
+      () => true,
+      'Australia/Sydney',
+    )
+    expect(totalsBefore.find((r) => r.refrigerant === 'R32')?.chargedKg).toBe(3)
+
+    act(() => api.current.deleteBottle(b.id))
+    // The movement row stays LIVE — deleting the cylinder must not
+    // rewrite already-reported quarterly figures.
+    const row = api.current.state.transactions.find((t) => t.id === txId)!
+    expect(row.deletedAt).toBeFalsy()
+    const totalsAfter = rangeTotals(
+      api.current.state.transactions.filter((t) => !t.deletedAt),
+      api.current.state.bottles,
+      () => true,
+      'Australia/Sydney',
+    )
+    expect(totalsAfter.find((r) => r.refrigerant === 'R32')?.chargedKg).toBe(3)
+    // And the row still identifies its cylinder without the bottle record.
+    expect(row.bottleNumber).toBe('RB2')
+    expect(row.bottleRefrigerantType).toBe('R32')
+  })
+
   it('deleting a site recycle-bins the site and each of its units', () => {
     const api = setup()
     let siteId = ''
@@ -308,6 +344,47 @@ describe('jobs (work-orders)', () => {
     expect(api.current.state.jobs.find((j) => j.id === jobId)?.status).toBe('open')
   })
 
+  it('re-linking a job to another site refreshes the frozen site/client snapshot and logs the change', () => {
+    const api = setup()
+    let jobId = ''
+    let siteBId = ''
+    act(() => {
+      const siteA = api.current.addSite({ name: 'Old Plant', client: 'Acme', address: '', state: '', city: '', notes: '' })
+      const siteB = api.current.addSite({ name: 'New Plant', client: 'Bunya', address: '', state: '', city: '', notes: '' })
+      siteBId = siteB.id
+      jobId = api.current.addJob({
+        reference: 'WO-400',
+        siteId: siteA.id,
+        date: new Date().toISOString(),
+      }).id
+    })
+    expect(api.current.state.jobs.find((j) => j.id === jobId)?.siteName).toBe('Old Plant')
+
+    act(() => api.current.updateJob(jobId, { siteId: siteBId }))
+    const job = api.current.state.jobs.find((j) => j.id === jobId)!
+    // The printed service report reads the frozen snapshot — it must
+    // follow the re-link, not show the old site forever.
+    expect(job.siteName).toBe('New Plant')
+    expect(job.clientName).toBe('Bunya')
+    // And the edit is field-diffed on the change log.
+    const entry = api.current.state.auditLog.find(
+      (e) => e.entity === 'job' && e.action === 'update' && e.entityId === jobId,
+    )
+    expect(entry?.changes?.some((c) => c.field === 'Site' && c.to === 'New Plant')).toBe(true)
+  })
+
+  it('saving a job form untouched records no empty edit', () => {
+    const api = setup()
+    let jobId = ''
+    act(() => {
+      jobId = api.current.addJob({ reference: 'WO-500', date: new Date().toISOString() }).id
+    })
+    const auditBefore = api.current.state.auditLog.length
+    const before = api.current.state.jobs.find((j) => j.id === jobId)!
+    act(() => api.current.updateJob(jobId, { reference: before.reference, notes: before.notes }))
+    expect(api.current.state.auditLog.length).toBe(auditBefore)
+  })
+
   it('deleting a job recycle-bins it and restore brings it back', () => {
     const api = setup()
     let jobId = ''
@@ -350,11 +427,138 @@ describe('role enforcement at the store layer', () => {
     act(() => api.current.deleteTransaction(txId, 'nope'))
     expect(api.current.state.transactions.find((t) => t.id === txId)!.deletedAt).toBeFalsy()
   })
+
+  it('signing out does NOT raise privileges once a crew exists', () => {
+    const api = setup()
+    const b = addBottle(api.current, { bottleNumber: 'SIGNOUT1' })
+    addActiveTech(api, 'apprentice')
+    // "Sign out" of the profile — the old escape hatch.
+    act(() => api.current.setActiveTechnicianId(undefined))
+    act(() => api.current.deleteBottle(b.id))
+    // Still blocked: signed-out is the least privileged state, not the most.
+    expect(api.current.state.bottles.some((x) => x.id === b.id)).toBe(true)
+    expect(api.current.state.recycleBin.length).toBe(0)
+  })
+
+  it('an apprentice cannot promote themselves to owner', () => {
+    const api = setup()
+    addActiveTech(api, 'apprentice')
+    const me = api.current.state.technicians[0]
+    act(() => api.current.updateTechnician(me.id, { role: 'owner' }))
+    expect(
+      api.current.state.technicians.find((t) => t.id === me.id)!.role,
+    ).toBe('apprentice')
+  })
+
+  it('a technician cannot re-role a peer, but an owner can', () => {
+    const api = setup()
+    addActiveTech(api, 'owner')
+    let peerId = ''
+    act(() => {
+      peerId = api.current.addTechnician({
+        name: 'Peer',
+        firstName: 'Peer',
+        lastName: 'Tech',
+        arcLicenceNumber: 'L-2',
+        role: 'technician',
+      }).id
+    })
+    // Owner CAN re-role.
+    act(() => api.current.updateTechnician(peerId, { role: 'lead_tech' }))
+    expect(
+      api.current.state.technicians.find((t) => t.id === peerId)!.role,
+    ).toBe('lead_tech')
+    // A technician acting on a lead tech (above their tier) is blocked.
+    addActiveTech(api, 'technician')
+    act(() => api.current.updateTechnician(peerId, { role: 'apprentice' }))
+    expect(
+      api.current.state.technicians.find((t) => t.id === peerId)!.role,
+    ).toBe('lead_tech')
+  })
+
+  it('an apprentice cannot log a correction (fresh movements stay open)', () => {
+    const api = setup()
+    const b = addBottle(api.current)
+    act(() => {
+      api.current.addTransaction({ bottleId: b.id, kind: 'charge', amount: 5, date: DATE })
+    })
+    const originalId = txIdFor(api.current, b.id)
+    addActiveTech(api, 'apprentice')
+    // Fresh work still logs fine…
+    act(() => {
+      api.current.addTransaction({ bottleId: b.id, kind: 'charge', amount: 1, date: DATE })
+    })
+    expect(
+      api.current.state.transactions.filter(
+        (t) => t.bottleId === b.id && t.kind === 'charge',
+      ).length,
+    ).toBe(2)
+    // …but a correction is refused.
+    act(() => {
+      api.current.addTransaction({
+        bottleId: b.id,
+        kind: 'charge',
+        amount: 3,
+        date: DATE,
+        correctsId: originalId,
+        correctionReason: 'was wrong',
+      })
+    })
+    expect(
+      api.current.state.transactions.some((t) => t.correctsId === originalId),
+    ).toBe(false)
+  })
+
+  it('the last active supervisor/owner cannot be deactivated (lockout guard)', () => {
+    const api = setup()
+    addActiveTech(api, 'owner')
+    const me = api.current.state.technicians[0]
+    act(() => api.current.deactivateTechnician(me.id))
+    // Blocked — deactivating the only manager would strand the device
+    // with every gated action (including reactivation) denied.
+    expect(
+      api.current.state.technicians.find((t) => t.id === me.id)!.deactivatedAt,
+    ).toBeFalsy()
+    // With a second manager present, the same deactivation proceeds.
+    act(() => {
+      api.current.addTechnician({
+        name: 'Backup',
+        firstName: 'Back',
+        lastName: 'Up',
+        arcLicenceNumber: 'L-3',
+        role: 'supervisor',
+      })
+    })
+    act(() => api.current.deactivateTechnician(me.id))
+    expect(
+      api.current.state.technicians.find((t) => t.id === me.id)!.deactivatedAt,
+    ).toBeTruthy()
+  })
+
+  it('an apprentice cannot delete a photo or signature attachment', async () => {
+    const api = setup()
+    const b = addBottle(api.current)
+    addActiveTech(api, 'apprentice')
+    let result = true
+    await act(async () => {
+      result = await api.current.removeAttachment(
+        'any-id',
+        'bottle',
+        b.id,
+        'signature',
+        'Jane Smith',
+      )
+    })
+    // Denied at the gate — resolves false before the blob is touched.
+    expect(result).toBe(false)
+  })
 })
 
 describe('audit logging gaps closed', () => {
   it('changing a technician role is logged', () => {
     const api = setup()
+    // The role change must come from someone allowed to make it.
+    addActiveTech(api, 'owner')
     let id = ''
     act(() => {
       const t = api.current.addTechnician({ name: 'Pat', firstName: 'Pat', lastName: 'Lee', arcLicenceNumber: 'L-9', role: 'apprentice' })

@@ -2,9 +2,12 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Button, Card } from '../components/ui'
 import { CollapsibleSection } from '../components/CollapsibleSection'
-import { ShareTxButton } from '../components/ShareSheet'
+import { ShareTxButton, ShareTxModal } from '../components/ShareSheet'
 import { ComplianceHealth } from '../components/ComplianceHealth'
 import { FleetLeakWatch } from '../components/FleetLeakWatch'
+import { LogForm } from '../components/LogForm'
+import { addPhoto } from '../lib/attachments'
+import { useToast } from '../lib/toast'
 import { useStore } from '../lib/store'
 import {
   REASON_LABELS,
@@ -20,9 +23,14 @@ import { profileFor } from '../lib/compliance'
 import { formatWeight, kgToDisplay } from '../lib/units'
 
 export default function Dashboard() {
-  const { state } = useStore()
+  const { state, addTransaction } = useStore()
+  const toast = useToast()
   const { bottles, sites, jobs, transactions, unit } = state
   const openJobs = jobs.filter((j) => j.status === 'open').length
+  // The single most common action in the app, one tap from the home
+  // screen — same shared LogForm as the Bottles quick-log and Log tab.
+  const [logging, setLogging] = useState(false)
+  const [shareTx, setShareTx] = useState<Transaction | null>(null)
 
   const totalsByType = new Map<string, { count: number; net: number }>()
   for (const b of bottles) {
@@ -82,6 +90,12 @@ export default function Dashboard() {
           )}
         </div>
       </Card>
+
+      {bottles.length > 0 && (
+        <Button full onClick={() => setLogging(true)}>
+          + Log refrigerant
+        </Button>
+      )}
 
       <ComplianceHealth />
 
@@ -208,6 +222,44 @@ export default function Dashboard() {
           </div>
         </Card>
       )}
+
+      <LogForm
+        open={logging}
+        onClose={() => setLogging(false)}
+        onSave={(data, share) => {
+          // Staged photos are bound to the new row's id in the attachment
+          // store, not stored on the transaction itself (same handler as
+          // the Bottles quick-log).
+          const { photos, ...txData } = data
+          const result = addTransaction(txData)
+          if (result) {
+            if (photos && photos.length > 0) {
+              const txId = result.id
+              void Promise.all(
+                photos.map((f) => addPhoto('transaction', txId, f)),
+              ).catch(() =>
+                toast.show('Logged, but a photo could not be saved', 'error'),
+              )
+            }
+            toast.show(
+              data.amount > 0
+                ? `${transactionLabel(data.kind)} logged: ${formatWeight(data.amount, unit)}`
+                : `${transactionLabel(data.kind)} logged`,
+            )
+            setLogging(false)
+            if (share) setShareTx(result)
+          } else {
+            toast.show(
+              'Could not log — that bottle no longer exists. Re-pick the bottle and try again.',
+              'error',
+            )
+          }
+        }}
+      />
+
+      {shareTx && (
+        <ShareTxModal t={shareTx} onClose={() => setShareTx(null)} />
+      )}
     </div>
   )
 }
@@ -247,7 +299,8 @@ function RecentActivityItem({ t }: { t: Transaction }) {
             {t.amount > 0 && ` · ${formatWeight(t.amount, unit)}`}
           </div>
           <div className="truncate text-sm text-slate-500">
-            {bottle?.bottleNumber ?? '?'} · {bottle?.refrigerantType ?? '?'}
+            {bottle?.bottleNumber ?? t.bottleNumber ?? '?'} ·{' '}
+            {t.bottleRefrigerantType ?? bottle?.refrigerantType ?? '?'}
             {move
               ? ` · ${move.from} → ${move.to}`
               : (site?.name ?? t.siteName)

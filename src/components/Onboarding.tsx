@@ -16,6 +16,9 @@ import { useToast } from '../lib/toast'
 import { hashPassword, MIN_PASSWORD_LENGTH } from '../lib/auth'
 import { screenNewPassword } from '../lib/passwordStrength'
 import {
+  AU_REGION_TIMEZONE,
+  AU_REGIONS,
+  TIMEZONE_OPTIONS,
   isLocationComplete,
   isSetupComplete,
   roleInfo,
@@ -25,6 +28,7 @@ import {
   type TechnicianRole,
 } from '../lib/types'
 import { profileFor } from '../lib/compliance'
+import { deviceTimeZone } from '../lib/datetime'
 
 // Every policy a new account can read during setup. The router isn't
 // mounted yet at onboarding, so each is shown in a modal (reusing the same
@@ -120,11 +124,21 @@ function OnboardingScreen() {
   // larger org where the owner won't use the app and a supervisor needs
   // full access. Restricted to SETUP_ROLE_CHOICES here.
   const [role, setRole] = useState<TechnicianRole>('owner')
-  const [loc, setLoc] = useState<LocationSettings>({
-    country: 'Australia',
-    region: '',
-    city: '',
-    timezone: '',
+  const [loc, setLoc] = useState<LocationSettings>(() => {
+    // Prefill from the device: its IANA zone (when it's one of the
+    // Australian options) and, when exactly one state matches that zone,
+    // the state too — two picker taps a new user never has to make.
+    const devTz = deviceTimeZone()
+    const tz = TIMEZONE_OPTIONS.some((o) => o.iana === devTz) ? devTz : ''
+    const regions = tz
+      ? AU_REGIONS.filter((r) => AU_REGION_TIMEZONE[r] === tz)
+      : []
+    return {
+      country: 'Australia',
+      region: regions.length === 1 ? regions[0] : '',
+      city: '',
+      timezone: tz,
+    }
   })
   // Single combined agreement to all policies (standard practice). Required
   // to finish setup.
@@ -571,7 +585,12 @@ function OnboardingScreen() {
               Sets the timezone used for "now" defaults on transactions and the
               generated-at line on logbook PDFs.
             </p>
-            <LocationFields loc={loc} setLoc={setLoc} errors={locErrors} />
+            <LocationFields
+              loc={loc}
+              setLoc={setLoc}
+              errors={locErrors}
+              requireTimezone
+            />
           </Card>
 
           <Card>

@@ -4,13 +4,13 @@ import { useToast } from '../lib/toast'
 import { useConfirm } from '../lib/confirm'
 import {
   addPhoto,
-  deleteAttachment,
   listAttachments,
   type Attachment,
   type AttachmentEntity,
 } from '../lib/attachments'
 import { formatDateTime } from '../lib/datetime'
 import { useStore } from '../lib/store'
+import { canDeleteRecords } from '../lib/types'
 
 // Photo gallery + camera capture for a saved record (unit nameplate,
 // intake invoice, return docket, job evidence). Photos live in
@@ -36,7 +36,14 @@ export function PhotoSection({
 }) {
   const toast = useToast()
   const confirm = useConfirm()
-  const { logAttachmentRemoved } = useStore()
+  const { state, removeAttachment } = useStore()
+  // Mirror the store's supervisor gate so the button doesn't invite a tap
+  // the save layer will refuse (no crew set up = no boundary to enforce).
+  const mayDelete =
+    state.technicians.length === 0 ||
+    canDeleteRecords(
+      state.technicians.find((t) => t.id === state.activeTechnicianId)?.role,
+    )
   const [photos, setPhotos] = useState<LoadedPhoto[]>([])
   const [viewing, setViewing] = useState<LoadedPhoto | null>(null)
   const [busy, setBusy] = useState(false)
@@ -98,10 +105,16 @@ export function PhotoSection({
     })
     if (!ok) return
     try {
-      await deleteAttachment(p.a.id)
-      // Record the removal on the change log so it isn't an off-the-record
-      // delete — only after the blob is actually gone.
-      logAttachmentRemoved(entityType, entityId, 'photo', p.a.caption)
+      // Deletes the blob and writes the change-log entry behind the
+      // supervisor gate — resolves false (with its own toast) if denied.
+      const deleted = await removeAttachment(
+        p.a.id,
+        entityType,
+        entityId,
+        'photo',
+        p.a.caption,
+      )
+      if (!deleted) return
       URL.revokeObjectURL(p.url)
       setPhotos((list) => list.filter((x) => x.a.id !== p.a.id))
       setViewing(null)
@@ -146,7 +159,11 @@ export function PhotoSection({
           e.target.value = ''
         }}
       />
-      <PhotoViewer photo={viewing} onClose={() => setViewing(null)} onDelete={onDelete} />
+      <PhotoViewer
+        photo={viewing}
+        onClose={() => setViewing(null)}
+        onDelete={mayDelete ? onDelete : undefined}
+      />
     </div>
   )
 }
@@ -158,7 +175,7 @@ function PhotoViewer({
 }: {
   photo: LoadedPhoto | null
   onClose: () => void
-  onDelete: (p: LoadedPhoto) => void
+  onDelete?: (p: LoadedPhoto) => void
 }) {
   const { state } = useStore()
   if (!photo) return null
@@ -174,11 +191,17 @@ function PhotoViewer({
           Taken {formatDateTime(photo.a.createdAt, state.location.timezone, state.clock)} ·{' '}
           {(photo.a.byteSize / 1024).toFixed(0)} KB
         </div>
-        <div className="flex justify-end">
-          <Button variant="danger" onClick={() => onDelete(photo)}>
-            Delete photo
-          </Button>
-        </div>
+        {onDelete ? (
+          <div className="flex justify-end">
+            <Button variant="danger" onClick={() => onDelete(photo)}>
+              Delete photo
+            </Button>
+          </div>
+        ) : (
+          <p className="text-right text-xs text-slate-400">
+            Deleting a photo needs supervisor access.
+          </p>
+        )}
       </div>
     </Modal>
   )

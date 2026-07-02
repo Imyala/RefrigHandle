@@ -186,7 +186,7 @@ export default function AuditLog() {
                 {mayRestore ? (
                   <button
                     onClick={() => handleRestoreBin(entry)}
-                    className="shrink-0 rounded-lg px-2 py-1 text-xs font-medium text-brand-600 hover:bg-brand-50 dark:hover:bg-brand-900/20"
+                    className="min-h-11 shrink-0 rounded-lg px-2.5 py-1 text-xs font-medium text-brand-600 hover:bg-brand-50 dark:hover:bg-brand-900/20"
                     aria-label={`Restore ${entry.label}`}
                   >
                     ↩ Restore
@@ -353,7 +353,7 @@ export default function AuditLog() {
                     {tx.deletedAt && mayRestore && (
                       <button
                         onClick={() => handleRestore(tx)}
-                        className="rounded-lg px-2 py-1 text-xs font-medium text-brand-600 hover:bg-brand-50 dark:hover:bg-brand-900/20"
+                        className="min-h-11 rounded-lg px-2.5 py-1 text-xs font-medium text-brand-600 hover:bg-brand-50 dark:hover:bg-brand-900/20"
                         aria-label="Restore this transaction"
                       >
                         ↩ Restore

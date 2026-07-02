@@ -598,6 +598,13 @@ export default function Bottles() {
             setLogKind(null)
             setSheetBottleId(null)
             if (share) setShareTx(result)
+          } else {
+            // The store refused the row (bottle deleted on another device
+            // between open and save) — say so instead of a silent no-op.
+            toast.show(
+              'Could not log — that bottle no longer exists. Re-pick the bottle and try again.',
+              'error',
+            )
           }
         }}
       />
@@ -704,7 +711,7 @@ export default function Bottles() {
                 const ok = await confirm({
                   title: 'Remove this bottle?',
                   message:
-                    'The bottle moves to Recently deleted (Change log → Recently deleted), where a supervisor can restore it. Its refrigerant log entries are always kept for the audit trail — in the CSV/JSON export and Settings → Deleted transactions.',
+                    'The bottle moves to Recently deleted (Change log → Recently deleted), where a supervisor can restore it. Its refrigerant log entries stay on the record and keep counting in reports — retiring a cylinder never changes past quarterly figures.',
                   confirmLabel: 'Remove bottle',
                   danger: true,
                 })

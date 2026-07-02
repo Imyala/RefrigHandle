@@ -13,9 +13,11 @@ import { DateInput } from '../components/DateInput'
 import { LocationFields } from '../components/LocationFields'
 import { InstallAppButton } from '../components/InstallAppButton'
 import { DiagnosticsCard } from '../components/Diagnostics'
+import { StorageHealthCard } from '../components/StorageHealth'
 import { QuarterlyReportCard } from '../components/QuarterlyReport'
 import { AuditReportCard } from '../components/AuditReport'
 import { useStore } from '../lib/store'
+import { uid } from '../lib/storage'
 import {
   expiryStatus,
   REFRIGERANT_TYPES,
@@ -390,7 +392,13 @@ export default function Settings() {
       // Photos/signatures ride in the backup under __attachments — restore
       // them to the attachment store and keep the key out of the app state.
       const { __attachments, ...stateOnly } = data
-      importState(stateOnly as unknown as AppState)
+      // The role gate can refuse (its own toast shows) — nothing else in
+      // the restore may proceed, or denied users would still get the
+      // file's photo blobs written into the attachment store.
+      if (!importState(stateOnly as unknown as AppState)) {
+        setBackupBusy(null)
+        return
+      }
       if (Array.isArray(__attachments) && __attachments.length > 0) {
         const n = await importAttachments(__attachments)
         if (n > 0) {
@@ -1007,8 +1015,9 @@ export default function Settings() {
       {isSyncConfigured() && (
         <Card>
           <div className="mb-2 flex items-center justify-between gap-2">
-            <div className="text-sm font-semibold text-slate-700 dark:text-slate-200">
+            <div className="flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-200">
               Cloud sync
+              <Pill tone="amber">Beta</Pill>
             </div>
             <Pill tone={state.sync.enabled ? 'green' : 'slate'}>
               {state.sync.enabled ? 'On' : 'Off'}
@@ -1021,32 +1030,70 @@ export default function Settings() {
               individual settings fields merge per item, so two devices
               working at once don't overwrite each other's changes.
             </p>
-            <p className="rounded-lg bg-slate-50 p-2.5 text-xs text-slate-500 dark:bg-slate-800/60 dark:text-slate-400">
-              Sync keeps your devices in step — it is not a long-term archive.
-              Keep taking periodic JSON exports (below) as your own off-device
-              copy of the record.
+            <p className="rounded-lg bg-amber-50 p-2.5 text-xs text-amber-900 dark:bg-amber-900/20 dark:text-amber-100">
+              <strong>Beta, self-hosted, small teams.</strong> Anyone who
+              learns your Team ID can read and change your team's synced
+              data, so treat it like a password — use the generated one, not
+              a guessable name. There are no per-person server accounts yet.
+              Sync keeps your devices in step — it is not a long-term
+              archive. Keep taking periodic JSON exports (below) as your own
+              off-device copy of the record.
             </p>
-            <Field label="Team ID" hint="Pick anything — must match across all devices">
+            <Field
+              label="Team ID"
+              hint="Treat it like a password — must match across all devices"
+            >
               <div className="flex gap-2">
                 <TextInput
                   value={teamIdInput}
                   onChange={(e) => setTeamIdInput(e.target.value)}
-                  placeholder="e.g. acme-hvac"
+                  placeholder="tap Generate, or paste your team's ID"
                 />
                 <Button
                   onClick={() => {
+                    const id = teamIdInput.trim()
+                    // The server refuses IDs under 12 characters (they're
+                    // guessable and collide) — catch it here with a clear
+                    // message instead of an endless failed-push loop.
+                    if (id && id.length < 12) {
+                      toast.show(
+                        'Team ID too short — tap “Generate a secure Team ID” and share that with your team.',
+                        'error',
+                        7000,
+                      )
+                      return
+                    }
                     setSyncSettings({
-                      enabled: !!teamIdInput.trim(),
-                      teamId: teamIdInput.trim(),
+                      enabled: !!id,
+                      teamId: id,
                     })
-                    toast.show(
-                      teamIdInput.trim() ? 'Cloud sync enabled' : 'Cloud sync paused',
-                    )
+                    toast.show(id ? 'Cloud sync enabled' : 'Cloud sync paused')
                   }}
                 >
                   {state.sync.enabled ? 'Update' : 'Connect'}
                 </Button>
               </div>
+              {state.sync.enabled && state.sync.teamId.length < 12 && (
+                <p className="mt-1.5 rounded-lg bg-red-50 p-2 text-xs text-red-800 dark:bg-red-900/20 dark:text-red-200">
+                  Your current Team ID is too short for the hardened server
+                  setup and pushes will be refused. Generate a secure ID
+                  below, connect with it here first (this device holds the
+                  data), then switch every other device to the same new ID.
+                </p>
+              )}
+              {(!state.sync.enabled || state.sync.teamId.length < 12) && (
+                <button
+                  type="button"
+                  className="mt-1.5 min-h-11 text-left text-xs font-medium text-brand-600 hover:underline"
+                  onClick={() => {
+                    // A long random ID is the only thing keeping strangers
+                    // out of the team's row — never suggest a guessable one.
+                    setTeamIdInput(uid())
+                  }}
+                >
+                  Generate a secure Team ID
+                </button>
+              )}
             </Field>
             {state.sync.enabled && (
               <Button
@@ -1076,6 +1123,10 @@ export default function Settings() {
           device.
         </p>
         <InstallAppButton variant="full" />
+      </Card>
+
+      <Card>
+        <StorageHealthCard />
       </Card>
 
       <Card>
@@ -1156,7 +1207,7 @@ export default function Settings() {
               ? { passwordHash: data.passwordChange.hash }
               : {}
           if (editingTech) {
-            updateTechnician(editingTech.id, {
+            const updated = updateTechnician(editingTech.id, {
               firstName: data.firstName,
               middleName: data.middleName,
               lastName: data.lastName,
@@ -1166,7 +1217,8 @@ export default function Settings() {
               licenceExpiry: data.licenceExpiry,
               ...passwordHashPatch,
             })
-            toast.show('Tech updated')
+            // The gate shows its own denial toast — no false success here.
+            if (updated) toast.show('Tech updated')
           } else {
             const created = addTechnician({
               firstName: data.firstName,

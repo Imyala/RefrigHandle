@@ -305,6 +305,14 @@ export interface Transaction {
   // back to the live bottle lookup.
   bottleTareWeight?: number
   bottleRefrigerantType?: string
+  // Cylinder number(s) frozen at the time of work, so the row still
+  // identifies its cylinder(s) in every view and report after the bottle
+  // record is deleted. A deleted bottle's movements stay LIVE — they are
+  // historical facts that quarterly figures and logbooks must keep
+  // counting — so they can't rely on the live bottle lookup. Optional:
+  // older rows fall back to that lookup.
+  bottleNumber?: string
+  sourceBottleNumber?: string
   date: string // ISO date
   technician?: string
   // ARC Refrigerant Handling Licence number stamped at the time of
@@ -486,6 +494,14 @@ export interface AuditEntry {
   seq?: number
   prevHash?: string
   hash?: string
+  // Chain id of the DEVICE THAT CREATED the entry, stamped at write time
+  // (before sealing). Sealing is restricted to entries this device
+  // originated: if an unsealed entry ever reaches another device via
+  // sync, both sides sealing it into their own chains would leave two
+  // permanently different seals for the same entry id — endless merge
+  // ping-pong and false tamper alarms. Routing metadata only; not part
+  // of the sealed hash. Unset on entries written before this existed.
+  origin?: string
 }
 
 // Deletion marker for hard-deleted records (bottles / sites / units /

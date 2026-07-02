@@ -96,6 +96,28 @@ export interface LoadResult {
   // When status === 'corrupted', the unparseable blob is preserved here
   // so the user can recover it from Settings → Storage health.
   corruptedBackupKey?: string
+  // Set when the damaged blob could NOT be moved to a backup key (quota
+  // full) and is still sitting at the live KEY. The save path must not
+  // write over KEY until secureCorruptedBlob() succeeds — one plain save
+  // of the fresh empty state would destroy the only copy.
+  corruptedUnsecured?: boolean
+}
+
+// Retry moving the damaged blob from the live KEY to a timestamped
+// backup key (used when the move failed at load time because storage
+// was full and the user has since freed space). True once KEY is clear.
+export function secureCorruptedBlob(): boolean {
+  try {
+    const raw = localStorage.getItem(KEY)
+    if (raw == null) return true
+    const backupKey =
+      CORRUPTED_PREFIX + new Date().toISOString().replace(/[:.]/g, '-')
+    localStorage.setItem(backupKey, raw)
+    localStorage.removeItem(KEY)
+    return true
+  } catch {
+    return false
+  }
 }
 
 function normalize(parsed: LegacyState): AppState {
@@ -120,15 +142,34 @@ function normalize(parsed: LegacyState): AppState {
     }
   })
 
+  // ANCIENT blobs (before the `sites` array existed) used `jobId` /
+  // `locationId` on a transaction as the SITE link — those fold into
+  // siteId. Modern blobs always serialize `sites` (even empty), and on
+  // them `jobId` is the WORK-ORDER link (Transaction.jobId) and must be
+  // preserved untouched — stripping it here would sever every
+  // transaction→job link on every single load and empty out the Jobs
+  // feature (service reports, job totals) app-wide.
+  const ancientSiteLink = parsed.sites == null
   const transactions: Transaction[] = (parsed.transactions ?? []).map((t) => {
-    const { jobId, locationId, ...rest } = t
+    const retiredKind = (next: Transaction) =>
+      // The 'station' kind was retired alongside the 'stationed' status —
+      // treat legacy rows as a plain transfer to a site.
+      (next.kind as string) === 'station' ? ('transfer' as const) : next.kind
+    if (ancientSiteLink) {
+      const { jobId, locationId, ...rest } = t
+      const next = rest as unknown as Transaction
+      return {
+        ...next,
+        kind: retiredKind(next),
+        siteId: next.siteId ?? jobId ?? locationId,
+      }
+    }
+    const { locationId, ...rest } = t
     const next = rest as unknown as Transaction
     return {
       ...next,
-      // The 'station' kind was retired alongside the 'stationed' status —
-      // treat legacy rows as a plain transfer to a site.
-      kind: (next.kind as string) === 'station' ? 'transfer' : next.kind,
-      siteId: next.siteId ?? jobId ?? locationId,
+      kind: retiredKind(next),
+      siteId: next.siteId ?? locationId,
     }
   })
 
@@ -326,9 +367,15 @@ export function loadState(): LoadResult {
       localStorage.setItem(backupKey, raw)
       localStorage.removeItem(KEY)
     } catch {
-      // If we can't even move it (quota full), leave it in place.
-      // Returning empty state still loses the live view, but the raw
-      // blob at KEY is untouched and recoverable manually.
+      // Can't move it (quota full) — the blob is still at the live KEY.
+      // Flag it so the save path refuses to overwrite KEY until
+      // secureCorruptedBlob() gets it out of the way; otherwise the very
+      // first save of the fresh empty state would destroy the only copy.
+      return {
+        state: { ...EMPTY_STATE },
+        status: 'corrupted',
+        corruptedUnsecured: true,
+      }
     }
     return {
       state: { ...EMPTY_STATE },

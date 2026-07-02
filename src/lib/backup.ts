@@ -192,8 +192,10 @@ export function buildLogCsv(
       formatDateTime(t.date, t.tz || state.location.timezone, state.clock, true),
       t.tz || state.location.timezone || '',
       t.kind,
-      b?.bottleNumber ?? '',
-      sb?.bottleNumber ?? '',
+      // Frozen numbers first so the CSV stays correct after a bottle is
+      // deleted (its movements stay on the record).
+      t.bottleNumber ?? b?.bottleNumber ?? '',
+      t.sourceBottleNumber ?? sb?.bottleNumber ?? '',
       // Frozen refrigerant first so the CSV stays correct after a bottle
       // is deleted (matches the quarterly report).
       t.bottleRefrigerantType ?? b?.refrigerantType ?? '',
