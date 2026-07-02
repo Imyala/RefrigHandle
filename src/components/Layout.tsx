@@ -78,13 +78,16 @@ export function Layout() {
 
       <DemoBanner />
 
-      <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-4 pb-28">
+      <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-4 pb-10">
         <Outlet />
       </main>
 
+      {/* Sticky (not fixed) so the bar occupies real layout space: the page
+          can always scroll its last control clear of the bar, instead of
+          relying on a guessed padding that a taller bar silently eats. */}
       <nav
         aria-label="Primary"
-        className="fixed bottom-0 left-0 right-0 z-30 border-t border-slate-200 bg-white/95 backdrop-blur dark:border-slate-800 dark:bg-slate-950/95"
+        className="sticky bottom-0 z-30 border-t border-slate-200 bg-white/95 backdrop-blur dark:border-slate-800 dark:bg-slate-950/95"
       >
         <div
           className="relative mx-auto grid max-w-3xl grid-cols-5"
@@ -141,8 +144,9 @@ export function Layout() {
 }
 
 // Persistent strip shown while exploring on sample data. Makes the demo
-// state unmistakable and offers the one-tap path to real setup (which wipes
-// the sample data). Renders nothing outside demo mode.
+// state unmistakable and offers both ways out: commit to real setup, or
+// exit guest mode back to the welcome screen without creating an account.
+// Renders nothing outside demo mode.
 function DemoBanner() {
   const { state, exitDemo } = useStore()
   const confirm = useConfirm()
@@ -158,20 +162,39 @@ function DemoBanner() {
     if (ok) exitDemo()
   }
 
+  async function exitGuest() {
+    const ok = await confirm({
+      title: 'Exit guest mode?',
+      message:
+        'This discards the sample data and returns to the welcome screen. No account is created and nothing is kept.',
+      confirmLabel: 'Exit guest mode',
+    })
+    if (ok) exitDemo()
+  }
+
   return (
     <div className="border-b border-amber-300 bg-amber-50 dark:border-amber-900/50 dark:bg-amber-900/20">
-      <div className="mx-auto flex max-w-3xl items-center justify-between gap-3 px-4 py-2">
+      <div className="mx-auto flex max-w-3xl flex-wrap items-center justify-between gap-x-3 gap-y-1.5 px-4 py-2">
         <p className="text-xs text-amber-900 dark:text-amber-100">
           <span className="font-semibold">Exploring with sample data.</span>{' '}
           Nothing here is a real record.
         </p>
-        <button
-          type="button"
-          onClick={() => void setUp()}
-          className="shrink-0 rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-amber-700"
-        >
-          Set up my business
-        </button>
+        <div className="flex shrink-0 items-center gap-2">
+          <button
+            type="button"
+            onClick={() => void exitGuest()}
+            className="rounded-lg border border-amber-600/60 px-3 py-1.5 text-xs font-semibold text-amber-800 transition hover:bg-amber-100 dark:text-amber-200 dark:hover:bg-amber-900/40"
+          >
+            Exit guest mode
+          </button>
+          <button
+            type="button"
+            onClick={() => void setUp()}
+            className="rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-amber-700"
+          >
+            Set up my business
+          </button>
+        </div>
       </div>
     </div>
   )

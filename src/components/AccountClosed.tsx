@@ -6,10 +6,16 @@ import { RetentionNotice } from './RetentionNotice'
 import type { AccountClosure } from '../lib/types'
 
 // How long the closed-account screen stays up before the device is wiped
-// back to the account-creation screen. The business already has its
-// records (a ZIP is downloaded at closure), so there's nothing to lose
-// by returning to a clean slate once they've read the closure notice.
-const CLOSURE_RESET_MS = 5 * 60 * 1000
+// back to the welcome screen. The business already has its records (a ZIP
+// is downloaded at closure), so there's nothing to lose by returning to a
+// clean slate once they've read the closure notice.
+const CLOSURE_RESET_MS = 3 * 60 * 1000
+
+// When this module was (re)loaded. A closure requested BEFORE this moment
+// means the page was reloaded after closing — the notice was already shown
+// once, so a refresh goes straight back to the welcome screen instead of
+// re-showing it for the rest of the countdown.
+const PAGE_LOADED_AT = Date.now()
 
 // Once account closure has been requested, the app shows the closed screen
 // instead of the normal UI. There is deliberately no in-app way to reopen —
@@ -32,13 +38,17 @@ function AccountClosedScreen({ closure }: { closure: AccountClosure }) {
     true,
   )
 
-  // Once the account has been closed for CLOSURE_RESET_MS, wipe the device
-  // back to the account-creation screen. The countdown runs from when
-  // closure was requested, so a reload partway through still fires on
-  // time (a stale closure just resets immediately on next open).
+  // The device returns to the welcome screen on a page refresh OR after
+  // CLOSURE_RESET_MS — whichever comes first. A closure stamped before this
+  // page load means we're on a reload (or the next open), so reset straight
+  // away; otherwise run the countdown from when closure was requested.
   useEffect(() => {
-    const elapsed = Date.now() - new Date(closure.requestedAt).getTime()
-    const remaining = Math.max(0, CLOSURE_RESET_MS - elapsed)
+    const requestedAt = new Date(closure.requestedAt).getTime()
+    if (requestedAt < PAGE_LOADED_AT) {
+      resetToFreshInstall()
+      return
+    }
+    const remaining = Math.max(0, CLOSURE_RESET_MS - (Date.now() - requestedAt))
     const handle = setTimeout(resetToFreshInstall, remaining)
     return () => clearTimeout(handle)
   }, [closure.requestedAt, resetToFreshInstall])
@@ -84,6 +94,11 @@ function AccountClosedScreen({ closure }: { closure: AccountClosure }) {
           <p className="mt-3 text-sm text-slate-700 dark:text-slate-300">
             To use RefrigHandle again, set the app up fresh — and restore the
             backup that downloaded at closure to bring your records back.
+          </p>
+          <p className="mt-3 text-xs text-slate-500 dark:text-slate-400">
+            This device returns to the start screen in a few minutes (or as
+            soon as the page is reloaded) — email or print your closure record
+            below before it does.
           </p>
           <div className="mt-3 space-y-2 border-t border-slate-200 pt-3 text-xs text-slate-500 dark:border-slate-800">
             <p className="font-semibold">Records retention</p>

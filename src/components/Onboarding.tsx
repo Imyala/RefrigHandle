@@ -469,7 +469,7 @@ function OnboardingScreen() {
         </div>
       </header>
 
-      <main className="mx-auto w-full max-w-2xl flex-1 px-4 py-5 pb-28">
+      <main className="mx-auto w-full max-w-2xl flex-1 px-4 py-5 pb-8">
         <div className="space-y-4">
           <p className="px-1 text-sm text-slate-600 dark:text-slate-400">
             Before you start logging work, we need your business and
@@ -790,8 +790,11 @@ function OnboardingScreen() {
         })()}
       </Modal>
 
+      {/* Sticky (not fixed) so the action bar occupies real layout space —
+          however tall it grows ("Still needed" list, guest link), the policy
+          checkbox above can always scroll clear of it. */}
       <div
-        className="fixed bottom-0 left-0 right-0 z-30 border-t border-slate-200 bg-white/95 px-4 py-3 backdrop-blur dark:border-slate-800 dark:bg-slate-950/95"
+        className="sticky bottom-0 z-30 border-t border-slate-200 bg-white/95 px-4 py-3 backdrop-blur dark:border-slate-800 dark:bg-slate-950/95"
         style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 0.75rem)' }}
       >
         <div className="mx-auto max-w-2xl">
