@@ -72,7 +72,7 @@ import {
   subscribeToState,
 } from './sync'
 import { mergeStates } from './merge'
-import { rebaseChainHead, sealAuditLog } from './auditChain'
+import { deviceChainId, rebaseChainHead, sealAuditLog } from './auditChain'
 import { buildDemoState } from './demo'
 import { profileFor } from './compliance'
 import { deviceTimeZone } from './datetime'
@@ -98,6 +98,9 @@ function withAudit(
     // Local zone of the device that made the change, for unambiguous
     // display on the change log. Not part of the sealed hash.
     tz: deviceTimeZone() || s.location.timezone || undefined,
+    // Which device wrote this — only that device may seal it (see
+    // AuditEntry.origin / auditChain.sealAuditLog).
+    origin: deviceChainId(),
   }
   return [entry, ...s.auditLog]
 }
@@ -630,6 +633,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     }
   }, [state.sync.enabled, state.sync.teamId, applyRemote])
 
+  // Bumped after a failed push to re-arm this effect for a retry.
+  const [pushRetryTick, setPushRetryTick] = useState(0)
+  const pushRetryHandleRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const lastSyncToastRef = useRef(0)
   useEffect(() => {
     if (!isSyncConfigured()) return
     if (!state.sync.enabled || !state.sync.teamId) return
@@ -639,12 +646,62 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     }
     const serialized = JSON.stringify(state)
     if (serialized === lastPushedRef.current) return
-    lastPushedRef.current = serialized
+    const teamId = state.sync.teamId
     const handle = setTimeout(() => {
-      void pushState(state.sync.teamId, state)
+      void (async () => {
+        // PULL-MERGE-PUSH. A device that was offline (realtime events are
+        // not replayed) must never blind-upsert its stale state over the
+        // server row — that destroys every record the rest of the team
+        // wrote in the meantime, with recovery depending on some other
+        // device still holding them. Merge the server row in first; if
+        // that changes local state, adopt it and let the re-run of this
+        // effect push the merged superset.
+        try {
+          const remote = await pullState(teamId)
+          if (remote) {
+            const merged = mergeStates(
+              stateRef.current,
+              normalizeState(remote),
+            )
+            if (
+              JSON.stringify(merged) !== JSON.stringify(stateRef.current)
+            ) {
+              remoteApplyRef.current = false
+              setState(merged)
+              return
+            }
+          }
+        } catch {
+          // Pull failed (offline) — fall through and try the push; a
+          // failure there is surfaced below.
+        }
+        const snapshot = stateRef.current
+        const ok = await pushState(teamId, snapshot)
+        if (ok) {
+          // Only a confirmed write counts as pushed — a failure must
+          // leave the door open for a retry, not read as replicated.
+          lastPushedRef.current = JSON.stringify(snapshot)
+        } else {
+          const now = Date.now()
+          if (now - lastSyncToastRef.current >= 60_000) {
+            lastSyncToastRef.current = now
+            toast.show(
+              'Cloud sync could not reach the server — changes are saved on this device and will retry.',
+              'error',
+              8000,
+            )
+          }
+          if (pushRetryHandleRef.current) {
+            clearTimeout(pushRetryHandleRef.current)
+          }
+          pushRetryHandleRef.current = setTimeout(() => {
+            setPushRetryTick((t) => t + 1)
+          }, 30_000)
+        }
+      })()
     }, 800)
     return () => clearTimeout(handle)
-  }, [state])
+  }, [state, pushRetryTick, toast])
 
   const addBottle: StoreApi['addBottle'] = useCallback((b) => {
     const now = new Date().toISOString()

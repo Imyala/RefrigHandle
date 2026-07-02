@@ -159,8 +159,12 @@ export async function sealAuditLog(
     }
   }
 
+  // Seal only entries THIS device originated (or legacy entries with no
+  // origin stamp). A foreign unsealed entry that arrived mid-sync must
+  // wait for its own device's seal — if both sides sealed it, the two
+  // different seals for one entry id would never converge in a merge.
   const unsealed = log
-    .filter((e) => !e.hash)
+    .filter((e) => !e.hash && (!e.origin || e.origin === chainId))
     .sort((a, b) => a.at.localeCompare(b.at))
 
   for (const e of unsealed) {

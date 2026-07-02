@@ -8,7 +8,7 @@
 const KEY = 'refrighandle.diagnostics'
 const MAX = 50
 
-export type DiagKind = 'error' | 'rejection' | 'app'
+export type DiagKind = 'error' | 'rejection' | 'app' | 'sync'
 
 export interface DiagEntry {
   at: string // ISO timestamp

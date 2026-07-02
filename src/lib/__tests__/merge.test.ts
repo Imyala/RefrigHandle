@@ -172,6 +172,25 @@ describe('record collections (bottles / sites / units)', () => {
     const merged = mergeStates(wiped, other)
     expect(merged.transactions.map((t) => t.id)).toEqual([newTx.id])
   })
+
+  it('a BACKDATED entry logged after the wipe survives the reset watermark', () => {
+    // A tech catches up on last Friday's work after a supervisor restored
+    // a backup: the work date predates the wipe but the row was WRITTEN
+    // after it — brand-new work, not part of the wiped snapshot.
+    const backdated = makeTx({
+      date: '2026-05-30T00:00:00.000Z',
+      loggedAt: '2026-06-06T09:00:00.000Z',
+    })
+    const wiped = makeState({ dataResetAt: '2026-06-05T00:00:00.000Z' })
+    const other = makeState({ transactions: [backdated] })
+    expect(
+      mergeStates(wiped, other).transactions.map((t) => t.id),
+    ).toEqual([backdated.id])
+    // …and symmetrically when the wiped side is remote.
+    expect(
+      mergeStates(other, wiped).transactions.map((t) => t.id),
+    ).toEqual([backdated.id])
+  })
 })
 
 describe('settings and per-device state', () => {

@@ -17,6 +17,7 @@ import { StorageHealthCard } from '../components/StorageHealth'
 import { QuarterlyReportCard } from '../components/QuarterlyReport'
 import { AuditReportCard } from '../components/AuditReport'
 import { useStore } from '../lib/store'
+import { uid } from '../lib/storage'
 import {
   expiryStatus,
   REFRIGERANT_TYPES,
@@ -1008,8 +1009,9 @@ export default function Settings() {
       {isSyncConfigured() && (
         <Card>
           <div className="mb-2 flex items-center justify-between gap-2">
-            <div className="text-sm font-semibold text-slate-700 dark:text-slate-200">
+            <div className="flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-200">
               Cloud sync
+              <Pill tone="amber">Beta</Pill>
             </div>
             <Pill tone={state.sync.enabled ? 'green' : 'slate'}>
               {state.sync.enabled ? 'On' : 'Off'}
@@ -1022,17 +1024,24 @@ export default function Settings() {
               individual settings fields merge per item, so two devices
               working at once don't overwrite each other's changes.
             </p>
-            <p className="rounded-lg bg-slate-50 p-2.5 text-xs text-slate-500 dark:bg-slate-800/60 dark:text-slate-400">
-              Sync keeps your devices in step — it is not a long-term archive.
-              Keep taking periodic JSON exports (below) as your own off-device
-              copy of the record.
+            <p className="rounded-lg bg-amber-50 p-2.5 text-xs text-amber-900 dark:bg-amber-900/20 dark:text-amber-100">
+              <strong>Beta, self-hosted, small teams.</strong> Anyone who
+              learns your Team ID can read and change your team's synced
+              data, so treat it like a password — use the generated one, not
+              a guessable name. There are no per-person server accounts yet.
+              Sync keeps your devices in step — it is not a long-term
+              archive. Keep taking periodic JSON exports (below) as your own
+              off-device copy of the record.
             </p>
-            <Field label="Team ID" hint="Pick anything — must match across all devices">
+            <Field
+              label="Team ID"
+              hint="Treat it like a password — must match across all devices"
+            >
               <div className="flex gap-2">
                 <TextInput
                   value={teamIdInput}
                   onChange={(e) => setTeamIdInput(e.target.value)}
-                  placeholder="e.g. acme-hvac"
+                  placeholder="tap Generate, or paste your team's ID"
                 />
                 <Button
                   onClick={() => {
@@ -1048,6 +1057,19 @@ export default function Settings() {
                   {state.sync.enabled ? 'Update' : 'Connect'}
                 </Button>
               </div>
+              {!state.sync.enabled && (
+                <button
+                  type="button"
+                  className="mt-1.5 min-h-11 text-left text-xs font-medium text-brand-600 hover:underline"
+                  onClick={() => {
+                    // A long random ID is the only thing keeping strangers
+                    // out of the team's row — never suggest a guessable one.
+                    setTeamIdInput(uid())
+                  }}
+                >
+                  Generate a secure Team ID
+                </button>
+              )}
             </Field>
             {state.sync.enabled && (
               <Button

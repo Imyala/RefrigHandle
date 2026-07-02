@@ -1,10 +1,21 @@
-// Optional Supabase sync. The app works fully offline without any of this.
-// To enable, set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY at build time
-// and turn the switch on in Settings → Cloud sync. See SYNC.md for the
-// SQL schema and one-time Supabase setup.
+// Optional Supabase sync (BETA). The app works fully offline without any
+// of this. To enable, set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY at
+// build time and turn the switch on in Settings → Cloud sync. See SYNC.md
+// for the SQL schema and one-time Supabase setup.
+//
+// Access model: the anon key can NOT read or write the rh_state table
+// directly — row level security is on with no policies. All access goes
+// through SECURITY DEFINER functions keyed by the exact Team ID, so
+// knowing a team's long random ID is the capability that unlocks that
+// team's row (and only that row). That's why the UI generates random IDs
+// and tells users to treat them like passwords. Change detection is a
+// light poll of the row's updated_at (tiny payload); the full state is
+// pulled only when it actually changed. Real per-person accounts need the
+// planned authenticated backend.
 
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { AppState } from './types'
+import { logDiagnostic } from './diagnostics'
 
 const URL = import.meta.env.VITE_SUPABASE_URL as string | undefined
 const KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined
@@ -25,67 +36,101 @@ async function getClient(): Promise<SupabaseClient | null> {
   return clientPromise
 }
 
-interface RemoteRow {
-  team_id: string
-  state: AppState
-  updated_at: string
-}
-
 export async function pullState(teamId: string): Promise<AppState | null> {
   const c = await getClient()
   if (!c || !teamId) return null
-  const { data, error } = await c
-    .from('rh_state')
-    .select('state, updated_at')
-    .eq('team_id', teamId)
-    .maybeSingle()
-  if (error || !data) return null
-  return (data as RemoteRow).state ?? null
+  const { data, error } = await c.rpc('rh_get_state', { p_team_id: teamId })
+  if (error) {
+    logDiagnostic('sync', 'Cloud sync pull failed', error.message)
+    return null
+  }
+  return (data as AppState | null) ?? null
 }
 
-export async function pushState(teamId: string, state: AppState): Promise<void> {
+// True when the row was written. A failed push must NEVER be silent —
+// the caller surfaces it and retries, otherwise a business can believe
+// it's replicated for months while nothing has left the phone.
+export async function pushState(
+  teamId: string,
+  state: AppState,
+): Promise<boolean> {
   const c = await getClient()
-  if (!c || !teamId) return
-  await c.from('rh_state').upsert(
-    {
-      team_id: teamId,
-      state,
-      updated_at: new Date().toISOString(),
-    },
-    { onConflict: 'team_id' },
-  )
+  if (!c || !teamId) return false
+  try {
+    const { error } = await c.rpc('rh_set_state', {
+      p_team_id: teamId,
+      p_state: state,
+    })
+    if (error) {
+      logDiagnostic('sync', 'Cloud sync push failed', error.message)
+      return false
+    }
+    return true
+  } catch (e) {
+    logDiagnostic(
+      'sync',
+      'Cloud sync push failed',
+      e instanceof Error ? e.message : String(e),
+    )
+    return false
+  }
 }
 
+// How often a visible app checks whether the team row changed. The check
+// is a single timestamp read; the full state only downloads on change.
+const POLL_MS = 15_000
+
+// Watch the team's row for changes. Polling (not Postgres realtime)
+// because realtime's postgres_changes needs SELECT rights on the table,
+// and granting those to the public anon key is exactly the hole the RPC
+// model closes. A hidden tab doesn't poll; refocusing checks immediately.
 export function subscribeToState(
   teamId: string,
   onRemote: (s: AppState) => void,
 ): () => void {
-  let cleanup: (() => void) | null = null
-  let cancelled = false
-  void getClient().then((c) => {
-    if (!c || cancelled || !teamId) return
-    const channel = c
-      .channel(`rh_state:${teamId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'rh_state',
-          filter: `team_id=eq.${teamId}`,
-        },
-        (payload) => {
-          const row = payload.new as RemoteRow | undefined
-          if (row?.state) onRemote(row.state)
-        },
-      )
-      .subscribe()
-    cleanup = () => {
-      void c.removeChannel(channel)
+  let stopped = false
+  let lastSeen = ''
+  let inFlight = false
+
+  const tick = async () => {
+    if (stopped || inFlight || !teamId) return
+    if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
+      return
     }
-  })
+    inFlight = true
+    try {
+      const c = await getClient()
+      if (!c || stopped) return
+      const { data, error } = await c.rpc('rh_get_updated_at', {
+        p_team_id: teamId,
+      })
+      if (error || data == null) return
+      const stamp = String(data)
+      if (stamp === lastSeen) return
+      lastSeen = stamp
+      const s = await pullState(teamId)
+      if (s && !stopped) onRemote(s)
+    } catch {
+      // Offline — the next tick retries.
+    } finally {
+      inFlight = false
+    }
+  }
+
+  const interval = setInterval(() => void tick(), POLL_MS)
+  const onWake = () => void tick()
+  if (typeof window !== 'undefined') {
+    window.addEventListener('focus', onWake)
+    document.addEventListener('visibilitychange', onWake)
+  }
+  void tick()
+
   return () => {
-    cancelled = true
-    cleanup?.()
+    stopped = true
+    clearInterval(interval)
+    if (typeof window !== 'undefined') {
+      window.removeEventListener('focus', onWake)
+      document.removeEventListener('visibilitychange', onWake)
+    }
   }
 }
