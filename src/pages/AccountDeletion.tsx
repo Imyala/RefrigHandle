@@ -38,37 +38,24 @@ export default function AccountDeletion() {
   )
 
   const [contactName, setContactName] = useState(activeTech?.name ?? '')
-  const [email, setEmail] = useState('')
-  const [confirmEmail, setConfirmEmail] = useState('')
-  const [phone, setPhone] = useState('')
   const [reason, setReason] = useState('')
   const [details, setDetails] = useState('')
   // Two separate confirmations: the legal duty to retain, and that the user
-  // has their own copy and accepts we stop holding their records on closure.
+  // has their own copy and accepts the on-device erase.
   const [ackRetention, setAckRetention] = useState(false)
   const [ackBackup, setAckBackup] = useState(false)
   const [attempted, setAttempted] = useState(false)
   const [busy, setBusy] = useState(false)
 
   const reasonLabel = REASONS.find((r) => r.value === reason)?.label ?? ''
+  // Only a name (stamped onto the closure record the business keeps) and a
+  // reason. Deliberately NO email/phone: closure is an on-device action —
+  // nothing is transmitted and nobody contacts you about it, so collecting
+  // contact details here would be collecting them under a false promise.
   const contactOk = contactName.trim() !== ''
-  // A contact email is required so the closure can be confirmed, and it's
-  // entered twice to catch a typo on something we can't easily fix later.
-  const emailOk = /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email.trim())
-  const emailsMatch =
-    email.trim() !== '' && email.trim() === confirmEmail.trim()
   const reasonOk =
     reason !== '' && (reason !== 'other' || details.trim() !== '')
-  // Phone is required so the closure can also be confirmed by phone.
-  const phoneOk = phone.trim() !== ''
-  const canSubmit =
-    contactOk &&
-    emailOk &&
-    emailsMatch &&
-    phoneOk &&
-    reasonOk &&
-    ackRetention &&
-    ackBackup
+  const canSubmit = contactOk && reasonOk && ackRetention && ackBackup
 
   const fieldErr = (show: boolean, msg: string) =>
     attempted && show ? msg : undefined
@@ -84,21 +71,19 @@ export default function AccountDeletion() {
     // the user's responsibility; we don't re-download here.
     const ok = await confirm({
       title: 'Close this account?',
-      message: `This closes your account and signs you out. A copy of your records (full backup + audit-log CSV) downloaded when you opened this page — export and securely retain your own copy; RefrigHandle should not be relied upon as your sole archive. Once closed, access may no longer be available, and account data may be deleted in accordance with RefrigHandle's Privacy Policy and internal data retention practices.`,
+      message: `This closes the account and signs you out, and a few minutes later this device is erased back to a clean slate. A copy of your records (full backup + audit-log CSV) downloaded when you opened this page — keep it safe; it becomes your only copy. If your business uses the optional cloud sync, also delete the team's row in your own Supabase project (see the sync notes) and close the account on each device.`,
       confirmLabel: 'Close account',
       danger: true,
     })
     if (!ok) return
     setBusy(true)
-    // No email is sent or opened — the closure is recorded in the account
-    // and we're notified through our own systems; the business doesn't need
-    // to email us.
+    // Closure is entirely on-device: it writes a closure record (shown on
+    // the closed screen for the business to print/keep), locks the app,
+    // and the device later resets to a clean slate. Nothing is transmitted.
     requestAccountClosure({
       reason: reasonLabel,
       details,
       contactName,
-      contactEmail: email,
-      contactPhone: phone,
     })
     toast.show('Account closed', 'info')
     // The AccountClosedGate takes over on the next render and replaces the
@@ -111,10 +96,11 @@ export default function AccountDeletion() {
 
       <div>
         <h2 className="text-xl font-semibold text-slate-900 dark:text-slate-100">
-          Request account deletion
+          Close account &amp; erase this device
         </h2>
         <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
-          Confirm your details below to request closure of your account.
+          Closing happens right here on the device — nothing is sent to
+          anyone. Confirm the details below to close the account.
         </p>
       </div>
 
@@ -123,7 +109,10 @@ export default function AccountDeletion() {
           Before you request closure
         </div>
         <div className="mt-1 space-y-2 text-sm text-amber-900/80 dark:text-amber-100/80">
-          <p>Submitting this request will close your account and sign you out.</p>
+          <p>
+            This closes your account, signs you out, and — a few minutes
+            later — erases the app's data from this device.
+          </p>
           <p>
             <strong>
               Before closing your account, export and securely retain your own
@@ -145,9 +134,12 @@ export default function AccountDeletion() {
             relevant authority or your own adviser.
           </p>
           <p>
-            Once an account is closed, access may no longer be available.
-            Account data may be deleted in accordance with RefrigHandle’s
-            Privacy Policy and internal data retention practices.
+            Closing the account erases the app's data <strong>from this
+            device</strong> a few minutes after closure. RefrigHandle holds no
+            server copy of your data. If your business enabled the optional
+            self-hosted cloud sync, the synced copy lives in your own Supabase
+            project — delete that row yourself (the sync notes show how), and
+            close the account on each device your business used.
           </p>
         </div>
       </Card>
@@ -173,61 +165,18 @@ export default function AccountDeletion() {
 
       <Card>
         <div className="mb-3 text-sm font-semibold text-slate-700 dark:text-slate-200">
-          Contact
+          Who is closing the account
         </div>
         <div className="space-y-3">
           <Field
-            label="Contact name *"
-            error={fieldErr(!contactOk, 'Enter a contact name.')}
-            hint="Pre-filled from the profile you're signed in as."
+            label="Closed by *"
+            error={fieldErr(!contactOk, 'Enter your name.')}
+            hint="Stamped on the closure record you keep — nothing is sent anywhere."
           >
             <TextInput
               value={contactName}
               invalid={!!fieldErr(!contactOk, 'x')}
               onChange={(ev) => setContactName(ev.target.value)}
-            />
-          </Field>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <Field
-              label="Email *"
-              error={fieldErr(!emailOk, 'Enter a valid email address.')}
-              hint="We use this to confirm the closure."
-            >
-              <TextInput
-                type="email"
-                inputMode="email"
-                value={email}
-                invalid={!!fieldErr(!emailOk, 'x')}
-                onChange={(ev) => setEmail(ev.target.value)}
-                placeholder="e.g. you@business.com.au"
-              />
-            </Field>
-            <Field
-              label="Confirm email *"
-              error={fieldErr(emailOk && !emailsMatch, 'Emails don’t match.')}
-            >
-              <TextInput
-                type="email"
-                inputMode="email"
-                value={confirmEmail}
-                invalid={!!fieldErr(emailOk && !emailsMatch, 'x')}
-                onChange={(ev) => setConfirmEmail(ev.target.value)}
-                placeholder="Re-enter email"
-              />
-            </Field>
-          </div>
-          <Field
-            label="Phone *"
-            error={fieldErr(!phoneOk, 'Enter a contact phone number.')}
-            hint="We use this to confirm the closure."
-          >
-            <TextInput
-              type="tel"
-              inputMode="tel"
-              value={phone}
-              invalid={!!fieldErr(!phoneOk, 'x')}
-              onChange={(ev) => setPhone(ev.target.value)}
-              placeholder="e.g. 0400 000 000"
             />
           </Field>
         </div>

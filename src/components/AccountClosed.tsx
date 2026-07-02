@@ -82,9 +82,8 @@ function AccountClosedScreen({ closure }: { closure: AccountClosure }) {
             Your account was closed on <strong>{stamp}</strong>.
           </p>
           <p className="mt-3 text-sm text-slate-700 dark:text-slate-300">
-            If you require your account to be reopened,{' '}
-            <strong>submit a request</strong> — we'll formally review it before
-            the account is reopened.
+            To use RefrigHandle again, set the app up fresh — and restore the
+            backup that downloaded at closure to bring your records back.
           </p>
           <div className="mt-3 space-y-2 border-t border-slate-200 pt-3 text-xs text-slate-500 dark:border-slate-800">
             <p className="font-semibold">Records retention</p>

@@ -4,7 +4,7 @@ import { Card } from './ui'
 
 // Effective date shown at the top of the policy. Update this whenever the
 // policy text materially changes so the published date stays accurate.
-const EFFECTIVE_DATE = '18 June 2026'
+const EFFECTIVE_DATE = '2 July 2026'
 
 // One place for the Privacy Policy text, shown on the standalone /privacy
 // page reached from Settings. Plain-English and deliberately conservative —
@@ -54,65 +54,45 @@ export function PrivacyContent() {
         </p>
       </Section>
 
-      <Section title="3. Information we collect">
-        <p>We may collect the following categories of information.</p>
-        <SubHead>Account information</SubHead>
-        <Bullets
-          items={[
-            'Name',
-            'Email address',
-            'Business name',
-            'ABN',
-            'Phone number',
-            'Billing information',
-            'User roles and permissions',
-          ]}
-        />
-        <SubHead>Operational information</SubHead>
-        <Bullets
-          items={[
-            'Customer records',
-            'Site records',
-            'Equipment information',
-            'Refrigerant transactions',
-            'Cylinder information',
-            'Technician activity records',
-            'Audit logs',
-            'Notes and attachments',
-          ]}
-        />
-        <SubHead>Technical information</SubHead>
-        <Bullets
-          items={[
-            'Device information',
-            'Browser information',
-            'Operating system',
-            'IP address',
-            'Error reports',
-            'Login activity',
-            'Approximate location (only if you enable location-based timezone; used on your device to determine your timezone)',
-          ]}
-        />
-        <SubHead>Payment information</SubHead>
+      <Section title="3. Information the app holds — and where it lives">
         <p>
-          Payment processing may be performed by third-party payment providers.
-          RefrigHandle does not store complete credit card information.
+          RefrigHandle is an offline-first application.{' '}
+          <strong>
+            Everything you enter is stored on your own device
+          </strong>{' '}
+          (in your browser's local storage) — RefrigHandle does not operate
+          server accounts and does not receive, see, or hold a copy of your
+          data.
         </p>
+        <SubHead>Information you enter, stored on your device</SubHead>
+        <Bullets
+          items={[
+            'Business identity: business name, ABN, Refrigerant Trading Authorisation number and expiry',
+            'Technician profiles: names, roles, Refrigerant Handling Licence numbers and expiries, and (if set) a hashed profile password',
+            'Operational records: customer/site records, equipment, cylinders, refrigerant transactions, jobs, audit logs, notes',
+            'Photos and customer signatures you attach (stored on the device only; never synced)',
+            'A local diagnostics log of app errors on this device (never sent anywhere unless you copy and share it yourself)',
+          ]}
+        />
+        <SubHead>What leaves your device</SubHead>
+        <Bullets
+          items={[
+            'Nothing, by default. There are no analytics, no tracking, no advertising identifiers, and RefrigHandle does not collect your IP address, email, phone number or billing details — the app has no billing today.',
+            'Optional cloud sync (off by default): if your business sets up its own Supabase project and turns sync on, your Business Data (excluding photos and signatures) is uploaded to THAT project — infrastructure your business chooses and controls, in the region it picks. See the in-app sync notes for the security model.',
+            'Password screening: when you set a profile password, the first 5 characters of a one-way hash (SHA-1 prefix) are sent to the Have I Been Pwned breach-checking service to warn you if the password is known-breached. The password itself, and never anything identifying you, cannot be derived from this prefix (k-anonymity). If you are offline the check is skipped.',
+            'Standard web hosting: like any website, the server that delivers the app (e.g. GitHub Pages) may keep ordinary access logs (IP address, browser type) under its own privacy policy. RefrigHandle does not receive these.',
+          ]}
+        />
       </Section>
 
-      <Section title="4. Why we collect information">
-        <p>Information is collected to:</p>
+      <Section title="4. Why information is handled this way">
+        <p>The information you enter exists to:</p>
         <Bullets
           items={[
-            'provide and maintain the Services;',
-            'create and manage Accounts;',
-            'synchronise Business Data;',
-            'provide customer support;',
-            'improve performance and reliability;',
-            'detect misuse or security threats;',
-            'communicate with users;',
-            'process payments;',
-            'comply with legal obligations.',
+            'keep the refrigerant-handling records your business is required to keep;',
+            'produce reports (equipment logbooks, quarterly figures, audit packs) for your own compliance;',
+            'synchronise Business Data between your own devices, if you enable sync;',
+            'warn you about weak or breached profile passwords, if you set one.',
           ]}
         />
       </Section>
@@ -129,77 +109,72 @@ export function PrivacyContent() {
         </p>
       </Section>
 
-      <Section title="6. How information is stored">
-        <p>Information may be stored:</p>
+      <Section title="6. How information is stored and protected">
+        <p>Information is stored:</p>
         <Bullets
           items={[
-            'on user devices;',
-            'on secure cloud infrastructure;',
-            'in backup systems;',
-            'by trusted third-party service providers.',
+            'on your devices (browser local storage and on-device attachment storage);',
+            'in backup files you export yourself and keep wherever you choose;',
+            'in your own Supabase project, only if your business enables the optional self-hosted sync.',
           ]}
         />
         <p>
-          Reasonable security measures are used to protect information from
-          unauthorised access, misuse or loss. However, no method of electronic
-          storage or transmission can guarantee absolute security.
+          On-device protections include hashed profile passwords (never stored
+          in plain text), an append-only tamper-evident change log, and
+          role-gated destructive actions. Because the data lives on your
+          device, device security (screen lock, who you hand the phone to)
+          and your own backups are part of protecting it. No method of
+          electronic storage can guarantee absolute security.
         </p>
       </Section>
 
-      <Section title="7. Third-party service providers">
-        <p>
-          RefrigHandle may use third-party providers to assist in operating the
-          Services, including providers of:
-        </p>
+      <Section title="7. Third-party services">
+        <p>The app touches exactly two third-party services, both described in section 3:</p>
         <Bullets
           items={[
-            'cloud hosting;',
-            'authentication;',
-            'analytics;',
-            'email delivery;',
-            'payment processing;',
-            'backup and storage services.',
+            'Have I Been Pwned — anonymous breached-password screening when you set a profile password;',
+            'Supabase — only if your business sets up and enables its own sync project; the project belongs to your business, not to RefrigHandle.',
           ]}
         />
-        <p>These providers may process information on our behalf.</p>
+        <p>
+          RefrigHandle uses no analytics, advertising, email delivery or
+          payment providers.
+        </p>
       </Section>
 
       <Section title="8. Disclosure of information">
-        <p>RefrigHandle does not sell personal information.</p>
-        <p>Information may be disclosed:</p>
-        <Bullets
-          items={[
-            'with your consent;',
-            'to service providers assisting us;',
-            'where required by law;',
-            'to protect the rights, safety or security of users or RefrigHandle;',
-            'in connection with the sale, merger or transfer of the business.',
-          ]}
-        />
+        <p>
+          RefrigHandle does not sell personal information — and because your
+          data lives on your devices (or in your own sync project), RefrigHandle
+          is not in a position to disclose it. Disclosure of Business Data is
+          controlled by the Account Owner: who they hand a device to, who they
+          share a Team ID with, and who they send exports to.
+        </p>
       </Section>
 
       <Section title="9. Overseas processing">
         <p>
-          Some third-party providers used by RefrigHandle may process or store
-          information outside Australia.
-        </p>
-        <p>
-          RefrigHandle takes reasonable steps to ensure that such providers
-          maintain appropriate privacy and security standards.
+          By default, no information is processed overseas by RefrigHandle. If
+          your business enables the optional sync, your data is stored in the
+          Supabase region your business selected when it created its project —
+          choose an Australian region if your obligations require onshore
+          storage. The Have I Been Pwned service (which receives only an
+          anonymous 5-character hash prefix) is operated internationally.
         </p>
       </Section>
 
       <Section title="10. Data retention">
-        <p>Information is retained only for as long as reasonably necessary to:</p>
-        <Bullets
-          items={[
-            'provide the Services;',
-            'maintain security;',
-            'resolve disputes;',
-            'comply with legal obligations;',
-            'maintain backup and recovery systems.',
-          ]}
-        />
+        <p>
+          Records stay on your device until you remove them or clear the
+          browser's site data — the app never deletes your records on its own
+          (removed records go to an in-app recycle bin). Browsers can evict
+          site data under storage pressure; the app requests persistent
+          storage and reminds you to export backups because{' '}
+          <strong>
+            your exported backups are the durable copy of the record
+          </strong>
+          .
+        </p>
         <p>
           The Account Owner remains responsible for retaining records for the
           periods required by applicable laws and regulations and should not
@@ -208,49 +183,38 @@ export function PrivacyContent() {
       </Section>
 
       <Section title="11. Account closure and deletion">
-        <p>The Account Owner may request account closure at any time.</p>
         <p>
-          Before closing an Account, the Account Owner should export and securely
-          retain copies of all records it wishes to keep.
+          Closing the account is an on-device action: the app first downloads
+          a ZIP of the business's records for the Account Owner to keep, then
+          erases the app's data from that device. Do this on each device the
+          business used.
         </p>
-        <p>Following account closure:</p>
         <Bullets
           items={[
-            'access to the Services may cease;',
-            'Authorised Users may lose access;',
-            'Business Data may be deleted in accordance with internal retention practices.',
+            'Export and securely retain copies of all records before closing — the erase is immediate on that device;',
+            'if your business used the optional self-hosted sync, also delete the row in your own Supabase project (the in-app sync notes show the one-line SQL) — RefrigHandle has no access to it and cannot delete it for you;',
+            'RefrigHandle retains nothing after closure, because it held nothing: there is no server-side account to delete.',
           ]}
         />
-        <p>
-          Certain information may be retained where reasonably necessary for
-          security, fraud prevention, dispute resolution, legal compliance or
-          backup purposes.
-        </p>
       </Section>
 
       <Section title="12. Cookies and analytics">
         <p>
-          RefrigHandle may use cookies and similar technologies to:
-        </p>
-        <Bullets
-          items={[
-            'maintain login sessions;',
-            'improve functionality;',
-            'analyse usage;',
-            'enhance performance.',
-          ]}
-        />
-        <p>
-          Users may disable cookies through browser settings, although some
-          features may not function correctly.
+          RefrigHandle uses <strong>no cookies and no analytics</strong>. The
+          browser's local storage is used solely to keep your own records and
+          settings on your device — nothing in it is read by, or transmitted
+          to, RefrigHandle or any third party.
         </p>
       </Section>
 
       <Section title="13. Access and correction">
         <p>
-          Users may request access to Personal Information held by RefrigHandle
-          and may request correction of inaccurate information. Requests may be
-          refused where permitted by law.
+          Your information is on your device, so you can access and correct it
+          directly in the app at any time (corrections to compliance records
+          are made as append-only re-statements, preserving the original for
+          audit). RefrigHandle itself holds no Personal Information about you
+          to produce or correct; for questions, contact us at the address in
+          section 18.
         </p>
       </Section>
 
