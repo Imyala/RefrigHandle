@@ -206,6 +206,10 @@ export function LogForm({
   const [docketNumber, setDocketNumber] = useState('')
   const [notes, setNotes] = useState('')
   const [pendingPhotos, setPendingPhotos] = useState<File[]>([])
+  // Notes + photos fold away on the everyday path — a routine top-up
+  // shouldn't scroll past fields it never uses. One tap opens them, and
+  // they stay open once they hold content.
+  const [showExtras, setShowExtras] = useState(false)
   const [addingSite, setAddingSite] = useState(false)
   const [addingUnit, setAddingUnit] = useState(false)
   const [addingBottle, setAddingBottle] = useState(false)
@@ -355,6 +359,7 @@ export function LogForm({
     setDocketNumber('')
     setNotes('')
     setPendingPhotos([])
+    setShowExtras(false)
     // Keep a correction on its original's job; otherwise default to an
     // open job dated TODAY (the visit you're working). A job forgotten
     // open from last week must not silently swallow unrelated movements
@@ -1364,15 +1369,30 @@ export function LogForm({
           </div>
         )}
 
-        <Field label="Notes">
-          <TextArea value={notes} onChange={(e) => setNotes(e.target.value)} />
-        </Field>
+        {!showExtras && notes === '' && pendingPhotos.length === 0 ? (
+          <button
+            type="button"
+            onClick={() => setShowExtras(true)}
+            className="min-h-11 text-left text-xs font-medium text-brand-600 hover:underline"
+          >
+            + Add notes or photos
+          </button>
+        ) : (
+          <>
+            <Field label="Notes">
+              <TextArea
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+              />
+            </Field>
 
-        <PendingPhotoPicker
-          files={pendingPhotos}
-          onChange={setPendingPhotos}
-          hint="Snap the docket, gauges or nameplate now — saved with this entry."
-        />
+            <PendingPhotoPicker
+              files={pendingPhotos}
+              onChange={setPendingPhotos}
+              hint="Snap the docket, gauges or nameplate now — saved with this entry."
+            />
+          </>
+        )}
 
         {blockAlreadyReturned && (
           <div className="rounded-xl bg-red-50 p-3 text-sm text-red-900 dark:bg-red-900/20 dark:text-red-100">

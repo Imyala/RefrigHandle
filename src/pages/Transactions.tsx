@@ -328,11 +328,23 @@ export default function Transactions() {
           body={
             transactions.length === 0
               ? 'Tip: tap a bottle on the Bottles tab for a faster way to log.'
-              : undefined
+              : 'Your entries are still here — this filter just matches none of them.'
           }
           action={
-            transactions.length === 0 && (
+            transactions.length === 0 ? (
               <Button onClick={() => setAdding(true)}>+ Log first transaction</Button>
+            ) : (
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  setFilterKind('all')
+                  setQuery('')
+                  setFromDate('')
+                  setToDate('')
+                }}
+              >
+                Clear filters
+              </Button>
             )
           }
         />
@@ -393,7 +405,7 @@ export default function Transactions() {
                           className="min-h-11 rounded-lg px-2.5 py-1 text-xs font-medium text-slate-500 hover:bg-slate-100 hover:text-brand-600 dark:hover:bg-slate-800"
                           aria-label="Photos and sign-off for this transaction"
                         >
-                          📎 {n > 0 ? n : 'Attach'}
+                          {n > 0 ? `📎 ${n}` : '+ Photos'}
                         </button>
                       )
                     })()}
@@ -417,9 +429,9 @@ export default function Transactions() {
                       <button
                         onClick={() => setDeleting({ id: t.id, reason: '' })}
                         className="min-h-11 rounded-lg px-2.5 py-1 text-xs font-medium text-slate-500 hover:bg-slate-100 hover:text-red-600 dark:hover:bg-slate-800"
-                        aria-label="Delete transaction"
+                        aria-label="Remove this entry (restorable)"
                       >
-                        Delete
+                        Remove
                       </button>
                     )}
                   </div>
@@ -515,13 +527,14 @@ export default function Transactions() {
 
       <Modal
         open={!!deleting}
-        title="Delete this transaction?"
+        title="Remove this entry?"
         onClose={() => setDeleting(null)}
       >
         <p className="text-sm text-slate-600 dark:text-slate-300">
-          It will be hidden from the activity log but kept in storage so an
-          admin can review the full entry or restore it from the{' '}
-          <span className="font-medium">Change log</span>.
+          It will be hidden from the activity log but kept in storage so a
+          supervisor can review the full entry or restore it from the{' '}
+          <span className="font-medium">Change log</span>. Nothing is
+          permanently deleted.
         </p>
         <Field label="Reason (optional)">
           <TextInput
@@ -549,12 +562,12 @@ export default function Transactions() {
               deleteTransaction(deleting.id, deleting.reason)
               setDeleting(null)
               toast.show(
-                'Transaction deleted — restore it from the Change log',
+                'Entry removed — restore it from the Change log',
                 'info',
               )
             }}
           >
-            Delete
+            Remove entry
           </Button>
         </div>
       </Modal>

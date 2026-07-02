@@ -36,10 +36,14 @@ import { formatWeight } from '../lib/units'
 // (where a Job picker attaches them); this page creates and manages the jobs
 // and produces the report.
 
+const PAGE = 30
+
 export default function Jobs() {
   const { state, addJob } = useStore()
   const [creating, setCreating] = useState(false)
   const [openJobId, setOpenJobId] = useState<string | null>(null)
+  const [query, setQuery] = useState('')
+  const [limit, setLimit] = useState(PAGE)
 
   const jobs = useMemo(
     () =>
@@ -56,6 +60,18 @@ export default function Jobs() {
         ),
     [state.jobs],
   )
+  // Search spans reference, site and client — the things a job is
+  // remembered by months later.
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    if (!q) return jobs
+    return jobs.filter((j) =>
+      [j.reference, j.siteName, j.clientName]
+        .filter(Boolean)
+        .some((s) => s!.toLowerCase().includes(q)),
+    )
+  }, [jobs, query])
+  const visible = filtered.slice(0, limit)
   const openJob = openJobId ? state.jobs.find((j) => j.id === openJobId) : null
 
   return (
@@ -76,17 +92,60 @@ export default function Jobs() {
         and Refrigerant log both have a Job field).
       </p>
 
+      {jobs.length > 3 && (
+        <TextInput
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Search by reference, site or client"
+        />
+      )}
+
+      {jobs.length > 0 && query.trim() !== '' && (
+        <div className="flex items-center justify-between gap-2 px-1 text-xs text-slate-500 dark:text-slate-400">
+          <span>
+            Showing {filtered.length} of {jobs.length}{' '}
+            {jobs.length === 1 ? 'job' : 'jobs'}
+          </span>
+          <button
+            type="button"
+            onClick={() => setQuery('')}
+            className="shrink-0 font-medium text-brand-600 hover:underline dark:text-brand-400"
+          >
+            Clear search
+          </button>
+        </div>
+      )}
+
       {jobs.length === 0 ? (
         <EmptyState
           title="No jobs yet"
           body="Open a job for a site visit, then log the charges and recoveries against it."
           action={<Button onClick={() => setCreating(true)}>+ New job</Button>}
         />
+      ) : filtered.length === 0 ? (
+        <EmptyState
+          title="No matches"
+          body="Your jobs are still here — this search just matches none of them."
+          action={
+            <Button variant="secondary" onClick={() => setQuery('')}>
+              Clear search
+            </Button>
+          }
+        />
       ) : (
         <div className="space-y-2">
-          {jobs.map((j) => (
+          {visible.map((j) => (
             <JobCard key={j.id} job={j} onOpen={() => setOpenJobId(j.id)} />
           ))}
+          {filtered.length > limit && (
+            <Button
+              variant="secondary"
+              full
+              onClick={() => setLimit((l) => l + PAGE)}
+            >
+              Show older ({filtered.length - limit} more)
+            </Button>
+          )}
         </div>
       )}
 
