@@ -74,10 +74,9 @@ slot ever frees up.
 The tab says **Log**, the page says **Refrigerant log**, and the page links
 to a separate **Change log (audit trail)**. Three "log" concepts in one
 viewport; the explainer paragraph is a patch over the collision.
-*Recommendation:* rename one of them (e.g. tab/page → "Movements") in a
-future round — deliberately not done now since the term is baked into
-reports and docs. Also: the per-row action rail can stack four text buttons
-on a narrow phone; an overflow "⋯" menu would calm it.
+*Applied in round 2:* the tab/page were renamed to "Moves" / "Refrigerant
+movements", and the per-row action rail (four stacked text buttons on a
+narrow phone) became a single "⋯" overflow.
 
 ### Log form — heaviest modal, well defended
 8–11 visible controls on the charge path, but the defaults ("Same as last
@@ -105,14 +104,34 @@ ComplianceHealth's traffic-light rows deep-link straight to the fix.
 Alerts can stack three amber/red cards on a bad day; capping to the most
 urgent with "+N more" would soften the wall of warnings.
 
-## Top remaining recommendations (not yet applied)
+## Recommendations — all applied in round 2
 
-1. Resolve the Log / Refrigerant log / Change log naming collision.
-2. Collapse BottleForm's secondary blocks (AS 2030, supplier/invoice)
-   behind "More details"; condense the live safe-fill panel.
-3. One compliance surface on Home; nest FleetLeakWatch.
-4. Overflow menu for Transactions row actions on narrow screens.
-5. "Compliance" subheading grouping Reason + Leak test in LogForm.
-6. Trim the Settings → Technicians intro paragraph.
-7. Make Jobs discoverable outside the Home grid.
-8. Cap stacked alert cards at one, with "+N more".
+1. **Naming collision resolved.** The tab is now "Moves" (aria:
+   "Refrigerant movements"), the page is "Refrigerant movements", and
+   every user-facing "Refrigerant log" reference (Jobs empty state,
+   Change-log copy) was updated to match. "Change log" now unambiguously
+   means the audit trail.
+2. **BottleForm decluttered.** Supplier/invoice and the AS 2030 test block
+   fold behind "More details" (auto-open when the bottle already has any
+   of that data, so nothing existing is ever hidden). The live safe-fill
+   panel shows just the net weight — and the over-limit warning when it
+   applies — with the W.C × FR maths behind a "Safe-fill details" toggle.
+3. **One compliance surface on Home.** Equipment leak watch collapses to
+   its header line + count pill by default; ComplianceHealth is the one
+   expanded summary.
+4. **Transactions rows calmed.** The four stacked text buttons became a
+   single "⋯" per row that expands an action strip (Share, Photos /
+   sign-off, Correct, Remove). The 📎 attachment count stays visible —
+   it's information, not just an action.
+5. **LogForm compliance grouping.** Reason + Leak test now sit under a
+   small "Compliance" heading. (The leak-test answer is deliberately NOT
+   defaulted from the last entry — pre-answering a regulatory question
+   risks false records; the explicit "Same as last job" prefill already
+   covers the routine case.)
+6. **Settings → Technicians intro** trimmed from 7 lines to 2; the role
+   tiers explain themselves in the add/edit profile picker.
+7. **Jobs discoverable** from the Movements page — the header blurb links
+   to the Jobs page alongside the Change log link.
+8. **Alerts capped.** Only the most urgent alert card shows (severity
+   order: cylinder safety, licences, backups) with a "Show N more alerts"
+   expander.

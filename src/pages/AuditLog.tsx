@@ -61,7 +61,7 @@ export default function AuditLog() {
     const ok = await confirm({
       title: 'Restore this transaction?',
       message:
-        'It returns to the Refrigerant log and is counted again in bottle and equipment totals. The original deletion stays on this change log.',
+        'It returns to Refrigerant movements and is counted again in bottle and equipment totals. The original deletion stays on this change log.',
       confirmLabel: 'Restore',
     })
     if (!ok) return
@@ -151,7 +151,7 @@ export default function AuditLog() {
         <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">
           A time-stamped record of every change — what changed, who changed it,
           and when. Covers bottles, sites, equipment, technicians and settings;
-          refrigerant movements are on the Refrigerant log. Read-only.
+          refrigerant movements live on the Movements tab. Read-only.
         </p>
       </div>
 

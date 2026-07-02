@@ -46,6 +46,8 @@ export default function Transactions() {
   const [adding, setAdding] = useState(false)
   // Row whose photos / customer sign-off are being viewed or added.
   const [attachFor, setAttachFor] = useState<Transaction | null>(null)
+  // Which row's "⋯" action strip is open (one at a time keeps the list calm).
+  const [actionsFor, setActionsFor] = useState<string | null>(null)
   // transaction id → number of photos+signatures, for the row badge.
   // Loaded with a key-only cursor so it stays cheap; refreshed whenever
   // the attachments modal closes or staged form photos are bound.
@@ -181,7 +183,7 @@ export default function Transactions() {
     <div className="space-y-3">
       <div className="flex items-center justify-between gap-2">
         <h2 className="text-xl font-semibold text-slate-900 dark:text-slate-100">
-          Refrigerant log
+          Refrigerant movements
         </h2>
         <div className="flex items-center gap-2">
           {transactions.some((t) => !t.deletedAt) && (
@@ -199,11 +201,15 @@ export default function Transactions() {
         </div>
       </div>
 
-      {/* Disambiguate the two "logs" and give the audit trail a way in from
-          here — it otherwise only lives in Settings. */}
+      {/* Neighbouring destinations: the audit trail (otherwise only in
+          Settings) and Jobs (otherwise only on the Home grid). */}
       <p className="-mt-1 text-xs text-slate-500">
-        Refrigerant movements — charges, recoveries, transfers, returns.
-        Looking for who changed what?{' '}
+        Every charge, recovery, transfer and return. Group one visit's work
+        on the{' '}
+        <Link to="/jobs" className="font-medium text-brand-600 hover:underline">
+          Jobs page
+        </Link>
+        ; for who changed what, see the{' '}
         <Link
           to="/history"
           className="font-medium text-brand-600 hover:underline"
@@ -395,20 +401,41 @@ export default function Transactions() {
                     corrects={corrects}
                     supersededBy={supersededBy}
                   />
+                  {/* One "⋯" per row instead of four stacked text buttons in
+                      a narrow right rail; the attachment count stays visible
+                      because it's information, not just an action. */}
                   <div className="flex shrink-0 flex-col items-end gap-1">
+                    {(attachCounts.get(t.id) ?? 0) > 0 && (
+                      <button
+                        onClick={() => setAttachFor(t)}
+                        className="min-h-11 rounded-lg px-2.5 py-1 text-xs font-medium text-slate-500 hover:bg-slate-100 hover:text-brand-600 dark:hover:bg-slate-800"
+                        aria-label="Photos and sign-off for this transaction"
+                      >
+                        📎 {attachCounts.get(t.id)}
+                      </button>
+                    )}
+                    <button
+                      onClick={() =>
+                        setActionsFor((cur) => (cur === t.id ? null : t.id))
+                      }
+                      aria-expanded={actionsFor === t.id}
+                      aria-label="Actions for this entry"
+                      className="min-h-11 rounded-lg px-2.5 py-1 text-base font-bold leading-none text-slate-500 hover:bg-slate-100 hover:text-brand-600 dark:hover:bg-slate-800"
+                    >
+                      ⋯
+                    </button>
+                  </div>
+                </div>
+                {actionsFor === t.id && (
+                  <div className="mt-2 flex flex-wrap justify-end gap-1 border-t border-slate-200 pt-2 dark:border-slate-800">
                     <ShareTxButton t={t} />
-                    {(() => {
-                      const n = attachCounts.get(t.id) ?? 0
-                      return (
-                        <button
-                          onClick={() => setAttachFor(t)}
-                          className="min-h-11 rounded-lg px-2.5 py-1 text-xs font-medium text-slate-500 hover:bg-slate-100 hover:text-brand-600 dark:hover:bg-slate-800"
-                          aria-label="Photos and sign-off for this transaction"
-                        >
-                          {n > 0 ? `📎 ${n}` : '+ Photos'}
-                        </button>
-                      )
-                    })()}
+                    <button
+                      onClick={() => setAttachFor(t)}
+                      className="min-h-11 rounded-lg px-2.5 py-1 text-xs font-medium text-slate-500 hover:bg-slate-100 hover:text-brand-600 dark:hover:bg-slate-800"
+                      aria-label="Photos and sign-off for this transaction"
+                    >
+                      + Photos / sign-off
+                    </button>
                     {/* Correct an entry only while no live correction points
                         at it (a corrected entry's fix is corrected instead —
                         that keeps the supersede chain unambiguous). Legacy
@@ -435,7 +462,7 @@ export default function Transactions() {
                       </button>
                     )}
                   </div>
-                </div>
+                )}
               </Card>
             )
           })}

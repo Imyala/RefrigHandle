@@ -124,10 +124,13 @@ export function Layout() {
             )}
           </NavLink>
 
+          {/* "Movements", not "Log": the page is the refrigerant ledger and
+              links to the separate Change log (audit trail) — a tab called
+              "Log" made three "log" concepts collide in one viewport. */}
           <TabLink
             to="/transactions"
-            label="Log"
-            aria="Refrigerant log"
+            label="Moves"
+            aria="Refrigerant movements"
             icon={<LogIcon />}
           />
           <TabLink to="/settings" label="Settings" icon={<SettingsIcon />} />

@@ -1127,6 +1127,23 @@ function BottleForm({
     toYearMonth(bottle?.nextHydroTestDate ?? ''),
   )
   const [addingSite, setAddingSite] = useState(false)
+  // Supplier/invoice and the AS 2030 test dates are secondary on a form
+  // that already carries ~10 fields, so they fold away — but never hide
+  // data that's already there, so editing a bottle that has any of it
+  // opens the section.
+  const [showMoreDetails, setShowMoreDetails] = useState(
+    () =>
+      !!(
+        (bottle?.supplier ?? '') !== '' ||
+        (bottle?.invoiceNumber ?? '') !== '' ||
+        toYearMonth(bottle?.lastHydroTestDate ?? '') !== '' ||
+        toYearMonth(bottle?.nextHydroTestDate ?? '') !== ''
+      ),
+  )
+  // The safe-fill maths (formula, note, full-scale reading) collapses to a
+  // one-line net weight so the panel doesn't read as a physics lesson
+  // mid data-entry. The over-limit warning always shows.
+  const [showFillDetails, setShowFillDetails] = useState(false)
 
   // "Manual capacity" only matters for bottles received partially used.
   // For the common case (fresh full bottle from supplier) capacity == net.
@@ -1386,32 +1403,58 @@ function BottleForm({
               <div className="mt-0.5 text-xs">
                 (gross − tare, calculated automatically)
               </div>
-              {safeFillKg > 0 && (
-                <div className="mt-0.5 text-xs">
-                  Safe fill for {refrigerantType}:{' '}
-                  <strong>{formatWeight(safeFillKg, unit)}</strong>
-                  {' '}(W.C × FR {fillingRatio(refrigerantType).toFixed(2)})
-                </div>
-              )}
-              {safeFillKg > 0 && (
-                <div className="mt-1 text-xs opacity-80">{SAFE_FILL_NOTE}</div>
-              )}
-              {safeFillKg > 0 && tareKgEntered > 0 && (
-                <div className="mt-0.5 text-xs">
-                  Total safe weight (full):{' '}
-                  <strong>{formatWeight(tareKgEntered + safeFillKg, unit)}</strong>
-                  {' '}— the scale reading at maximum safe fill (tare + safe fill).
-                </div>
-              )}
-              {over > 0 && (
+              {over > 0 && safeFillKg > 0 && (
                 <div className="mt-1 font-semibold">
-                  ⚠ Over safe-fill limit by {formatWeight(over, unit)}
+                  ⚠ Over the {refrigerantType} safe fill of{' '}
+                  {formatWeight(safeFillKg, unit)} by {formatWeight(over, unit)}
                 </div>
+              )}
+              {safeFillKg > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setShowFillDetails((v) => !v)}
+                  aria-expanded={showFillDetails}
+                  className="mt-1 block text-xs font-medium underline underline-offset-2"
+                >
+                  {showFillDetails
+                    ? 'Hide safe-fill details'
+                    : 'Safe-fill details'}
+                </button>
+              )}
+              {showFillDetails && safeFillKg > 0 && (
+                <>
+                  <div className="mt-1 text-xs">
+                    Safe fill for {refrigerantType}:{' '}
+                    <strong>{formatWeight(safeFillKg, unit)}</strong>
+                    {' '}(W.C × FR {fillingRatio(refrigerantType).toFixed(2)})
+                  </div>
+                  <div className="mt-1 text-xs opacity-80">{SAFE_FILL_NOTE}</div>
+                  {tareKgEntered > 0 && (
+                    <div className="mt-0.5 text-xs">
+                      Total safe weight (full):{' '}
+                      <strong>{formatWeight(tareKgEntered + safeFillKg, unit)}</strong>
+                      {' '}— the scale reading at maximum safe fill (tare + safe fill).
+                    </div>
+                  )}
+                </>
               )}
             </div>
           )
         })()}
 
+        <button
+          type="button"
+          onClick={() => setShowMoreDetails((v) => !v)}
+          aria-expanded={showMoreDetails}
+          className="text-sm font-medium text-brand-600 hover:underline dark:text-brand-400"
+        >
+          {showMoreDetails
+            ? 'Hide supplier & cylinder test'
+            : 'More details — supplier, invoice, cylinder test'}
+        </button>
+
+        {showMoreDetails && (
+        <>
         <div className="grid grid-cols-2 gap-3">
           <Field
             label="Supplier"
@@ -1476,6 +1519,8 @@ function BottleForm({
             2030.5). Edit it if your cylinder has a different stamp.
           </p>
         </div>
+        </>
+        )}
 
         <Field label="Status">
           <Picker

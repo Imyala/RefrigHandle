@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { Fragment, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { Button, Card, Pill } from './ui'
 import { useStore } from '../lib/store'
@@ -23,11 +23,38 @@ import { useToast } from '../lib/toast'
 // browser until team accounts land). Renders nothing when there's
 // nothing to warn about.
 export function Alerts() {
+  // Each hook always runs (Rules of Hooks) and returns its card or null.
+  // Only the most urgent card shows by default — a bad day shouldn't open
+  // with a wall of warnings — with one tap to reveal the rest. Severity
+  // order: cylinder safety (red), then licences, then backups.
+  const hydro = useHydroAlert()
+  const licence = useLicenceAlert()
+  const backup = useBackupAlert()
+  const [showAll, setShowAll] = useState(false)
+  const cards = [
+    { key: 'hydro', node: hydro },
+    { key: 'licence', node: licence },
+    { key: 'backup', node: backup },
+  ].filter((c) => c.node !== null)
+  if (cards.length === 0) return null
+  const shown = showAll ? cards : cards.slice(0, 1)
   return (
     <>
-      <LicenceAlerts />
-      <HydroAlerts />
-      <BackupAlert />
+      {shown.map((c) => (
+        <Fragment key={c.key}>{c.node}</Fragment>
+      ))}
+      {cards.length > 1 && (
+        <button
+          type="button"
+          onClick={() => setShowAll((v) => !v)}
+          aria-expanded={showAll}
+          className="block w-full rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-left text-xs font-medium text-amber-900 transition hover:bg-amber-100 dark:border-amber-900/50 dark:bg-amber-900/20 dark:text-amber-100 dark:hover:bg-amber-900/30"
+        >
+          {showAll
+            ? 'Show fewer alerts ▴'
+            : `Show ${cards.length - 1} more alert${cards.length - 1 === 1 ? '' : 's'} ▾`}
+        </button>
+      )}
     </>
   )
 }
@@ -37,7 +64,7 @@ export function Alerts() {
 // live in one browser's storage. This card nags (gently, snoozable)
 // when the newest full JSON backup is stale, and quietly asks the
 // browser for persistent storage so the origin isn't evicted.
-function BackupAlert() {
+function useBackupAlert(): ReactNode {
   const { state } = useStore()
   const toast = useToast()
   // Bumped after "Back up now" / "Later" so the card re-evaluates the
@@ -170,7 +197,7 @@ function BackupAlert() {
   )
 }
 
-function LicenceAlerts() {
+function useLicenceAlert(): ReactNode {
   const { state } = useStore()
   const profile = profileFor(state.jurisdiction)
   // Hidden for 24h once dismissed, then it re-alerts (see alertSnooze).
@@ -266,7 +293,7 @@ function LicenceAlerts() {
   )
 }
 
-function HydroAlerts() {
+function useHydroAlert(): ReactNode {
   const { state } = useStore()
   const { bottles } = state
   // Hidden for 24h once dismissed, then it re-alerts (see alertSnooze).

@@ -386,7 +386,7 @@ function JobDetail({ job, onClose }: { job: Job; onClose: () => void }) {
           {txs.length === 0 ? (
             <p className="text-sm text-slate-500">
               No movements logged against this job yet. Open the bottle
-              quick-log or the Refrigerant log and pick this job.
+              quick-log or the Movements tab and pick this job.
             </p>
           ) : (
             <div className="space-y-2">

@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Card, Pill } from './ui'
 import { useStore } from '../lib/store'
@@ -12,6 +13,7 @@ import { formatWeight } from '../lib/units'
 // when the fleet is clean.
 export function FleetLeakWatch() {
   const { state } = useStore()
+  const [open, setOpen] = useState(false)
 
   const rows = state.units
     .filter((u) => u.status === 'active')
@@ -29,14 +31,30 @@ export function FleetLeakWatch() {
 
   return (
     <Card className="!border-amber-300 !bg-amber-50 dark:!border-amber-900/50 dark:!bg-amber-900/20">
-      <div className="flex items-center justify-between gap-2">
-        <div className="text-sm font-semibold text-amber-900 dark:text-amber-200">
+      {/* Collapsed to its header line by default so Home carries one
+          expanded compliance surface (ComplianceHealth); the count pill
+          still says at a glance whether anything needs attention. */}
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        className="flex w-full items-center justify-between gap-2 text-left"
+      >
+        <div className="flex items-center gap-1.5 text-sm font-semibold text-amber-900 dark:text-amber-200">
+          <span
+            aria-hidden
+            className={`text-xs transition-transform ${open ? '' : '-rotate-90'}`}
+          >
+            ▾
+          </span>
           Equipment leak watch
         </div>
         <Pill tone={suspected > 0 ? 'red' : 'amber'}>
           {rows.length} flagged
         </Pill>
-      </div>
+      </button>
+      {open && (
+      <>
       <p className="mt-1 text-xs text-amber-900/80 dark:text-amber-100/80">
         Units topped up above the AIRAH DA19 leak-rate threshold in the last 12
         months — highest first. Investigate and rectify.
@@ -69,6 +87,8 @@ export function FleetLeakWatch() {
           </li>
         )}
       </ul>
+      </>
+      )}
     </Card>
   )
 }

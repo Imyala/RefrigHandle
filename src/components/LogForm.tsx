@@ -1127,6 +1127,11 @@ export function LogForm({
                 />
               </Field>
             )}
+            {/* Small heading so the two required regulatory answers read as
+                one "compliance" unit rather than just more form fields. */}
+            <div className="pt-1 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+              Compliance
+            </div>
             <Field label="Reason" hint="Required — the purpose of this job.">
               <Picker
                 required
