@@ -15,6 +15,11 @@ import { useStore } from '../lib/store'
 import { useToast } from '../lib/toast'
 import { hashPassword, MIN_PASSWORD_LENGTH } from '../lib/auth'
 import { screenNewPassword } from '../lib/passwordStrength'
+import {
+  buildTestAccountSetup,
+  TEST_ACCOUNT_EMAIL,
+  TEST_ACCOUNT_PASSWORD,
+} from '../lib/testAccount'
 import { importAttachments } from '../lib/attachments'
 import type { AppState } from '../lib/types'
 import {
@@ -102,8 +107,16 @@ function OnboardingScreen() {
   // screen with three doors — sign in (restore existing records), create
   // an account (the setup form), or a guest test drive on sample data.
   const [view, setView] = useState<'welcome' | 'signin' | 'setup'>('welcome')
-  // "Sign in" on a device with no data means bringing your records here —
-  // restoring the backup file exported from the previous device.
+  // "Sign in" on a device with no data: email + password. Until the cloud
+  // backend exists the only credentials that can work on a fresh device
+  // are the built-in test account's (records otherwise arrive by restoring
+  // a backup, offered on the same screen). The server sign-in call lands
+  // exactly here later.
+  const [signinEmail, setSigninEmail] = useState('')
+  const [signinPw, setSigninPw] = useState('')
+  const [signinBusy, setSigninBusy] = useState(false)
+  const [signinErr, setSigninErr] = useState('')
+  // Restoring the backup file exported from the previous device.
   const restoreFileRef = useRef<HTMLInputElement | null>(null)
   const [restoring, setRestoring] = useState(false)
   const [businessName, setBusinessName] = useState('')
@@ -113,6 +126,10 @@ function OnboardingScreen() {
   const [techFirst, setTechFirst] = useState('')
   const [techMiddle, setTechMiddle] = useState('')
   const [techLast, setTechLast] = useState('')
+  // Sign-in email for the account. Optional today (nothing is transmitted
+  // pre-server); it becomes the cloud login once accounts land, so it's
+  // captured now to save every business a migration prompt later.
+  const [techEmail, setTechEmail] = useState('')
   const [techRhl, setTechRhl] = useState('')
   const [techExpiry, setTechExpiry] = useState('')
   const [password, setPassword] = useState('')
@@ -166,13 +183,22 @@ function OnboardingScreen() {
   // setup so the app can warn before the authorisation runs out.
   const arcExpiryOk = !profile.hasBusinessAuthorisation || arcExpiry !== ''
   const nameOk = techFirst.trim() !== '' && techLast.trim() !== ''
+  // Optional, but when given it must at least look like an address —
+  // it's the future sign-in identifier.
+  const emailOk =
+    techEmail.trim() === '' || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(techEmail.trim())
   const expiryOk = techExpiry !== ''
   // Every account gets a password — it secures profile switching today
   // and becomes the sign-in once team accounts land.
   const passwordOk =
     password.length >= MIN_PASSWORD_LENGTH && password === confirmPw
   const techOk =
-    nameOk && techRhl.trim() !== '' && expiryOk && passwordOk && licenceDeclared
+    nameOk &&
+    emailOk &&
+    techRhl.trim() !== '' &&
+    expiryOk &&
+    passwordOk &&
+    licenceDeclared
   const locOk = isLocationComplete(loc)
   const canFinish =
     businessOk &&
@@ -200,6 +226,7 @@ function OnboardingScreen() {
   if (!arcExpiryOk) missing.push(`${profile.businessAuthShort} expiry`)
   if (techFirst.trim() === '') missing.push('first name')
   if (techLast.trim() === '') missing.push('surname')
+  if (!emailOk) missing.push('a valid email')
   if (techRhl.trim() === '') missing.push(profile.techLicenceShort)
   if (!expiryOk) missing.push(`${profile.techLicenceShort} expiry`)
   if (!passwordOk) missing.push('password')
@@ -228,6 +255,7 @@ function OnboardingScreen() {
   )
   const techFirstErr = err(techFirst.trim() === '', 'Enter your first name.')
   const techLastErr = err(techLast.trim() === '', 'Enter your surname.')
+  const techEmailErr = err(!emailOk, 'Enter a valid email address (or leave it blank).')
   const techRhlErr = err(
     techRhl.trim() === '',
     `Enter your ${profile.techLicenceShort}.`,
@@ -282,6 +310,7 @@ function OnboardingScreen() {
         firstName: techFirst,
         middleName: techMiddle,
         lastName: techLast,
+        email: techEmail.trim() || undefined,
         arcLicenceNumber: techRhl,
         licenceExpiry: techExpiry,
         role,
@@ -293,10 +322,45 @@ function OnboardingScreen() {
     toast.show('Setup complete — welcome aboard', 'success')
   }
 
-  // "Sign in" from the welcome screen = restore this business's records
-  // onto this device from a backup file. A light version of Settings →
-  // Import: the device is empty here, so there's nothing to back up or
-  // overwrite first.
+  // Email + password sign-in. Pre-server, the only account that can exist
+  // on a fresh device is the built-in test one; entering its credentials
+  // provisions the local test workspace through the same completeSetup
+  // path a real account uses. When the backend lands, this becomes the
+  // remote authentication call.
+  async function signIn(e: React.FormEvent) {
+    e.preventDefault()
+    if (signinBusy) return
+    setSigninErr('')
+    const em = signinEmail.trim().toLowerCase()
+    if (!em || !signinPw) {
+      setSigninErr('Enter your email and password.')
+      return
+    }
+    if (em !== TEST_ACCOUNT_EMAIL) {
+      setSigninErr(
+        'No account with that email exists on this device. RefrigHandle ' +
+          'accounts live on your own devices until the cloud server ' +
+          'arrives — restore your backup below to bring your records here, ' +
+          'or create the account.',
+      )
+      return
+    }
+    if (signinPw !== TEST_ACCOUNT_PASSWORD) {
+      setSigninErr('Wrong password.')
+      return
+    }
+    setSigninBusy(true)
+    const passwordHash = await hashPassword(TEST_ACCOUNT_PASSWORD)
+    completeSetup(buildTestAccountSetup(passwordHash))
+    toast.show('Signed in to the built-in test account.', 'success')
+    // The onboarding gate stands down on the next render — nothing more
+    // to do here.
+  }
+
+  // "Sign in" from the welcome screen can also mean restoring this
+  // business's records onto this device from a backup file. A light
+  // version of Settings → Import: the device is empty here, so there's
+  // nothing to back up or overwrite first.
   async function restoreFromFile(file: File) {
     if (restoring) return
     setRestoring(true)
@@ -401,16 +465,65 @@ function OnboardingScreen() {
               Sign in
             </h1>
             <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
-              Your business's records live on your own devices — not on a
-              RefrigHandle server. To sign in here, restore the backup file
-              exported from your other device (Settings → Backup &amp;
-              export → Export JSON).
+              Enter your account email and password.
             </p>
           </div>
 
-          <div className="mt-8 space-y-3">
+          <form onSubmit={signIn} className="mt-8 space-y-3">
+            <Field label="Email">
+              <TextInput
+                type="email"
+                autoComplete="username"
+                autoFocus
+                value={signinEmail}
+                onChange={(e) => {
+                  setSigninEmail(e.target.value)
+                  setSigninErr('')
+                }}
+                placeholder="you@business.com.au"
+              />
+            </Field>
+            <Field label="Password">
+              <TextInput
+                type="password"
+                autoComplete="current-password"
+                value={signinPw}
+                onChange={(e) => {
+                  setSigninPw(e.target.value)
+                  setSigninErr('')
+                }}
+                placeholder="Password"
+              />
+            </Field>
+            {signinErr && (
+              <p className="text-xs font-medium text-red-600 dark:text-red-400">
+                {signinErr}
+              </p>
+            )}
+            <Button full type="submit" disabled={signinBusy}>
+              {signinBusy ? 'Signing in…' : 'Sign in'}
+            </Button>
+            <div className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-[11px] text-blue-900 dark:border-blue-900/50 dark:bg-blue-900/20 dark:text-blue-200">
+              <span className="font-semibold">No server yet.</span> Cloud
+              sign-in arrives with RefrigHandle accounts. Until then you can
+              try this form with the built-in test account —{' '}
+              <span className="font-mono">{TEST_ACCOUNT_EMAIL}</span> /{' '}
+              <span className="font-mono">{TEST_ACCOUNT_PASSWORD}</span> — or
+              bring your real records across below.
+            </div>
+          </form>
+
+          <div className="mt-5 space-y-3">
+            <div className="flex items-center gap-3 py-1">
+              <span className="h-px flex-1 bg-slate-200 dark:bg-slate-800" />
+              <span className="text-[11px] uppercase tracking-wider text-slate-400">
+                or
+              </span>
+              <span className="h-px flex-1 bg-slate-200 dark:bg-slate-800" />
+            </div>
             <Button
               full
+              variant="secondary"
               onClick={() => restoreFileRef.current?.click()}
               disabled={restoring}
             >
@@ -428,15 +541,17 @@ function OnboardingScreen() {
               }}
             />
             <p className="text-center text-[11px] text-slate-400">
-              Everything comes across — cylinders, sites, the full log, photos
-              and signatures — and you sign in with the same profiles and
-              passwords as before.
+              Already use RefrigHandle on another device? Restore the backup
+              exported there (Settings → Backup &amp; export → Export JSON) —
+              cylinders, sites, the full log, photos and signatures all come
+              across, and you sign in with the same profiles and passwords as
+              before.
             </p>
             <p className="text-center text-[11px] text-slate-400">
               Team on cloud sync? Restore a backup (or create the account)
               first, then join with your Team ID in Settings → Cloud sync.
             </p>
-            <Button full variant="secondary" onClick={() => setView('welcome')}>
+            <Button full variant="ghost" onClick={() => setView('welcome')}>
               ← Back
             </Button>
           </div>
@@ -606,6 +721,20 @@ function OnboardingScreen() {
                   invalid={!!techLastErr}
                   onChange={(e) => setTechLast(e.target.value)}
                   placeholder="e.g. Smith"
+                />
+              </Field>
+              <Field
+                label="Email"
+                error={techEmailErr}
+                hint="Optional for now — nothing is sent anywhere. It becomes your sign-in when RefrigHandle cloud accounts arrive."
+              >
+                <TextInput
+                  type="email"
+                  autoComplete="email"
+                  value={techEmail}
+                  invalid={!!techEmailErr}
+                  onChange={(e) => setTechEmail(e.target.value)}
+                  placeholder="e.g. you@business.com.au"
                 />
               </Field>
               <Field

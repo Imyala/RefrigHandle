@@ -3,6 +3,7 @@ import type { ReactNode } from 'react'
 import { useDevicePrefs } from '../lib/devicePrefs'
 import { useStore } from '../lib/store'
 import { useConfirm } from '../lib/confirm'
+import { isTestAccount } from '../lib/testAccount'
 
 // Bottom tab bar — "floating centre button" layout. Bottles is the core
 // entity, so it's promoted to a raised circular button in the middle,
@@ -77,6 +78,7 @@ export function Layout() {
       </header>
 
       <DemoBanner />
+      <TestAccountBanner />
 
       <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-4 pb-10">
         <Outlet />
@@ -195,6 +197,45 @@ function DemoBanner() {
             Set up my business
           </button>
         </div>
+      </div>
+    </div>
+  )
+}
+
+// Persistent strip while signed in to the built-in test account (the
+// pre-server sign-in sandbox), so it can't be mistaken for a business's
+// real records. One tap erases the sandbox and returns to the welcome
+// screen. Renders nothing outside the test account.
+function TestAccountBanner() {
+  const { state, resetToFreshInstall } = useStore()
+  const confirm = useConfirm()
+  if (!isTestAccount(state)) return null
+
+  async function leave() {
+    const ok = await confirm({
+      title: 'Erase the test account?',
+      message:
+        'This erases the test workspace from this device and returns to the welcome screen. Nothing from it is kept.',
+      confirmLabel: 'Erase & leave',
+      danger: true,
+    })
+    if (ok) resetToFreshInstall()
+  }
+
+  return (
+    <div className="border-b border-blue-300 bg-blue-50 dark:border-blue-900/50 dark:bg-blue-900/20">
+      <div className="mx-auto flex max-w-3xl flex-wrap items-center justify-between gap-x-3 gap-y-1.5 px-4 py-2">
+        <p className="text-xs text-blue-900 dark:text-blue-100">
+          <span className="font-semibold">Built-in test account.</span> For
+          trying sign-in only — nothing here is a real record.
+        </p>
+        <button
+          type="button"
+          onClick={() => void leave()}
+          className="shrink-0 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-blue-700"
+        >
+          Erase &amp; leave
+        </button>
       </div>
     </div>
   )

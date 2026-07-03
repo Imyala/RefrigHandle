@@ -4,16 +4,24 @@ import { verifyPassword } from '../lib/auth'
 import type { Technician } from '../lib/types'
 
 // Soft-lock prompt for switching the active technician on a shared
-// device. Caller is responsible for the actual setActiveTechnicianId
-// call inside onVerified — keeps this component policy-free.
+// device — and, via the copy overrides, the password step of the
+// sign-in screen. Caller is responsible for the actual
+// setActiveTechnicianId call inside onVerified — keeps this component
+// policy-free.
 export function PasswordPromptModal({
   tech,
   onClose,
   onVerified,
+  title,
+  description,
+  submitLabel,
 }: {
   tech: Technician | null
   onClose: () => void
   onVerified: (t: Technician) => void
+  title?: string
+  description?: string
+  submitLabel?: string
 }) {
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
@@ -63,12 +71,12 @@ export function PasswordPromptModal({
     <Modal
       open={open}
       onClose={onClose}
-      title={tech ? `Switch to ${tech.name}` : ''}
+      title={tech ? (title ?? `Switch to ${tech.name}`) : ''}
     >
       <form onSubmit={submit} className="space-y-3">
         <p className="text-xs text-slate-500">
-          Enter {tech?.name}’s password to make them the active tech on this
-          device.
+          {description ??
+            `Enter ${tech?.name}’s password to make them the active tech on this device.`}
         </p>
         <Field label="Password">
           <TextInput
@@ -85,7 +93,7 @@ export function PasswordPromptModal({
         )}
         <div className="flex gap-2">
           <Button type="submit" full disabled={busy || !password}>
-            {busy ? 'Checking…' : 'Switch'}
+            {busy ? 'Checking…' : (submitLabel ?? 'Switch')}
           </Button>
           <Button type="button" variant="ghost" onClick={onClose}>
             Cancel

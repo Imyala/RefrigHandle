@@ -5,6 +5,12 @@ import { StoreProvider, useStore } from '../store'
 import { ToastProvider } from '../toast'
 import { ConfirmProvider } from '../confirm'
 import { rangeTotals } from '../reports'
+import { hashPassword, verifyPassword } from '../auth'
+import {
+  buildTestAccountSetup,
+  TEST_ACCOUNT_EMAIL,
+  TEST_ACCOUNT_PASSWORD,
+} from '../testAccount'
 import type { Bottle } from '../types'
 
 // Tests the REAL store provider end-to-end (no mocks of the reducer) — the
@@ -669,5 +675,47 @@ describe('audit logging gaps closed', () => {
     expect(
       api.current.state.auditLog.some((e) => /Switched the active profile/.test(e.summary)),
     ).toBe(true)
+  })
+
+  // The pre-server sign-in path: entering the built-in test credentials on
+  // the welcome sign-in page provisions a full local workspace through the
+  // normal completeSetup path, signed in as an owner whose stored password
+  // hash verifies against the published test password.
+  it('provisions the built-in test account as a signed-in owner workspace', async () => {
+    const api = setup()
+    const passwordHash = await hashPassword(TEST_ACCOUNT_PASSWORD)
+    act(() => api.current.completeSetup(buildTestAccountSetup(passwordHash)))
+    const s = api.current.state
+    expect(s.setupCompletedAt).toBeTruthy()
+    expect(s.termsAcceptedAt).toBeTruthy()
+    const tech = s.technicians.find((t) => t.email === TEST_ACCOUNT_EMAIL)
+    expect(tech).toBeTruthy()
+    expect(tech!.role).toBe('owner')
+    expect(s.activeTechnicianId).toBe(tech!.id)
+    expect(await verifyPassword(TEST_ACCOUNT_PASSWORD, tech!.passwordHash!)).toBe(true)
+    expect(await verifyPassword('not-the-password', tech!.passwordHash!)).toBe(false)
+  })
+
+  it('completeSetup lowercases and stores the account email', () => {
+    const api = setup()
+    act(() =>
+      api.current.completeSetup({
+        businessName: 'B',
+        businessAbn: '51824753556',
+        arcAuthorisationNumber: 'AU000',
+        arcAuthorisationExpiry: '2030-01-01',
+        technician: {
+          firstName: 'Jo',
+          lastName: 'Smith',
+          email: '  Jo.Smith@Business.COM.au ',
+          arcLicenceNumber: 'L1',
+          licenceExpiry: '2030-01-01',
+          role: 'owner',
+        },
+        location: { country: 'Australia', region: 'NSW', city: 'Sydney', timezone: 'Australia/Sydney' },
+        jurisdiction: 'AU',
+      }),
+    )
+    expect(api.current.state.technicians[0].email).toBe('jo.smith@business.com.au')
   })
 })

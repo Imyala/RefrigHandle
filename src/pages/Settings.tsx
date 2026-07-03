@@ -693,6 +693,24 @@ export default function Settings() {
             })}
           </div>
         )}
+        {/* Signing out empties the seat; the sign-in screen (SignInGate)
+            takes over until someone picks their profile and enters its
+            password. Records stay on the device. Hidden in demo mode —
+            there the way out is the banner's "Exit guest mode". */}
+        {state.setupCompletedAt && activeTech && (
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-slate-200 pt-3 dark:border-slate-800">
+            <p className="text-xs text-slate-500">
+              Done on this device? Signing out keeps every record here — you
+              (or another tech) sign back in with a profile password.
+            </p>
+            <Button
+              variant="secondary"
+              onClick={() => setActiveTechnicianId(undefined)}
+            >
+              Sign out
+            </Button>
+          </div>
+        )}
       </Card>
 
       <Card>

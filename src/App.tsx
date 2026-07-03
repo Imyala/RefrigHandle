@@ -5,6 +5,7 @@ import { ScrollRestoration } from './components/ScrollRestoration'
 import { LocationTimezoneSync } from './components/LocationTimezoneSync'
 import { OnboardingGate } from './components/Onboarding'
 import { AccountClosedGate } from './components/AccountClosed'
+import { SignInGate } from './components/SignInGate'
 import { StoreProvider } from './lib/store'
 import { ToastProvider } from './lib/toast'
 import { ConfirmProvider } from './lib/confirm'
@@ -45,6 +46,7 @@ export default function App() {
           <LocationTimezoneSync />
           <AccountClosedGate>
             <OnboardingGate>
+            <SignInGate>
             <TermsGate>
             <HashRouter>
               <ScrollRestoration />
@@ -74,6 +76,7 @@ export default function App() {
               </Suspense>
             </HashRouter>
             </TermsGate>
+            </SignInGate>
             </OnboardingGate>
           </AccountClosedGate>
         </StoreProvider>
