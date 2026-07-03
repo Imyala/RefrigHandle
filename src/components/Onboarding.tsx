@@ -17,8 +17,9 @@ import { hashPassword, MIN_PASSWORD_LENGTH } from '../lib/auth'
 import { screenNewPassword } from '../lib/passwordStrength'
 import {
   buildTestAccountSetup,
-  TEST_ACCOUNT_EMAIL,
+  TEST_ACCOUNT_BUSINESS_ID,
   TEST_ACCOUNT_PASSWORD,
+  TEST_ACCOUNT_USERNAME,
 } from '../lib/testAccount'
 import { importAttachments } from '../lib/attachments'
 import type { AppState } from '../lib/types'
@@ -107,12 +108,13 @@ function OnboardingScreen() {
   // screen with three doors — sign in (restore existing records), create
   // an account (the setup form), or a guest test drive on sample data.
   const [view, setView] = useState<'welcome' | 'signin' | 'setup'>('welcome')
-  // "Sign in" on a device with no data: email + password. Until the cloud
-  // backend exists the only credentials that can work on a fresh device
-  // are the built-in test account's (records otherwise arrive by restoring
-  // a backup, offered on the same screen). The server sign-in call lands
-  // exactly here later.
-  const [signinEmail, setSigninEmail] = useState('')
+  // "Sign in" on a device with no data: business ID + username +
+  // password. Until the cloud backend exists the only credentials that
+  // can work on a fresh device are the built-in test account's (records
+  // otherwise arrive by restoring a backup, offered on the same screen).
+  // The server sign-in call lands exactly here later.
+  const [signinBizId, setSigninBizId] = useState('')
+  const [signinUser, setSigninUser] = useState('')
   const [signinPw, setSigninPw] = useState('')
   const [signinBusy, setSigninBusy] = useState(false)
   const [signinErr, setSigninErr] = useState('')
@@ -126,10 +128,11 @@ function OnboardingScreen() {
   const [techFirst, setTechFirst] = useState('')
   const [techMiddle, setTechMiddle] = useState('')
   const [techLast, setTechLast] = useState('')
-  // Sign-in email for the account. Optional today (nothing is transmitted
-  // pre-server); it becomes the cloud login once accounts land, so it's
-  // captured now to save every business a migration prompt later.
-  const [techEmail, setTechEmail] = useState('')
+  // Sign-in username for the account. Optional today (nothing is
+  // transmitted pre-server); with the business ID it becomes the cloud
+  // login once accounts land, so it's captured now to save every business
+  // a migration prompt later.
+  const [techUsername, setTechUsername] = useState('')
   const [techRhl, setTechRhl] = useState('')
   const [techExpiry, setTechExpiry] = useState('')
   const [password, setPassword] = useState('')
@@ -183,10 +186,10 @@ function OnboardingScreen() {
   // setup so the app can warn before the authorisation runs out.
   const arcExpiryOk = !profile.hasBusinessAuthorisation || arcExpiry !== ''
   const nameOk = techFirst.trim() !== '' && techLast.trim() !== ''
-  // Optional, but when given it must at least look like an address —
-  // it's the future sign-in identifier.
-  const emailOk =
-    techEmail.trim() === '' || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(techEmail.trim())
+  // Optional, but when given it must be a usable identifier — letters,
+  // digits and . _ - only, at least 3 characters.
+  const usernameOk =
+    techUsername.trim() === '' || /^[a-z0-9._-]{3,}$/i.test(techUsername.trim())
   const expiryOk = techExpiry !== ''
   // Every account gets a password — it secures profile switching today
   // and becomes the sign-in once team accounts land.
@@ -194,7 +197,7 @@ function OnboardingScreen() {
     password.length >= MIN_PASSWORD_LENGTH && password === confirmPw
   const techOk =
     nameOk &&
-    emailOk &&
+    usernameOk &&
     techRhl.trim() !== '' &&
     expiryOk &&
     passwordOk &&
@@ -226,7 +229,7 @@ function OnboardingScreen() {
   if (!arcExpiryOk) missing.push(`${profile.businessAuthShort} expiry`)
   if (techFirst.trim() === '') missing.push('first name')
   if (techLast.trim() === '') missing.push('surname')
-  if (!emailOk) missing.push('a valid email')
+  if (!usernameOk) missing.push('a valid username')
   if (techRhl.trim() === '') missing.push(profile.techLicenceShort)
   if (!expiryOk) missing.push(`${profile.techLicenceShort} expiry`)
   if (!passwordOk) missing.push('password')
@@ -255,7 +258,10 @@ function OnboardingScreen() {
   )
   const techFirstErr = err(techFirst.trim() === '', 'Enter your first name.')
   const techLastErr = err(techLast.trim() === '', 'Enter your surname.')
-  const techEmailErr = err(!emailOk, 'Enter a valid email address (or leave it blank).')
+  const techUsernameErr = err(
+    !usernameOk,
+    'Usernames are at least 3 characters — letters, digits, dots, dashes and underscores (or leave it blank).',
+  )
   const techRhlErr = err(
     techRhl.trim() === '',
     `Enter your ${profile.techLicenceShort}.`,
@@ -310,7 +316,7 @@ function OnboardingScreen() {
         firstName: techFirst,
         middleName: techMiddle,
         lastName: techLast,
-        email: techEmail.trim() || undefined,
+        username: techUsername.trim() || undefined,
         arcLicenceNumber: techRhl,
         licenceExpiry: techExpiry,
         role,
@@ -322,37 +328,35 @@ function OnboardingScreen() {
     toast.show('Setup complete — welcome aboard', 'success')
   }
 
-  // Email + password sign-in. Pre-server, the only account that can exist
-  // on a fresh device is the built-in test one; entering its credentials
-  // provisions the local test workspace through the same completeSetup
-  // path a real account uses. When the backend lands, this becomes the
-  // remote authentication call.
+  // Business ID + username + password sign-in. Pre-server, the only
+  // account that can exist on a fresh device is the built-in test one;
+  // entering its credentials provisions the local test workspace through
+  // the same completeSetup path a real account uses. When the backend
+  // lands, this becomes the remote authentication call. Every miss gets
+  // the same generic error — the form never reveals which part was wrong
+  // or that a test account exists.
   async function signIn(e: React.FormEvent) {
     e.preventDefault()
     if (signinBusy) return
     setSigninErr('')
-    const em = signinEmail.trim().toLowerCase()
-    if (!em || !signinPw) {
-      setSigninErr('Enter your email and password.')
+    const biz = signinBizId.trim().toUpperCase()
+    const user = signinUser.trim().toLowerCase()
+    if (!biz || !user || !signinPw) {
+      setSigninErr('Enter your business ID, username and password.')
       return
     }
-    if (em !== TEST_ACCOUNT_EMAIL) {
-      setSigninErr(
-        'No account with that email exists on this device. RefrigHandle ' +
-          'accounts live on your own devices until the cloud server ' +
-          'arrives — restore your backup below to bring your records here, ' +
-          'or create the account.',
-      )
-      return
-    }
-    if (signinPw !== TEST_ACCOUNT_PASSWORD) {
-      setSigninErr('Wrong password.')
+    if (
+      biz !== TEST_ACCOUNT_BUSINESS_ID ||
+      user !== TEST_ACCOUNT_USERNAME ||
+      signinPw !== TEST_ACCOUNT_PASSWORD
+    ) {
+      setSigninErr('Those details don’t match an account. Check your business ID, username and password.')
       return
     }
     setSigninBusy(true)
     const passwordHash = await hashPassword(TEST_ACCOUNT_PASSWORD)
     completeSetup(buildTestAccountSetup(passwordHash))
-    toast.show('Signed in to the built-in test account.', 'success')
+    toast.show('Signed in.', 'success')
     // The onboarding gate stands down on the next render — nothing more
     // to do here.
   }
@@ -465,22 +469,32 @@ function OnboardingScreen() {
               Sign in
             </h1>
             <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
-              Enter your account email and password.
+              Enter your business ID, username and password.
             </p>
           </div>
 
           <form onSubmit={signIn} className="mt-8 space-y-3">
-            <Field label="Email">
+            <Field label="Business ID">
               <TextInput
-                type="email"
-                autoComplete="username"
+                autoComplete="organization"
                 autoFocus
-                value={signinEmail}
+                value={signinBizId}
                 onChange={(e) => {
-                  setSigninEmail(e.target.value)
+                  setSigninBizId(e.target.value)
                   setSigninErr('')
                 }}
-                placeholder="you@business.com.au"
+                placeholder="Business ID"
+              />
+            </Field>
+            <Field label="Username">
+              <TextInput
+                autoComplete="username"
+                value={signinUser}
+                onChange={(e) => {
+                  setSigninUser(e.target.value)
+                  setSigninErr('')
+                }}
+                placeholder="Username"
               />
             </Field>
             <Field label="Password">
@@ -503,14 +517,6 @@ function OnboardingScreen() {
             <Button full type="submit" disabled={signinBusy}>
               {signinBusy ? 'Signing in…' : 'Sign in'}
             </Button>
-            <div className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-[11px] text-blue-900 dark:border-blue-900/50 dark:bg-blue-900/20 dark:text-blue-200">
-              <span className="font-semibold">No server yet.</span> Cloud
-              sign-in arrives with RefrigHandle accounts. Until then you can
-              try this form with the built-in test account —{' '}
-              <span className="font-mono">{TEST_ACCOUNT_EMAIL}</span> /{' '}
-              <span className="font-mono">{TEST_ACCOUNT_PASSWORD}</span> — or
-              bring your real records across below.
-            </div>
           </form>
 
           <div className="mt-5 space-y-3">
@@ -724,17 +730,16 @@ function OnboardingScreen() {
                 />
               </Field>
               <Field
-                label="Email"
-                error={techEmailErr}
-                hint="Optional for now — nothing is sent anywhere. It becomes your sign-in when RefrigHandle cloud accounts arrive."
+                label="Username"
+                error={techUsernameErr}
+                hint="Optional for now — nothing is sent anywhere. With your business ID it becomes your sign-in when RefrigHandle cloud accounts arrive."
               >
                 <TextInput
-                  type="email"
-                  autoComplete="email"
-                  value={techEmail}
-                  invalid={!!techEmailErr}
-                  onChange={(e) => setTechEmail(e.target.value)}
-                  placeholder="e.g. you@business.com.au"
+                  autoComplete="username"
+                  value={techUsername}
+                  invalid={!!techUsernameErr}
+                  onChange={(e) => setTechUsername(e.target.value)}
+                  placeholder="e.g. jsmith"
                 />
               </Field>
               <Field

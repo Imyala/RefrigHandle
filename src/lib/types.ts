@@ -881,11 +881,12 @@ export interface Technician {
   firstName?: string
   middleName?: string
   lastName?: string
-  // Sign-in identifier (stored lowercased). Captured at account creation;
-  // today it signs in on this device only, and it becomes the cloud login
-  // once the authenticated backend lands. Optional: profiles created
-  // before sign-in existed (and secondary tech profiles) may lack one.
-  email?: string
+  // Sign-in username (stored lowercased). Captured at account creation;
+  // today it signs in on this device only, and — with the business ID —
+  // it becomes the cloud login once the authenticated backend lands.
+  // Optional: profiles created before sign-in existed (and secondary
+  // tech profiles) may lack one.
+  username?: string
   // Access tier (owner / supervisor / technician / apprentice). Optional
   // for back-compat: profiles saved before roles existed read as the
   // default tier via roleInfo(). normalize() promotes one profile per

@@ -86,7 +86,7 @@ function SignInScreen({ profiles }: { profiles: Technician[] }) {
                     </Pill>
                   </div>
                   <div className="text-xs text-slate-500">
-                    {t.email ??
+                    {t.username ??
                       (t.arcLicenceNumber
                         ? `${profile.techLicenceShort} ${t.arcLicenceNumber}`
                         : '')}

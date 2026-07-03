@@ -118,14 +118,17 @@ The v1.x replacement, hosted by RefrigHandle (Supabase or equivalent):
   "move team to RefrigHandle cloud" that imports the old row and retires
   the Team ID.
 - **Groundwork already in place (July 2026):** the welcome screen has a
-  real email + password sign-in form, accounts capture an email at
-  creation (stored lowercased on the technician profile), and a signed-out
-  device shows a sign-in screen (profile + password). Until the backend
-  exists, the sign-in form authenticates a **built-in test account**
-  (`test@refrighandle.app` / `Test1234`) that provisions a clearly-bannered
-  local sandbox. When the server lands: point the form's submit at the
-  remote auth call, and **remove `src/lib/testAccount.ts`** and its uses —
-  a hardcoded credential must not survive into the real-auth era.
+  real sign-in form (business ID + username + password), accounts capture
+  an optional username at creation (stored lowercased on the technician
+  profile), and a signed-out device shows a sign-in screen (profile +
+  password). Until the backend exists, the sign-in form authenticates a
+  **built-in test account** — business ID `TEST-0001`, username
+  `testuser`, password `Test1234` — that provisions a clearly-bannered
+  local sandbox. The credentials are deliberately not hinted anywhere in
+  the UI; every miss gets the same generic error. When the server lands:
+  point the form's submit at the remote auth call, and **remove
+  `src/lib/testAccount.ts`** and its uses — a hardcoded credential must
+  not survive into the real-auth era.
 
 ### 2.2 Transactional email *(small, after a domain exists)*
 - Replace `mailto:` handoffs (closure record, audit pack share) with real

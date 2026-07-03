@@ -8,8 +8,8 @@ import { rangeTotals } from '../reports'
 import { hashPassword, verifyPassword } from '../auth'
 import {
   buildTestAccountSetup,
-  TEST_ACCOUNT_EMAIL,
   TEST_ACCOUNT_PASSWORD,
+  TEST_ACCOUNT_USERNAME,
 } from '../testAccount'
 import type { Bottle } from '../types'
 
@@ -688,7 +688,7 @@ describe('audit logging gaps closed', () => {
     const s = api.current.state
     expect(s.setupCompletedAt).toBeTruthy()
     expect(s.termsAcceptedAt).toBeTruthy()
-    const tech = s.technicians.find((t) => t.email === TEST_ACCOUNT_EMAIL)
+    const tech = s.technicians.find((t) => t.username === TEST_ACCOUNT_USERNAME)
     expect(tech).toBeTruthy()
     expect(tech!.role).toBe('owner')
     expect(s.activeTechnicianId).toBe(tech!.id)
@@ -696,7 +696,7 @@ describe('audit logging gaps closed', () => {
     expect(await verifyPassword('not-the-password', tech!.passwordHash!)).toBe(false)
   })
 
-  it('completeSetup lowercases and stores the account email', () => {
+  it('completeSetup lowercases and stores the account username', () => {
     const api = setup()
     act(() =>
       api.current.completeSetup({
@@ -707,7 +707,7 @@ describe('audit logging gaps closed', () => {
         technician: {
           firstName: 'Jo',
           lastName: 'Smith',
-          email: '  Jo.Smith@Business.COM.au ',
+          username: '  JSmith ',
           arcLicenceNumber: 'L1',
           licenceExpiry: '2030-01-01',
           role: 'owner',
@@ -716,6 +716,6 @@ describe('audit logging gaps closed', () => {
         jurisdiction: 'AU',
       }),
     )
-    expect(api.current.state.technicians[0].email).toBe('jo.smith@business.com.au')
+    expect(api.current.state.technicians[0].username).toBe('jsmith')
   })
 })

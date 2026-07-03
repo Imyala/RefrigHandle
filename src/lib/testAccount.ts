@@ -6,11 +6,14 @@ import type { AppState } from './types'
 // workspace (the same completeSetup path a real account uses), so the
 // whole loop — sign in, work, sign out, sign back in — is testable today.
 //
-// The credentials are deliberately public: they grant nothing beyond a
-// sandbox on the visitor's own device (exactly like guest mode). REMOVE
-// this module when the server backend lands — sign-in then authenticates
-// remotely and a hardcoded account would only confuse.
-export const TEST_ACCOUNT_EMAIL = 'test@refrighandle.app'
+// The credentials are deliberately NOT shown anywhere in the UI; the
+// sign-in form answers every miss with the same generic error. They grant
+// nothing beyond a sandbox on the visitor's own device (exactly like
+// guest mode). REMOVE this module when the server backend lands —
+// sign-in then authenticates remotely and a hardcoded account would only
+// confuse.
+export const TEST_ACCOUNT_BUSINESS_ID = 'TEST-0001'
+export const TEST_ACCOUNT_USERNAME = 'testuser'
 export const TEST_ACCOUNT_PASSWORD = 'Test1234'
 
 // Whether this device's workspace is the built-in test account — drives
@@ -18,7 +21,7 @@ export const TEST_ACCOUNT_PASSWORD = 'Test1234'
 // business's records.
 export function isTestAccount(state: AppState): boolean {
   return state.technicians.some(
-    (t) => t.email?.toLowerCase() === TEST_ACCOUNT_EMAIL,
+    (t) => t.username?.toLowerCase() === TEST_ACCOUNT_USERNAME,
   )
 }
 
@@ -41,7 +44,7 @@ export function buildTestAccountSetup(passwordHash: string) {
     technician: {
       firstName: 'Test',
       lastName: 'Account',
-      email: TEST_ACCOUNT_EMAIL,
+      username: TEST_ACCOUNT_USERNAME,
       arcLicenceNumber: 'TEST-0000',
       licenceExpiry: ymdMonthsFromNow(24),
       role: 'owner' as const,

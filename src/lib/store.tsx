@@ -225,8 +225,8 @@ interface StoreApi {
       firstName: string
       middleName?: string
       lastName: string
-      // Sign-in email for the account (see Technician.email).
-      email?: string
+      // Sign-in username for the account (see Technician.username).
+      username?: string
       arcLicenceNumber: string
       licenceExpiry: string
       // owner or supervisor — chosen at setup (SETUP_ROLE_CHOICES).
@@ -2085,7 +2085,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         middleName: data.technician.middleName?.trim() || undefined,
         lastName: data.technician.lastName.trim(),
         // Lowercased so sign-in lookups are case-insensitive.
-        email: data.technician.email?.trim().toLowerCase() || undefined,
+        username: data.technician.username?.trim().toLowerCase() || undefined,
         name: composeName(data.technician),
         arcLicenceNumber: data.technician.arcLicenceNumber.trim(),
         licenceExpiry: data.technician.licenceExpiry || undefined,
