@@ -1,4 +1,4 @@
-import { useRef, useState, type ComponentType, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ComponentType, type ReactNode } from 'react'
 import { Button, Card, Field, Modal, TextInput } from './ui'
 import { Picker } from './Picker'
 import { DateInput } from './DateInput'
@@ -100,6 +100,19 @@ export function OnboardingGate({ children }: { children: ReactNode }) {
 function OnboardingScreen() {
   const { completeSetup, startDemo, importState } = useStore()
   const toast = useToast()
+
+  // The router (and its URL hash) lives INSIDE this gate, so the hash
+  // still holds whatever page the PREVIOUS session died on — exit guest
+  // from Settings and the next guest session would open on Settings;
+  // worse, a closed account left `#/account-deletion` behind and a fresh
+  // guest landed on the deletion screen. While the welcome screen is up
+  // there is no router mounted, so resetting the hash directly is safe —
+  // every new session starts at Home.
+  useEffect(() => {
+    if (window.location.hash && window.location.hash !== '#/') {
+      window.location.hash = '#/'
+    }
+  }, [])
 
   // Australia-only product: the jurisdiction is fixed to AU rather than
   // picked, so every install runs on the ARC (RHL/RTA) profile.
