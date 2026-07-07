@@ -92,7 +92,7 @@ export function Layout() {
         className="sticky bottom-0 z-30 border-t border-slate-200 bg-white/95 backdrop-blur dark:border-slate-800 dark:bg-slate-950/95"
       >
         <div
-          className="relative mx-auto grid max-w-3xl grid-cols-5"
+          className="relative mx-auto grid max-w-3xl grid-cols-6"
           style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
         >
           <TabLink to="/" end label="Home" icon={<HomeIcon />} />
@@ -128,6 +128,10 @@ export function Layout() {
               </>
             )}
           </NavLink>
+
+          {/* Jobs earned a tab: fridgies think in jobs, and the UX review
+              kept finding it stranded behind the Home card grid. */}
+          <TabLink to="/jobs" label="Jobs" icon={<JobsIcon />} />
 
           {/* "Movements", not "Log": the page is the refrigerant ledger and
               links to the separate Change log (audit trail) — a tab called
@@ -256,6 +260,17 @@ function Icon({ children, big }: { children: ReactNode; big?: boolean }) {
     >
       {children}
     </svg>
+  )
+}
+
+function JobsIcon() {
+  // Clipboard — the work-order metaphor.
+  return (
+    <Icon>
+      <rect x="5" y="4.5" width="14" height="17" rx="2" />
+      <path d="M9 4.5V3h6v1.5" />
+      <path d="M8.5 10h7M8.5 13.5h7M8.5 17h4" />
+    </Icon>
   )
 }
 

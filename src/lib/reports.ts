@@ -11,6 +11,7 @@ import {
   isTechnicianActive,
   leakStatusFor,
   quarterKey,
+  quarterLabel,
   quarterOfDay,
   supersededIds,
   transactionLoss,
@@ -293,6 +294,226 @@ export function rangeTotals(
   return [...byType.values()].sort((a, b) =>
     a.refrigerant.localeCompare(b.refrigerant),
   )
+}
+
+// --- Quarter-close ritual -------------------------------------------------
+
+// The card only appears in the closing stretch of a quarter — a nudge,
+// not a permanent fixture.
+export const QUARTER_CLOSE_WINDOW_DAYS = 14
+
+export interface QuarterCloseItem {
+  id: string
+  label: string
+  // Where the fix lives.
+  to: string
+}
+
+export interface QuarterCloseStatus {
+  quarterKey: string
+  quarterLabelText: string
+  closesOn: string // YYYY-MM-DD (last local day of the quarter)
+  daysLeft: number // 0 = closes today
+  movements: number // live movements logged this quarter so far
+  items: QuarterCloseItem[] // outstanding fixes, empty = ready
+}
+
+// Turns the last fortnight of each quarter into a 5-minute routine: what
+// still needs attention before the ARC quarterly record is worth
+// printing. Returns null outside the window. Pure — `today` is the local
+// calendar day in the business timezone.
+export function quarterCloseStatus(
+  state: AppState,
+  today: string,
+): QuarterCloseStatus | null {
+  const q = quarterOfDay(today)
+  if (!q) return null
+  const endMonth = q.q * 3
+  const lastDay = new Date(Date.UTC(q.year, endMonth, 0)).getUTCDate()
+  const closesOn = `${q.year}-${String(endMonth).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
+  const daysLeft = Math.round(
+    (Date.parse(`${closesOn}T00:00:00Z`) - Date.parse(`${today}T00:00:00Z`)) /
+      86400000,
+  )
+  if (daysLeft < 0 || daysLeft > QUARTER_CLOSE_WINDOW_DAYS) return null
+
+  const items: QuarterCloseItem[] = []
+
+  // Cylinders whose AS 2030 state would embarrass the record.
+  const inService = state.bottles.filter((b) => !isOutOfFleet(b.status))
+  const noTestDate = inService.filter(
+    (b) => hydroStatusFor(b).status === 'unknown',
+  ).length
+  const overdue = inService.filter(
+    (b) => hydroStatusFor(b).status === 'overdue',
+  ).length
+  if (overdue > 0) {
+    items.push({
+      id: 'cyl-overdue',
+      label: `${overdue} cylinder${overdue === 1 ? '' : 's'} overdue for the AS 2030 test`,
+      to: '/bottles',
+    })
+  }
+  if (noTestDate > 0) {
+    items.push({
+      id: 'cyl-nodate',
+      label: `${noTestDate} cylinder${noTestDate === 1 ? '' : 's'} with no test date recorded`,
+      to: '/bottles',
+    })
+  }
+
+  // Licences / RTA that lapse before or shortly after the close.
+  const actives = state.technicians.filter(isTechnicianActive)
+  const licProblem = actives.filter((t) => {
+    if (!t.licenceExpiry) return true
+    const lv = expiryStatus(t.licenceExpiry).level
+    return lv === 'expired' || lv === 'due_soon'
+  }).length
+  if (licProblem > 0) {
+    items.push({
+      id: 'licences',
+      label: `${licProblem} technician licence${licProblem === 1 ? '' : 's'} expired, expiring or missing a date`,
+      to: '/settings',
+    })
+  }
+  if (state.arcAuthorisationExpiry) {
+    const lv = expiryStatus(state.arcAuthorisationExpiry).level
+    if (lv !== 'ok') {
+      items.push({
+        id: 'rta',
+        label: 'The RTA is expired or expiring — renew before the record is signed',
+        to: '/settings',
+      })
+    }
+  }
+
+  // Risk plan (an RTA condition): never reviewed, or stale by a year.
+  const reviewedAt = state.riskPlan?.reviewedAt
+  const staleReview =
+    !reviewedAt ||
+    Date.parse(reviewedAt) < Date.parse(`${today}T00:00:00Z`) - 365 * 86400000
+  if (staleReview) {
+    items.push({
+      id: 'risk-plan',
+      label: reviewedAt
+        ? 'Risk management plan review is over a year old'
+        : 'Risk management plan has never been reviewed',
+      to: '/settings',
+    })
+  }
+
+  // A fresh backup belongs with a closed quarter.
+  if (backupStatus(state).due) {
+    items.push({
+      id: 'backup',
+      label: 'Records backup is overdue — export one with the record',
+      to: '/settings',
+    })
+  }
+
+  const key = quarterKey(q)
+  const live = state.transactions.filter((t) => !t.deletedAt)
+  const dayOf = (t: Transaction) =>
+    localDateTimeInput(new Date(t.date), state.location.timezone).slice(0, 10)
+  const movements = live.filter((t) => {
+    const qd = quarterOfDay(dayOf(t))
+    return !!qd && quarterKey(qd) === key
+  }).length
+
+  return {
+    quarterKey: key,
+    quarterLabelText: quarterLabel(q),
+    closesOn,
+    daysLeft,
+    movements,
+    items,
+  }
+}
+
+// --- Monthly owner summary --------------------------------------------
+
+export interface MonthlySummary {
+  monthLabel: string // e.g. "June 2026"
+  monthKey: string // YYYY-MM
+  movements: number
+  chargedKg: number
+  recoveredKg: number
+  purchasedKg: number
+  soldKg: number
+  topSite?: { name: string; movements: number }
+  leakWatchUnits: number // active units currently at watch/suspected
+}
+
+// "Last month at a glance" — the numbers an owner forwards to a partner.
+// Covers the previous calendar month relative to `today`; null when it
+// had no movements (a fresh install shouldn't show a wall of zeros).
+export function monthlySummary(
+  state: AppState,
+  today: string,
+): MonthlySummary | null {
+  const year = Number(today.slice(0, 4))
+  const month = Number(today.slice(5, 7)) // 1–12
+  const prevYear = month === 1 ? year - 1 : year
+  const prevMonth = month === 1 ? 12 : month - 1
+  const monthKey = `${prevYear}-${String(prevMonth).padStart(2, '0')}`
+  const tz = state.location.timezone
+
+  const superseded = supersededIds(
+    state.transactions.filter((t) => !t.deletedAt),
+  )
+  const rows = state.transactions.filter((t) => {
+    if (t.deletedAt || superseded.has(t.id)) return false
+    return (
+      localDateTimeInput(new Date(t.date), tz).slice(0, 7) === monthKey
+    )
+  })
+  if (rows.length === 0) return null
+
+  let chargedKg = 0
+  let recoveredKg = 0
+  let purchasedKg = 0
+  let soldKg = 0
+  const bySite = new Map<string, number>()
+  for (const t of rows) {
+    if (t.kind === 'charge') chargedKg += t.amount
+    else if (t.kind === 'recover' && !t.sourceBottleId) recoveredKg += t.amount
+    else if (t.kind === 'intake') purchasedKg += t.amount
+    else if (t.kind === 'sell') {
+      const bottle = state.bottles.find((b) => b.id === t.bottleId)
+      const tare = t.bottleTareWeight ?? bottle?.tareWeight
+      if (tare != null) soldKg += Math.max(0, t.weightBefore - tare)
+    }
+    const siteName =
+      state.sites.find((s) => s.id === t.siteId)?.name ?? t.siteName
+    if (siteName) bySite.set(siteName, (bySite.get(siteName) ?? 0) + 1)
+  }
+  const top = [...bySite.entries()].sort((a, b) => b[1] - a[1])[0]
+
+  const leakWatchUnits = state.units.filter((u) => {
+    if (u.status !== 'active') return false
+    const lv = leakStatusFor(u, state.transactions).level
+    return lv === 'watch' || lv === 'suspected'
+  }).length
+
+  const monthLabel = new Date(
+    Date.UTC(prevYear, prevMonth - 1, 1),
+  ).toLocaleDateString('en-AU', {
+    month: 'long',
+    year: 'numeric',
+    timeZone: 'UTC',
+  })
+
+  return {
+    monthLabel,
+    monthKey,
+    movements: rows.length,
+    chargedKg,
+    recoveredKg,
+    purchasedKg,
+    soldKg,
+    topSite: top ? { name: top[0], movements: top[1] } : undefined,
+    leakWatchUnits,
+  }
 }
 
 // Per-refrigerant totals for one calendar quarter — the ARC quarterly

@@ -43,7 +43,7 @@ export function QuarterlyReportCard() {
   )
 }
 
-function QuarterlyReportModal({ onClose }: { onClose: () => void }) {
+export function QuarterlyReportModal({ onClose }: { onClose: () => void }) {
   const { state } = useStore()
   const tz = state.location.timezone
 

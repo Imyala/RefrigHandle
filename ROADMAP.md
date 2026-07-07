@@ -46,30 +46,31 @@ Ranked by how directly they change a technician's or owner's week.
 2. **The job becomes the centre, with a customer-facing service report**
    — **largely done (July 2026)**: the service report now embeds the
    customer's captured signature (name + time) and the job's photos, and
-   has a Share… sheet (device share / copy / email) alongside Print/PDF.
-   **Still to do**: a Jobs entry in the tab bar, and a real PDF
-   attachment once transactional email exists.
-3. **Quarter-close ritual** — a card that appears in the last fortnight
-   of each quarter: "Q3 closes in 12 days — 2 charges missing a leak-test
-   answer, 1 cylinder with no test date, risk plan review due" with
-   one-tap fixes, ending in "Quarterly record ready — share it". Turns
-   compliance from a scramble into a 5-minute routine, 4 guaranteed
-   sessions a year. *(Mostly client-side; ~1 week.)*
+   has a Share… sheet (device share / copy / email) alongside Print/PDF,
+   and **Jobs now has its own tab** in the bottom bar. **Still to do**:
+   a real PDF attachment once transactional email exists.
+3. ~~Quarter-close ritual~~ — **done (July 2026)**: in the last fortnight
+   of each quarter a dashboard card lists the outstanding fixes (overdue /
+   undated cylinder tests, lapsing licences or RTA, stale risk plan,
+   overdue backup) with one-tap links, flips green when everything's
+   clear ("a nil return is still a record"), and opens the quarterly
+   record directly.
 4. **Managed accounts + cloud sync (the category jump)** — per-tech
    sign-in, real revocation, server-anchored audit chain, nightly managed
    backups. This is what makes multi-van businesses adopt it as the
    system of record — and data gravity is the strongest retention there
    is. It is also the natural paid tier. (RELEASE-GO-LIVE §2.1; the
    quarter-scale project.)
-5. **Faster capture in the field** — the record only exists if entering
-   it beats a notebook: PWA **app-shortcut** "Log a charge" straight from
-   the home-screen icon *(hours)*; camera-first entry (snap the docket /
-   nameplate, fill the form around it — OCR later); bulk "move these 5
-   bottles to site X" *(days)*.
-6. **A monthly summary that makes the owner look** — "March: 42 kg
-   charged, 11 recovered, top site Harbour View, unit #2 flagged on leak
-   watch, all licences current." In-app card first, email once §B.1
-   exists. Owners forward it; forwarding is marketing. *(~3–4 days.)*
+5. **Faster capture in the field** — **app shortcut done (July 2026)**:
+   long-press the home-screen icon → "Log refrigerant" opens the form
+   directly (manifest shortcut + `#/?action=log` deep link). **Still to
+   do**: camera-first entry (snap the docket / nameplate, fill the form
+   around it — OCR later); bulk "move these 5 bottles to site X".
+6. ~~A monthly summary that makes the owner look~~ — **in-app card done
+   (July 2026)**: "June 2026 at a glance" on the dashboard — charged /
+   recovered / purchased / sold kg, movement count, busiest site, leak-
+   watch flags; hidden for months with nothing logged. **Still to do**:
+   the email edition once §B.1's sender exists.
 7. **Xero deepening** — the purchases CSV ships today; the next step is
    OAuth push of draft bills, only justified once pilots actually use
    the CSV route.

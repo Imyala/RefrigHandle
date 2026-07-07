@@ -1,10 +1,12 @@
-import { useState } from 'react'
-import { Link } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { Link, useSearchParams } from 'react-router-dom'
 import { Button, Card } from '../components/ui'
 import { CollapsibleSection } from '../components/CollapsibleSection'
 import { ShareTxButton, ShareTxModal } from '../components/ShareSheet'
 import { ComplianceHealth } from '../components/ComplianceHealth'
 import { FleetLeakWatch } from '../components/FleetLeakWatch'
+import { QuarterCloseCard } from '../components/QuarterClose'
+import { MonthlySummaryCard } from '../components/MonthlySummary'
 import { LogForm } from '../components/LogForm'
 import { addPhoto } from '../lib/attachments'
 import { useToast } from '../lib/toast'
@@ -31,6 +33,24 @@ export default function Dashboard() {
   // screen — same shared LogForm as the Bottles quick-log and Log tab.
   const [logging, setLogging] = useState(false)
   const [shareTx, setShareTx] = useState<Transaction | null>(null)
+
+  // PWA app-shortcut deep link: long-press the home-screen icon →
+  // "Log refrigerant" launches `#/?action=log`. Opening the form is an
+  // own-state adjustment during render (the same pattern as the Bottles
+  // deep link); stripping the param is a NAVIGATION, so it runs in an
+  // effect — otherwise refresh/back would reopen the form forever.
+  const [searchParams, setSearchParams] = useSearchParams()
+  const [handledLogAction, setHandledLogAction] = useState(false)
+  if (searchParams.get('action') === 'log' && !handledLogAction) {
+    setHandledLogAction(true)
+    setLogging(true)
+  }
+  useEffect(() => {
+    if (searchParams.get('action') !== 'log') return
+    const next = new URLSearchParams(searchParams)
+    next.delete('action')
+    setSearchParams(next, { replace: true })
+  }, [searchParams, setSearchParams])
 
   const totalsByType = new Map<string, { count: number; net: number }>()
   for (const b of bottles) {
@@ -102,6 +122,10 @@ export default function Dashboard() {
           + Log refrigerant
         </Button>
       )}
+
+      {/* Quarter-close ritual — only renders in the last fortnight of a
+          quarter, above the always-on scorecards while it's relevant. */}
+      <QuarterCloseCard />
 
       <ComplianceHealth />
 
@@ -183,6 +207,8 @@ export default function Dashboard() {
           </div>
         )}
       </CollapsibleSection>
+
+      <MonthlySummaryCard />
 
       <CollapsibleSection
         title="Recent activity"

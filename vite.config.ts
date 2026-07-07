@@ -47,6 +47,20 @@ export default defineConfig({
             purpose: 'maskable',
           },
         ],
+        // Long-press the home-screen icon → straight into the logging
+        // form (Android launchers and desktop; harmless where the
+        // platform ignores shortcuts). The app uses HashRouter, so the
+        // action param must live INSIDE the hash for useSearchParams to
+        // see it; the Dashboard consumes it.
+        shortcuts: [
+          {
+            name: 'Log refrigerant',
+            short_name: 'Log',
+            description: 'Open the refrigerant logging form',
+            url: `${base}#/?action=log`,
+            icons: [{ src: 'icon-192.png', sizes: '192x192' }],
+          },
+        ],
       },
     }),
   ],
