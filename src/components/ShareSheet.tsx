@@ -38,7 +38,7 @@ export function ShareTxButton({
         {label}
       </button>
       {text && (
-        <ShareModal
+        <ShareTextModal
           open={open}
           onClose={() => setOpen(false)}
           subject={text.subject}
@@ -60,7 +60,7 @@ export function ShareTxModal({
 }) {
   const { state } = useStore()
   const { subject, body } = transactionShareText(t, state)
-  return <ShareModal open onClose={onClose} subject={subject} body={body} />
+  return <ShareTextModal open onClose={onClose} subject={subject} body={body} />
 }
 
 // Bundles the jobs logged today / this week / this month into one
@@ -150,7 +150,7 @@ export function SharePeriodButton({
       </Modal>
 
       {text && (
-        <ShareModal
+        <ShareTextModal
           open
           onClose={() => setText(null)}
           subject={text.subject}
@@ -161,7 +161,10 @@ export function SharePeriodButton({
   )
 }
 
-function ShareModal({
+// Generic subject+body share sheet (device share / copy / email with an
+// editable preview). Exported so other documents — e.g. the job service
+// report — reuse the exact same hand-off UX as a transaction share.
+export function ShareTextModal({
   open,
   onClose,
   subject,

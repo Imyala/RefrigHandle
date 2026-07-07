@@ -16,6 +16,7 @@ import { DiagnosticsCard } from '../components/Diagnostics'
 import { StorageHealthCard } from '../components/StorageHealth'
 import { QuarterlyReportCard } from '../components/QuarterlyReport'
 import { RiskPlanCard } from '../components/RiskPlan'
+import { ReminderCalendarCard } from '../components/ReminderCalendar'
 import { AuditReportCard } from '../components/AuditReport'
 import { useStore } from '../lib/store'
 import { uid } from '../lib/storage'
@@ -518,6 +519,8 @@ export default function Settings() {
 
       {/* Risk management plan — an RTA condition alongside the records. */}
       <RiskPlanCard />
+
+      <ReminderCalendarCard />
 
       <Card>
         <div className="mb-1 text-sm font-semibold text-slate-700 dark:text-slate-200">

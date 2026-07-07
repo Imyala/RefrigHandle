@@ -43,6 +43,7 @@ import { ScanButton } from '../components/ScanButton'
 import { profileFor } from '../lib/compliance'
 import { SiteForm } from './Sites'
 import { BottleQuickAdd } from '../components/QuickAdd'
+import { BottleImportButton } from '../components/BottleImport'
 import { LogForm } from '../components/LogForm'
 import { ShareTxModal } from '../components/ShareSheet'
 import { addPhoto } from '../lib/attachments'
@@ -501,7 +502,8 @@ export default function Bottles() {
       )}
 
       {visible.length > 0 && (
-        <div className="flex justify-end px-1">
+        <div className="flex flex-wrap justify-between gap-2 px-1">
+          <BottleImportButton />
           <button
             type="button"
             onClick={() => setLabelsFor(visible)}
@@ -517,12 +519,15 @@ export default function Bottles() {
           title={bottles.length === 0 ? 'No bottles yet' : 'No matches'}
           body={
             bottles.length === 0
-              ? 'Add your first bottle to start tracking refrigerant.'
+              ? 'Add your first bottle to start tracking refrigerant — or import your whole cylinder list from the spreadsheet you already keep.'
               : 'Try a different filter or search.'
           }
           action={
             bottles.length === 0 ? (
-              <Button onClick={() => setQuickAdding(true)}>+ Add bottle</Button>
+              <div className="flex flex-col items-center gap-2">
+                <Button onClick={() => setQuickAdding(true)}>+ Add bottle</Button>
+                <BottleImportButton />
+              </div>
             ) : undefined
           }
         />

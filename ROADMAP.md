@@ -13,12 +13,12 @@ in-app blocker they found.*
 
 1. **Custom domain + hosting cutover** — before anything else; installed
    PWAs pin to their origin forever. (RELEASE-GO-LIVE §1.4.)
-2. **Onboarding import from a spreadsheet** *(engineering, ~2–3 days)* —
-   a "Bring your cylinders in" CSV/paste import (bottle number,
-   refrigerant, tare, gross, test date). Every real business already has
-   a spreadsheet; retyping 60 cylinders on a phone is the single biggest
-   reason a trial dies in the first hour. This is an adoption feature,
-   but it must exist *before* the pilot.
+2. ~~Onboarding import from a spreadsheet~~ — **done (July 2026)**:
+   Bottles → "Import from spreadsheet" takes a pasted Excel selection or
+   a CSV file (synonym header matching, kg weights, dd/mm/yyyy or
+   mm/yyyy dates), previews every row with per-row errors/warnings, and
+   creates each cylinder through the normal path — change-log entry and
+   intake ledger row included. Template downloadable in-app.
 3. **Pilot with 3–5 real businesses for a full quarter cycle** — exit
    criterion: one business does setup → daily logs → quarterly record →
    audit pack ZIP → restore-from-backup without help.
@@ -34,20 +34,21 @@ in-app blocker they found.*
 
 Ranked by how directly they change a technician's or owner's week.
 
-1. **Reminders that reach people** *(the #1 retention lever)* — licence /
-   RTA expiry, cylinder test due, "quarter closes in 14 days", backup
-   overdue — delivered as push notifications and email, not just in-app
-   badges. An app that taps you on the shoulder before the regulator
-   does is the one you keep. Web Push + a tiny serverless sender; the
-   alert model already exists in-app. *(Needs the domain; ~1–2 weeks.)*
+1. **Reminders that reach people** *(the #1 retention lever)* —
+   **first half done (July 2026)**: Settings → "Reminders on your
+   calendar" builds an .ics file (licence/RTA renewals 60 days ahead and
+   on the day, each cylinder's AS 2030 test date, a heads-up two weeks
+   before every quarter closes) shared straight to the phone's calendar;
+   deterministic event IDs so re-imports update rather than duplicate.
+   **Still to do**: push notifications + email via a serverless sender
+   once the domain exists — the calendar file then remains the offline
+   fallback.
 2. **The job becomes the centre, with a customer-facing service report**
-   — fridgies think in jobs, not transactions. Give Jobs a tab, and give
-   every job a one-tap, good-looking **service report PDF/share**: site,
-   work done, refrigerant in/out, leak test, photos, customer signature.
-   That's the artifact they send to *their* customer — daily utility
-   beyond compliance, and free word-of-mouth (every report carries the
-   app's name). Most pieces (jobs, share text, signatures, print CSS)
-   already exist. *(~1–2 weeks.)*
+   — **largely done (July 2026)**: the service report now embeds the
+   customer's captured signature (name + time) and the job's photos, and
+   has a Share… sheet (device share / copy / email) alongside Print/PDF.
+   **Still to do**: a Jobs entry in the tab bar, and a real PDF
+   attachment once transactional email exists.
 3. **Quarter-close ritual** — a card that appears in the last fortnight
    of each quarter: "Q3 closes in 12 days — 2 charges missing a leak-test
    answer, 1 cylinder with no test date, risk plan review due" with

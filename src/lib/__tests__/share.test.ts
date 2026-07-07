@@ -4,6 +4,7 @@ import {
   periodShareText,
   rangeShareText,
   transactionShareText,
+  serviceReportText,
 } from '../share'
 import { makeBottle, makeState, makeTx } from './fixtures'
 
@@ -130,5 +131,43 @@ describe('rangeShareText / periodShareText', () => {
     expect(out).not.toBeNull()
     expect(out!.body).toContain('Filtered: R32 · 2 jobs')
     expect(listShareText([], state, 'x')).toBeNull()
+  })
+})
+
+describe('serviceReportText', () => {
+  it('reads as a customer document: header, work, totals, sign-off note', () => {
+    const job = {
+      id: 'j1',
+      reference: 'WO-1042',
+      status: 'closed' as const,
+      date: '2026-06-18T03:00:00.000Z',
+      siteName: 'Harbour View Apartments',
+      clientName: 'Strata Co',
+      createdAt: '2026-06-18T03:00:00.000Z',
+    }
+    const state = makeState({
+      businessName: 'Acme Refrigeration',
+      businessAbn: '51824753556',
+      // A modern blob always serialises `sites` — without it, normalize
+      // treats jobId as the ANCIENT site link and strips it.
+      sites: [],
+      bottles: [makeBottle({ id: 'b1', bottleNumber: 'B-1', refrigerantType: 'R32' })],
+      jobs: [job],
+      transactions: [
+        makeTx({ id: 't1', jobId: 'j1', bottleId: 'b1', kind: 'charge', amount: 2.5, date: '2026-06-18T04:00:00.000Z' }),
+        // deleted row must not leak into the customer's report
+        makeTx({ id: 't2', jobId: 'j1', bottleId: 'b1', kind: 'charge', amount: 9, date: '2026-06-18T05:00:00.000Z', deletedAt: '2026-06-19T00:00:00.000Z' }),
+      ],
+    })
+    const { subject, body } = serviceReportText(job, state)
+    expect(subject).toBe('Service report — WO-1042 · Harbour View Apartments')
+    expect(body).toContain('REFRIGERANT SERVICE REPORT')
+    expect(body).toContain('Acme Refrigeration')
+    expect(body).toContain('Job: WO-1042')
+    expect(body).toContain('Client: Strata Co')
+    expect(body).toContain('WORK PERFORMED (1 movement)')
+    expect(body).toContain('Charge — 2.50 kg R32')
+    expect(body).not.toContain('Charge — 9.00') // the deleted row
+    expect(body).toContain('Refrigerant Trading Authorisation')
   })
 })

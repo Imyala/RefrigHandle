@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Button, Card, EmptyState, Field, Modal, Pill, TextArea, TextInput } from '../components/ui'
 import { Picker } from '../components/Picker'
 import { DateTimeInput } from '../components/DateTimeInput'
@@ -19,6 +19,9 @@ import {
   transactionLabel,
 } from '../lib/types'
 import { profileFor } from '../lib/compliance'
+import { serviceReportText } from '../lib/share'
+import { ShareTextModal } from '../components/ShareSheet'
+import { listAttachments, type Attachment } from '../lib/attachments'
 import {
   dateTimeInputToIso,
   deviceTimeZone,
@@ -439,9 +442,37 @@ function ServiceReport({ job, onClose }: { job: Job; onClose: () => void }) {
   const { state } = useStore()
   const profile = profileFor(state.jurisdiction)
   const tz = state.location.timezone
+  const [sharing, setSharing] = useState(false)
   const txs = jobTransactions(job, state.transactions)
     .slice()
     .sort((a, b) => (a.date < b.date ? -1 : 1))
+
+  // The job's captured evidence — photos and the customer's on-screen
+  // signature — belongs ON the report, not behind it: a report printed
+  // with a blank customer line while a signature exists undersells the
+  // record. Loaded from the attachment store as object URLs.
+  const [loaded, setLoaded] = useState<{ a: Attachment; url: string }[]>([])
+  useEffect(() => {
+    let cancelled = false
+    let urls: string[] = []
+    listAttachments('job', job.id)
+      .then((list) => {
+        if (cancelled) return
+        const l = list.map((a) => ({ a, url: URL.createObjectURL(a.blob) }))
+        urls = l.map((x) => x.url)
+        setLoaded(l)
+      })
+      .catch(() => {
+        // Storage unavailable (private mode) — the report still prints,
+        // just without the images.
+      })
+    return () => {
+      cancelled = true
+      urls.forEach((u) => URL.revokeObjectURL(u))
+    }
+  }, [job.id])
+  const photos = loaded.filter((x) => x.a.kind === 'photo')
+  const signature = loaded.filter((x) => x.a.kind === 'signature').at(-1)
 
   // Per-refrigerant charged / recovered for the job summary.
   const byRef = new Map<string, { charged: number; recovered: number }>()
@@ -457,9 +488,14 @@ function ServiceReport({ job, onClose }: { job: Job; onClose: () => void }) {
 
   return (
     <Modal open title="Service report" onClose={onClose} size="lg">
-      <div className="no-print mb-3 flex justify-end">
+      <div className="no-print mb-3 flex justify-end gap-2">
         <Button variant="secondary" onClick={() => window.print()}>
           Print / Save PDF
+        </Button>
+        {/* Text version for the customer's inbox / job card — same
+            share-copy-email sheet as a transaction share. */}
+        <Button variant="secondary" onClick={() => setSharing(true)}>
+          Share…
         </Button>
       </div>
 
@@ -603,10 +639,55 @@ function ServiceReport({ job, onClose }: { job: Job; onClose: () => void }) {
           </section>
         )}
 
+        {photos.length > 0 && (
+          <section className="break-inside-avoid">
+            <h3 className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">
+              Photos ({photos.length})
+            </h3>
+            <div className="grid grid-cols-3 gap-2">
+              {photos.slice(0, 9).map((p) => (
+                <figure key={p.a.id}>
+                  <img
+                    src={p.url}
+                    alt={p.a.caption || 'Job photo'}
+                    className="h-28 w-full rounded-lg border border-slate-200 object-cover dark:border-slate-700"
+                  />
+                  {p.a.caption && (
+                    <figcaption className="mt-0.5 truncate text-[9px] text-slate-500">
+                      {p.a.caption}
+                    </figcaption>
+                  )}
+                </figure>
+              ))}
+            </div>
+            {photos.length > 9 && (
+              <p className="mt-1 text-[10px] text-slate-500">
+                +{photos.length - 9} more photo{photos.length - 9 === 1 ? '' : 's'} on the job record.
+              </p>
+            )}
+          </section>
+        )}
+
         <footer className="break-inside-avoid border-t-2 border-slate-800 pt-3 dark:border-slate-200">
           <div className="grid grid-cols-2 gap-8 pt-4">
             <SignatureLine label="Technician" />
-            <SignatureLine label="Customer" />
+            {signature ? (
+              <div>
+                <img
+                  src={signature.url}
+                  alt="Customer signature"
+                  className="h-16 border-b border-slate-500 object-contain object-left"
+                />
+                <div className="mt-1 text-[10px] text-slate-500 dark:text-slate-400">
+                  Customer
+                  {signature.a.signedBy ? ` — ${signature.a.signedBy}` : ''} ·
+                  signed{' '}
+                  {formatDateTime(signature.a.createdAt, tz, state.clock)}
+                </div>
+              </div>
+            ) : (
+              <SignatureLine label="Customer" />
+            )}
           </div>
           <p className="mt-3 text-[10px] text-slate-500 dark:text-slate-400">
             Generated {generatedAt}. Refrigerant handled under a Refrigerant
@@ -616,6 +697,18 @@ function ServiceReport({ job, onClose }: { job: Job; onClose: () => void }) {
           <IntegrityStamp />
         </footer>
       </div>
+
+      {sharing && (() => {
+        const { subject, body } = serviceReportText(job, state)
+        return (
+          <ShareTextModal
+            open
+            onClose={() => setSharing(false)}
+            subject={subject}
+            body={body}
+          />
+        )
+      })()}
     </Modal>
   )
 }
