@@ -61,11 +61,14 @@ Ranked by how directly they change a technician's or owner's week.
    system of record — and data gravity is the strongest retention there
    is. It is also the natural paid tier. (RELEASE-GO-LIVE §2.1; the
    quarter-scale project.)
-5. **Faster capture in the field** — **app shortcut done (July 2026)**:
-   long-press the home-screen icon → "Log refrigerant" opens the form
-   directly (manifest shortcut + `#/?action=log` deep link). **Still to
-   do**: camera-first entry (snap the docket / nameplate, fill the form
-   around it — OCR later); bulk "move these 5 bottles to site X".
+5. ~~Faster capture in the field~~ — **done (July 2026)**: home-screen
+   app shortcut ("Log refrigerant" → `#/?action=log`); **camera-first
+   entry** (the 📷 button beside "+ Log refrigerant" opens the camera
+   first, then the form with the shot pre-staged onto the record); and
+   **bulk move** (Bottles → Select → tick cylinders → one site pick logs
+   a transfer each, skipping any already there). **Still to do**: OCR
+   prefill from the docket photo — revisit after the pilot shows whether
+   accuracy on greasy dockets justifies the wasm payload.
 6. ~~A monthly summary that makes the owner look~~ — **in-app card done
    (July 2026)**: "June 2026 at a glance" on the dashboard — charged /
    recovered / purchased / sold kg, movement count, busiest site, leak-

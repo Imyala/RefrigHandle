@@ -84,6 +84,12 @@ export default function Bottles() {
   const [quickAdding, setQuickAdding] = useState(false)
   // Cylinders to print QR labels for (one bottle, or the visible set).
   const [labelsFor, setLabelsFor] = useState<Bottle[] | null>(null)
+  // Bulk move: select mode turns row taps into selection toggles, then
+  // one site pick logs a transfer for every ticked cylinder — loading
+  // the ute for a big job is one action, not five forms.
+  const [selecting, setSelecting] = useState(false)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [bulkMoveOpen, setBulkMoveOpen] = useState(false)
   // Set after a "Save & share" so the share sheet pops for the new record.
   const [shareTx, setShareTx] = useState<Transaction | null>(null)
   // Persist the active status filter across tab navigation. The page
@@ -297,12 +303,44 @@ export default function Bottles() {
     const pct =
       initialNet > 0 ? Math.min(100, Math.max(0, (net / initialNet) * 100)) : 0
     const over = overfillKg(net, initialNet)
+    // In select mode a row tap toggles the tick instead of opening the
+    // action sheet. Out-of-fleet cylinders can't be bulk-moved.
+    const selectable = !isOutOfFleet(b.status)
+    const isSelected = selectedIds.has(b.id)
     return (
-      <Card key={b.id} className="!p-3">
+      <Card
+        key={b.id}
+        className={`!p-3 ${selecting && isSelected ? '!border-brand-500 ring-1 ring-brand-500/40' : ''} ${selecting && !selectable ? 'opacity-50' : ''}`}
+      >
         <button
           className="flex w-full items-start justify-between gap-3 text-left"
-          onClick={() => setSheetBottleId(b.id)}
+          aria-pressed={selecting ? isSelected : undefined}
+          onClick={() => {
+            if (!selecting) {
+              setSheetBottleId(b.id)
+              return
+            }
+            if (!selectable) return
+            setSelectedIds((cur) => {
+              const next = new Set(cur)
+              if (next.has(b.id)) next.delete(b.id)
+              else next.add(b.id)
+              return next
+            })
+          }}
         >
+          {selecting && (
+            <span
+              aria-hidden
+              className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-xs font-bold ${
+                isSelected
+                  ? 'border-brand-600 bg-brand-600 text-white'
+                  : 'border-slate-300 text-transparent dark:border-slate-600'
+              }`}
+            >
+              ✓
+            </span>
+          )}
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
               <span className="font-semibold text-slate-900 dark:text-slate-100">
@@ -501,16 +539,53 @@ export default function Bottles() {
         </div>
       )}
 
-      {visible.length > 0 && (
+      {visible.length > 0 && !selecting && (
         <div className="flex flex-wrap justify-between gap-2 px-1">
           <BottleImportButton />
-          <button
-            type="button"
-            onClick={() => setLabelsFor(visible)}
-            className="inline-flex min-h-11 items-center text-xs font-medium text-brand-600 hover:underline dark:text-brand-400"
-          >
-            🏷 Print scannable labels ({visible.length})
-          </button>
+          <div className="flex flex-wrap gap-3">
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedIds(new Set())
+                setSelecting(true)
+              }}
+              className="inline-flex min-h-11 items-center text-xs font-medium text-brand-600 hover:underline dark:text-brand-400"
+            >
+              ☑ Select
+            </button>
+            <button
+              type="button"
+              onClick={() => setLabelsFor(visible)}
+              className="inline-flex min-h-11 items-center text-xs font-medium text-brand-600 hover:underline dark:text-brand-400"
+            >
+              🏷 Print scannable labels ({visible.length})
+            </button>
+          </div>
+        </div>
+      )}
+
+      {selecting && (
+        <div className="sticky top-0 z-20 -mx-1 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-brand-200 bg-brand-50 p-2 px-3 dark:border-brand-900/50 dark:bg-brand-900/20">
+          <span className="text-sm font-medium text-slate-800 dark:text-slate-100">
+            {selectedIds.size} selected
+          </span>
+          <div className="flex gap-2">
+            <Button
+              disabled={selectedIds.size === 0}
+              onClick={() => setBulkMoveOpen(true)}
+            >
+              Move to site…
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={() => {
+                setSelecting(false)
+                setSelectedIds(new Set())
+              }}
+            >
+              Cancel
+            </Button>
+          </div>
         </div>
       )}
 
@@ -620,6 +695,64 @@ export default function Bottles() {
 
       {shareTx && (
         <ShareTxModal t={shareTx} onClose={() => setShareTx(null)} />
+      )}
+
+      {bulkMoveOpen && (
+        <Modal
+          open
+          title={`Move ${selectedIds.size} cylinder${selectedIds.size === 1 ? '' : 's'}`}
+          onClose={() => setBulkMoveOpen(false)}
+        >
+          <p className="mb-3 text-sm text-slate-500">
+            Pick the destination site — each cylinder gets its own transfer
+            on the refrigerant log, exactly as if moved one by one.
+          </p>
+          {sites.length === 0 ? (
+            <p className="text-sm text-slate-500">
+              No sites yet — add one on the Sites page first.
+            </p>
+          ) : (
+            <div className="max-h-80 space-y-2 overflow-y-auto">
+              {sites.map((s) => (
+                <Button
+                  key={s.id}
+                  variant="secondary"
+                  full
+                  onClick={() => {
+                    const when = new Date().toISOString()
+                    let moved = 0
+                    for (const id of selectedIds) {
+                      const b = bottles.find((x) => x.id === id)
+                      // Skip anything that left the fleet (or the site it's
+                      // already on) since selection.
+                      if (!b || isOutOfFleet(b.status)) continue
+                      if (b.currentSiteId === s.id) continue
+                      addTransaction({
+                        bottleId: id,
+                        kind: 'transfer',
+                        siteId: s.id,
+                        amount: 0,
+                        date: when,
+                      })
+                      moved += 1
+                    }
+                    setBulkMoveOpen(false)
+                    setSelecting(false)
+                    setSelectedIds(new Set())
+                    toast.show(
+                      moved > 0
+                        ? `Moved ${moved} cylinder${moved === 1 ? '' : 's'} to ${s.name}`
+                        : 'Nothing to move — already at that site',
+                      moved > 0 ? 'success' : 'info',
+                    )
+                  }}
+                >
+                  {siteLabel(s)}
+                </Button>
+              ))}
+            </div>
+          )}
+        </Modal>
       )}
 
       {/* Quick-add is the default for "+ Add" — the lean path. "More fields"

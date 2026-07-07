@@ -225,7 +225,12 @@ export function PendingPhotoPicker({
   const fileRef = useRef<HTMLInputElement>(null)
   const urls = useMemo(() => files.map((f) => URL.createObjectURL(f)), [files])
   useEffect(() => {
-    return () => urls.forEach((u) => URL.revokeObjectURL(u))
+    return () => {
+      // Deferred: revoking synchronously races the closing modal's <img>
+      // teardown and logs a spurious ERR_FILE_NOT_FOUND in the console.
+      const stale = urls
+      setTimeout(() => stale.forEach((u) => URL.revokeObjectURL(u)), 1000)
+    }
   }, [urls])
 
   return (

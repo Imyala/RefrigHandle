@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { Button, Card } from '../components/ui'
 import { CollapsibleSection } from '../components/CollapsibleSection'
@@ -33,6 +33,10 @@ export default function Dashboard() {
   // screen — same shared LogForm as the Bottles quick-log and Log tab.
   const [logging, setLogging] = useState(false)
   const [shareTx, setShareTx] = useState<Transaction | null>(null)
+  // Camera-first entry: the shot taken before the form opened, staged
+  // onto the new record. Cleared when the form closes.
+  const [cameraShot, setCameraShot] = useState<File | null>(null)
+  const cameraRef = useRef<HTMLInputElement>(null)
 
   // PWA app-shortcut deep link: long-press the home-screen icon →
   // "Log refrigerant" launches `#/?action=log`. Opening the form is an
@@ -118,9 +122,38 @@ export default function Dashboard() {
       </Card>
 
       {bottles.length > 0 && (
-        <Button full onClick={() => setLogging(true)}>
-          + Log refrigerant
-        </Button>
+        <div className="flex gap-2">
+          <div className="min-w-0 flex-1">
+            <Button full onClick={() => setLogging(true)}>
+              + Log refrigerant
+            </Button>
+          </div>
+          {/* Camera-first: snap the docket / gauges FIRST, then fill the
+              form around the shot — the photo arrives pre-staged. */}
+          <Button
+            variant="secondary"
+            aria-label="Snap a photo and log"
+            title="Snap a photo and log"
+            onClick={() => cameraRef.current?.click()}
+          >
+            📷
+          </Button>
+          <input
+            ref={cameraRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            className="hidden"
+            onChange={(e) => {
+              const f = e.target.files?.[0]
+              if (f) {
+                setCameraShot(f)
+                setLogging(true)
+              }
+              e.target.value = ''
+            }}
+          />
+        </div>
       )}
 
       {/* Quarter-close ritual — only renders in the last fortnight of a
@@ -257,7 +290,11 @@ export default function Dashboard() {
 
       <LogForm
         open={logging}
-        onClose={() => setLogging(false)}
+        initialPhotos={cameraShot ? [cameraShot] : undefined}
+        onClose={() => {
+          setLogging(false)
+          setCameraShot(null)
+        }}
         onSave={(data, share) => {
           // Staged photos are bound to the new row's id in the attachment
           // store, not stored on the transaction itself (same handler as
@@ -279,6 +316,7 @@ export default function Dashboard() {
                 : `${transactionLabel(data.kind)} logged`,
             )
             setLogging(false)
+            setCameraShot(null)
             if (share) setShareTx(result)
           } else {
             toast.show(

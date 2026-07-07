@@ -107,6 +107,7 @@ export function LogForm({
   correcting,
   initialBottleId,
   initialKind,
+  initialPhotos,
   onClose,
   onSave,
 }: {
@@ -114,6 +115,10 @@ export function LogForm({
   correcting?: Transaction | null
   initialBottleId?: string
   initialKind?: TransactionKind
+  // Camera-first entry: shots taken BEFORE the form opened (the
+  // dashboard's "snap & log" button) arrive pre-staged so the evidence
+  // is already on the record the tech is about to fill in.
+  initialPhotos?: File[]
   onClose: () => void
   onSave: (data: LogFormData, share?: boolean) => void
 }) {
@@ -364,8 +369,10 @@ export function LogForm({
     setReturnDestination('')
     setDocketNumber('')
     setNotes('')
-    setPendingPhotos([])
-    setShowExtras(false)
+    // Camera-first shots arrive pre-staged, with the extras section open
+    // so the tech can see what's already attached.
+    setPendingPhotos(initialPhotos ?? [])
+    setShowExtras((initialPhotos?.length ?? 0) > 0)
     // Keep a correction on its original's job; otherwise default to an
     // open job dated TODAY (the visit you're working). A job forgotten
     // open from last week must not silently swallow unrelated movements
