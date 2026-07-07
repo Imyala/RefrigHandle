@@ -24,6 +24,7 @@ import {
   netWeight,
   regionForCity,
   siteLabel,
+  isOutOfFleet,
   statusLabel,
   supersededIds,
   tonnesCO2eFor,
@@ -875,7 +876,7 @@ function AssignBottleModal({
           (b) =>
             b.currentSiteId !== site.id &&
             b.status !== 'empty' &&
-            b.status !== 'returned',
+            !isOutOfFleet(b.status),
         )
         .sort((a, b) => a.bottleNumber.localeCompare(b.bottleNumber)),
     [state.bottles, site.id],

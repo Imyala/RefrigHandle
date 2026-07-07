@@ -47,6 +47,7 @@ export default function Dashboard() {
   const inStock = bottles.filter((b) => b.status === 'in_stock').length
   const onSite = bottles.filter((b) => b.status === 'on_site').length
   const returned = bottles.filter((b) => b.status === 'returned').length
+  const sold = bottles.filter((b) => b.status === 'sold').length
   const empty = bottles.filter((b) => b.status === 'empty').length
 
   const liveTransactions = transactions.filter((t) => !t.deletedAt)
@@ -81,6 +82,11 @@ export default function Dashboard() {
           {returned > 0 && (
             <span className="inline-flex items-center rounded-full bg-white/15 px-2.5 py-0.5 text-xs font-medium text-white">
               {returned} returned
+            </span>
+          )}
+          {sold > 0 && (
+            <span className="inline-flex items-center rounded-full bg-sky-400/25 px-2.5 py-0.5 text-xs font-medium text-sky-50">
+              {sold} sold
             </span>
           )}
           {empty > 0 && (

@@ -24,6 +24,7 @@ import {
   defaultRefrigerantType,
   fillingRatio,
   hydroStatusFor,
+  isOutOfFleet,
   isDuplicateActiveBottleNumber,
   isDuplicateBottleNumber,
   netWeight,
@@ -57,6 +58,7 @@ const statusTone: Record<
   in_stock: 'green',
   on_site: 'amber',
   returned: 'slate',
+  sold: 'blue',
   empty: 'red',
 }
 
@@ -95,6 +97,7 @@ export default function Bottles() {
       saved === 'in_stock' ||
       saved === 'on_site' ||
       saved === 'returned' ||
+      saved === 'sold' ||
       saved === 'empty'
     ) {
       return saved
@@ -215,7 +218,7 @@ export default function Bottles() {
       // On site / Empty) and only shows under the "Returned" filter, where
       // a mistaken return can be corrected. Its log entries stay untouched.
       .filter((b) =>
-        filter === 'all' ? b.status !== 'returned' : b.status === filter,
+        filter === 'all' ? !isOutOfFleet(b.status) : b.status === filter,
       )
       .filter((b) => {
         if (!q) return true
@@ -423,11 +426,11 @@ export default function Bottles() {
       )}
 
       <div className="no-scrollbar -mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
-        {(['all', 'in_stock', 'on_site', 'returned', 'empty'] as const).map(
+        {(['all', 'in_stock', 'on_site', 'returned', 'sold', 'empty'] as const).map(
           (f) => {
             const count =
               f === 'all'
-                ? bottles.filter((b) => b.status !== 'returned').length
+                ? bottles.filter((b) => !isOutOfFleet(b.status)).length
                 : bottles.filter((b) => b.status === f).length
             return (
               <button
@@ -681,6 +684,16 @@ export default function Bottles() {
                   amount: 0,
                   date: new Date().toISOString(),
                 })
+              } else if (newStatus === 'sold' && prevStatus !== 'sold') {
+                // A manual flip to Sold gets its ledger row too, so the
+                // quarterly "sold" figure never depends on which path
+                // the tech used to record the sale.
+                addTransaction({
+                  bottleId: editing.id,
+                  kind: 'sell',
+                  amount: 0,
+                  date: new Date().toISOString(),
+                })
               }
             }
             // A manual change to the gross weight changes the bottle's
@@ -853,17 +866,19 @@ function BottleActionSheet({
           </Button>
         </div>
 
-        {bottle.status === 'returned' ? (
-          // Correction for a return logged by mistake — brings the bottle
-          // back into stock. The original return stays in the log.
+        {isOutOfFleet(bottle.status) ? (
+          // Correction for a return/sale logged by mistake — brings the
+          // bottle back into stock. The original row stays in the log.
           <Button
             variant="secondary"
             full
             onClick={async () => {
+              const sold = bottle.status === 'sold'
               const ok = await confirm({
                 title: 'Return this bottle to stock?',
-                message:
-                  'Use this to correct a return logged by mistake — it brings the bottle back into your stock. The original return stays on the log.',
+                message: sold
+                  ? 'Use this to correct a sale logged by mistake — it brings the bottle back into your stock. The original sale stays on the log.'
+                  : 'Use this to correct a return logged by mistake — it brings the bottle back into your stock. The original return stays on the log.',
                 confirmLabel: 'Return to stock',
               })
               if (!ok) return
@@ -1566,6 +1581,7 @@ function BottleForm({
                 hint: 'Currently at a site / job',
               },
               { value: 'returned', label: 'Returned' },
+              { value: 'sold', label: 'Sold', hint: 'Sold to another business' },
               {
                 value: 'empty',
                 label: 'Empty',

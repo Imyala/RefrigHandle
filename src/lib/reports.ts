@@ -7,6 +7,7 @@ import type { AppState, Bottle, Transaction } from './types'
 import {
   expiryStatus,
   hydroStatusFor,
+  isOutOfFleet,
   isTechnicianActive,
   leakStatusFor,
   quarterKey,
@@ -120,7 +121,7 @@ export function complianceRows(state: AppState): ComplianceRow[] {
   }
 
   // 3. Cylinder periodic testing (AS 2030) — cylinders still in service.
-  const inService = state.bottles.filter((b) => b.status !== 'returned')
+  const inService = state.bottles.filter((b) => !isOutOfFleet(b.status))
   let cOver = 0
   let cDue = 0
   let cUnknown = 0

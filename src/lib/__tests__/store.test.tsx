@@ -139,6 +139,25 @@ describe('addTransaction — weight math', () => {
     expect(after.grossWeight).toBe(10) // back to tare
     expect(after.status).toBe('empty')
   })
+
+  it("a sale marks the bottle 'sold' (not 'returned') and clears its site", () => {
+    const api = setup()
+    const b = addBottle(api.current)
+    act(() => {
+      api.current.addTransaction({
+        bottleId: b.id,
+        kind: 'sell',
+        amount: 0,
+        returnDestination: 'Coastal Coolrooms',
+        date: DATE,
+      })
+    })
+    const after = api.current.state.bottles.find((x) => x.id === b.id)!
+    expect(after.status).toBe('sold')
+    expect(after.currentSiteId).toBeUndefined()
+    // Gross unchanged — the cylinder left with its contents.
+    expect(after.grossWeight).toBe(20)
+  })
 })
 
 describe('addTransaction — re-statement correction', () => {

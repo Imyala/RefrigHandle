@@ -11,6 +11,7 @@ import {
   expiryStatus,
   gwpFor,
   hydroStatusFor,
+  isOutOfFleet,
   isTechnicianActive,
   leakStatusFor,
   netWeight,
@@ -209,7 +210,7 @@ function AuditReportModal({ onClose }: { onClose: () => void }) {
   const overall = worstLevel(rows.map((r) => r.level))
 
   const inServiceBottles = state.bottles
-    .filter((b) => b.status !== 'returned')
+    .filter((b) => !isOutOfFleet(b.status))
     .slice()
     .sort((a, b) => a.bottleNumber.localeCompare(b.bottleNumber))
   const activeUnits = state.units.filter((u) => u.status === 'active')

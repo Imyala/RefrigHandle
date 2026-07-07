@@ -36,6 +36,7 @@ import {
   roleInfo,
   canAssignRole,
   canManageTech,
+  isOutOfFleet,
   isTechnicianActive,
   expiryStatus,
   DEFAULT_TECHNICIAN_ROLE,
@@ -1435,14 +1436,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         updatedBottle.currentSiteId = t.siteId
         updatedBottle.status = 'on_site'
       } else if (t.kind === 'return' || t.kind === 'sell') {
-        // Both take the cylinder out of the fleet; 'returned' is the
-        // app's "no longer ours" status. The ledger row keeps the
-        // distinction (Sold, with the buyer as the destination).
+        // Both take the cylinder out of the fleet, under their own label.
         updatedBottle.currentSiteId = undefined
-        updatedBottle.status = 'returned'
+        updatedBottle.status = t.kind === 'sell' ? 'sold' : 'returned'
       }
       const net = Math.max(0, updatedBottle.grossWeight - updatedBottle.tareWeight)
-      if (net <= 0.01 && updatedBottle.status !== 'returned') {
+      if (net <= 0.01 && !isOutOfFleet(updatedBottle.status)) {
         updatedBottle.status = 'empty'
       }
 
@@ -1457,7 +1456,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           updatedAt: new Date().toISOString(),
         }
         const srcNet = Math.max(0, sourceUpdated.grossWeight - sourceUpdated.tareWeight)
-        if (srcNet <= 0.01 && sourceUpdated.status !== 'returned') {
+        if (srcNet <= 0.01 && !isOutOfFleet(sourceUpdated.status)) {
           sourceUpdated.status = 'empty'
         }
         nextBottles = nextBottles.map((b) =>

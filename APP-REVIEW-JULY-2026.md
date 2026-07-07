@@ -228,6 +228,9 @@ round (July 2026)** — all verified end-to-end in the running app:
 4. ~~"Sold" transaction kind~~ — **done**: Sell to another business, with
    buyer + invoice fields; the net contents feed a new **Sold kg** column
    on the quarterly record and audit pack (Regulation 141's "sold").
+   Sold cylinders carry their own **Sold** status (filter chip, status
+   pill, dashboard count) rather than displaying as "Returned", and the
+   corrective "Return to stock" path handles a mistaken sale too.
 5. ~~Risk-management-plan checklist~~ — **done**: a guided 7-item plan
    (Settings → Audit & records), printable, merge-safe across devices,
    with the review stamp shown on the audit pack's compliance summary.

@@ -49,7 +49,16 @@ export type BottleStatus =
   | 'in_stock'
   | 'on_site'
   | 'returned'
+  | 'sold'
   | 'empty'
+
+// A cylinder that has left the fleet — returned to a supplier or sold to
+// another party. The two statuses behave identically everywhere except
+// the label; use this instead of comparing against 'returned' so "out of
+// our possession" logic can't miss sold cylinders.
+export function isOutOfFleet(s: BottleStatus): boolean {
+  return s === 'returned' || s === 'sold'
+}
 
 // What kind of cylinder this is. A "pump-down" bottle is a dedicated
 // cylinder used to pump down / recover a system's charge (its contents
@@ -1346,6 +1355,8 @@ export function statusLabel(s: BottleStatus): string {
       return 'On site'
     case 'returned':
       return 'Returned'
+    case 'sold':
+      return 'Sold'
     case 'empty':
       return 'Empty'
   }
@@ -2095,7 +2106,7 @@ export function isDuplicateActiveBottleNumber(
   return bottles.some(
     (b) =>
       b.id !== excludeId &&
-      b.status !== 'returned' &&
+      !isOutOfFleet(b.status) &&
       b.bottleNumber.trim().toLowerCase() === n,
   )
 }

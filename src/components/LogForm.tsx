@@ -16,6 +16,7 @@ import {
   type TransactionReason,
   REASON_LABELS,
   REFRIGERANT_TYPES,
+  isOutOfFleet,
   netWeight,
   overfillKg,
   scaleDeltaKg,
@@ -515,7 +516,7 @@ export function LogForm({
   const blockAlreadyReturned =
     !!bottle &&
     (kind === 'return' || kind === 'sell') &&
-    bottle.status === 'returned'
+    isOutOfFleet(bottle.status)
   const missingSource = isBottleToBottleRecover && !sourceBottleId
   const missingReason = showCompliance && !reason
   const missingLeakTest = showCompliance && leakTest === null
@@ -819,7 +820,7 @@ export function LogForm({
               onAddNew={() => setAddingBottle(true)}
               placeholder="Tap to pick a source bottle"
               modalTitle="Pick source bottle"
-              candidateFilter={(b) => b.status !== 'returned'}
+              candidateFilter={(b) => !isOutOfFleet(b.status)}
             />
           </Field>
         )}
@@ -1435,14 +1436,18 @@ export function LogForm({
 
         {blockAlreadyReturned && (
           <div className="rounded-xl bg-red-50 p-3 text-sm text-red-900 dark:bg-red-900/20 dark:text-red-100">
-            ⛔ This bottle is already marked as returned. Edit the bottle
-            first and set its status back to In stock to log another return.
+            ⛔ This bottle is already marked as{' '}
+            {bottle?.status === 'sold' ? 'sold' : 'returned'}. Edit the bottle
+            first and set its status back to In stock to log another{' '}
+            {kind === 'sell' ? 'sale' : 'return'}.
           </div>
         )}
 
         <Button type="submit" full disabled={submitBlocked}>
           {blockAlreadyReturned
-            ? 'Already returned'
+            ? bottle?.status === 'sold'
+              ? 'Already sold'
+              : 'Already returned'
             : scaleInvalid
               ? 'Check the scale reading'
               : blockOverdraw || blockSourceOverdraw
