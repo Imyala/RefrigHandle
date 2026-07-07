@@ -209,15 +209,33 @@ in Settings, the quarterly footer and the audit pack footer.
 
 ## 6. Recommended next corrections (ranked)
 
-1. **Audit pack ZIP + share** (§3.1) — the hero demo and the single
-   biggest remaining audit-workflow gap.
-2. **Tap-target pass on secondary controls** (§1.1) — one CSS sweep;
-   field usability debt.
-3. **Cost field + Xero purchases CSV** (§3.2).
-4. **"Sold" transaction kind** feeding the quarterly record (§2.1).
-5. **Risk-management-plan checklist** printable into the audit pack (§2.2).
+**Items 1–5 below were implemented on this branch in the follow-up
+round (July 2026)** — all verified end-to-end in the running app:
+
+1. ~~Audit pack ZIP + share~~ — **done**: the audit pack modal's
+   "Share ZIP…" bundles the period CSV, the full JSON backup, every
+   photo/signature as real image files (named by record id, cross-
+   referenceable to the CSV), and a `VERIFICATION.txt` carrying the
+   hash-chain result and the compliance-ruleset stamp.
+2. ~~Tap-target pass~~ — **done**: filter chips, date-range toggles,
+   alert snooze/hide links, guest-banner buttons, and the small
+   link-buttons (Clear filter, Print labels, More details, View all,
+   Show/Hide) all now render at the 44 px minimum.
+3. ~~Cost field + Xero purchases CSV~~ — **done**: optional purchase
+   cost (AUD ex-GST) on the cylinder form, frozen onto the intake row,
+   and a "Purchases CSV (Xero)…" share in Settings emitting Xero's
+   bills-import columns (dd/mm/yyyy, GST on Expenses) for costed intakes.
+4. ~~"Sold" transaction kind~~ — **done**: Sell to another business, with
+   buyer + invoice fields; the net contents feed a new **Sold kg** column
+   on the quarterly record and audit pack (Regulation 141's "sold").
+5. ~~Risk-management-plan checklist~~ — **done**: a guided 7-item plan
+   (Settings → Audit & records), printable, merge-safe across devices,
+   with the review stamp shown on the audit pack's compliance summary.
+
+Still open, in order:
+
 6. Moves-page alert collapse; Jobs discoverability; licence-class picker;
-   change-log CSV; "periodic test" wording.
+   change-log CSV export; "periodic test" wording.
 
 ## 7. Getting ready for release and the AIRAH / ARC stage
 

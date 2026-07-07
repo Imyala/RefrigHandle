@@ -357,6 +357,13 @@ export function mergeStates(local: AppState, remote: AppState): AppState {
       local.loggedExpiryKeys ?? [],
       remote.loggedExpiryKeys ?? [],
     ),
+    // Risk management plan — a singleton document reviewed in one
+    // sitting, so the most recently touched copy wins wholesale rather
+    // than interleaving two reviews item-by-item.
+    riskPlan:
+      (remote.riskPlan?.updatedAt ?? '') > (local.riskPlan?.updatedAt ?? '')
+        ? remote.riskPlan
+        : local.riskPlan,
 
     customRefrigerants,
     favoriteRefrigerants: unionStrings(

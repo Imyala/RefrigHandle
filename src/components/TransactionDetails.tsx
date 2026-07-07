@@ -35,6 +35,7 @@ const kindTone: Record<
   recover: 'green',
   transfer: 'blue',
   return: 'slate',
+  sell: 'blue',
   adjust: 'red',
   intake: 'green',
 }
@@ -159,13 +160,15 @@ export function TransactionDetails({
           {t.reason && REASON_LABELS[t.reason]}
         </div>
       )}
-      {t.kind === 'return' && (t.returnDestination || t.docketNumber) && (
-        <div className="text-xs text-slate-500">
-          {t.returnDestination && `Returned to: ${t.returnDestination}`}
-          {t.returnDestination && t.docketNumber && ' · '}
-          {t.docketNumber && `Docket ${t.docketNumber}`}
-        </div>
-      )}
+      {(t.kind === 'return' || t.kind === 'sell') &&
+        (t.returnDestination || t.docketNumber) && (
+          <div className="text-xs text-slate-500">
+            {t.returnDestination &&
+              `${t.kind === 'sell' ? 'Sold to' : 'Returned to'}: ${t.returnDestination}`}
+            {t.returnDestination && t.docketNumber && ' · '}
+            {t.docketNumber && `Docket ${t.docketNumber}`}
+          </div>
+        )}
       {t.kind === 'intake' && (t.supplier || t.invoiceNumber) && (
         <div className="text-xs text-slate-500">
           {t.supplier && `Supplier: ${t.supplier}`}

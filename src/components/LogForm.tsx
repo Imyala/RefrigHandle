@@ -52,6 +52,11 @@ const KIND_OPTIONS: readonly PickerOption[] = [
   { value: 'recover', label: 'Recover', hint: 'from equipment or another bottle (bottle weight increases)' },
   { value: 'transfer', label: 'Transfer bottle to a site' },
   { value: 'return', label: 'Return bottle to stock/supplier' },
+  {
+    value: 'sell',
+    label: 'Sell to another business',
+    hint: 'cylinder + contents leave the fleet — the quarterly "sold" figure',
+  },
   { value: 'adjust', label: 'Manual adjust (signed)' },
 ]
 
@@ -437,8 +442,9 @@ export function LogForm({
     }
   }
 
-  const showAmount = kind !== 'transfer' && kind !== 'return'
-  const showSite = kind !== 'adjust' && !isBottleToBottleRecover
+  const showAmount = kind !== 'transfer' && kind !== 'return' && kind !== 'sell'
+  const showSite =
+    kind !== 'adjust' && kind !== 'sell' && !isBottleToBottleRecover
   const showCompliance =
     (kind === 'charge' || kind === 'recover') && !isBottleToBottleRecover
   const supportsLoss =
@@ -507,7 +513,9 @@ export function LogForm({
 
   // Form-specific gates (the weight-based blocks live in computeLog above).
   const blockAlreadyReturned =
-    !!bottle && kind === 'return' && bottle.status === 'returned'
+    !!bottle &&
+    (kind === 'return' || kind === 'sell') &&
+    bottle.status === 'returned'
   const missingSource = isBottleToBottleRecover && !sourceBottleId
   const missingReason = showCompliance && !reason
   const missingLeakTest = showCompliance && leakTest === null
@@ -581,11 +589,11 @@ export function LogForm({
       reason: showCompliance && reason ? reason : undefined,
       leakTestPerformed: showCompliance && leakTest !== null ? leakTest : undefined,
       returnDestination:
-        kind === 'return' && returnDestination.trim()
+        (kind === 'return' || kind === 'sell') && returnDestination.trim()
           ? returnDestination.trim()
           : undefined,
       docketNumber:
-        kind === 'return' && docketNumber.trim()
+        (kind === 'return' || kind === 'sell') && docketNumber.trim()
           ? docketNumber.trim()
           : undefined,
       notes: notes.trim() || undefined,
@@ -1182,26 +1190,38 @@ export function LogForm({
           </>
         )}
 
-        {kind === 'return' && (
+        {(kind === 'return' || kind === 'sell') && (
           <>
             <Field
-              label="Store / supplier"
-              hint="Where is the bottle being returned? Optional."
+              label={kind === 'sell' ? 'Buyer (business)' : 'Store / supplier'}
+              hint={
+                kind === 'sell'
+                  ? 'Who bought it — the quarterly record reports refrigerant sold. Optional but strongly recommended.'
+                  : 'Where is the bottle being returned? Optional.'
+              }
             >
               <TextInput
                 value={returnDestination}
                 onChange={(e) => setReturnDestination(e.target.value)}
-                placeholder="e.g. BOC, Refco depot, Beijer Ref"
+                placeholder={
+                  kind === 'sell'
+                    ? 'e.g. Coastal Coolrooms Pty Ltd'
+                    : 'e.g. BOC, Refco depot, Beijer Ref'
+                }
               />
             </Field>
             <Field
-              label="Docket / consignment #"
-              hint="The paper trail an audit follows — e.g. an RRA consignment note for refrigerant sent for destruction."
+              label={kind === 'sell' ? 'Invoice / docket #' : 'Docket / consignment #'}
+              hint={
+                kind === 'sell'
+                  ? 'The sale invoice an audit can follow.'
+                  : 'The paper trail an audit follows — e.g. an RRA consignment note for refrigerant sent for destruction.'
+              }
             >
               <TextInput
                 value={docketNumber}
                 onChange={(e) => setDocketNumber(e.target.value)}
-                placeholder="e.g. RRA-102938"
+                placeholder={kind === 'sell' ? 'e.g. INV-2041' : 'e.g. RRA-102938'}
               />
             </Field>
           </>

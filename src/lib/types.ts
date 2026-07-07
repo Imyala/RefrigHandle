@@ -92,6 +92,10 @@ export interface Bottle {
   // record is later deleted.
   supplier?: string
   invoiceNumber?: string
+  // What the cylinder + charge cost, AUD ex-GST. Purely for the
+  // bookkeeping export (Xero purchases CSV) — no compliance figure uses
+  // it. Editable after the fact: bills usually arrive later.
+  costAud?: number
   createdAt: string
   // Tech name + RHL frozen at the time the bottle was added to the
   // system. Useful when a crew shares a device — anyone glancing at
@@ -242,6 +246,7 @@ export type TransactionKind =
   | 'recover' // refrigerant pulled OUT of equipment, added to bottle
   | 'transfer' // bottle moved to a site (no weight change)
   | 'return' // bottle returned to stock / supplier
+  | 'sell' // cylinder + contents sold to another party (reg 141 'sold')
   | 'adjust' // manual correction
   | 'intake' // a new bottle entered the system, bringing its net charge
 
@@ -349,6 +354,11 @@ export interface Transaction {
   // the time it entered the system (see Bottle.supplier).
   supplier?: string
   invoiceNumber?: string
+  // Purchase cost (AUD ex-GST) frozen from the bottle on intake. The
+  // purchases export prefers the LIVE bottle value (costs are often
+  // entered when the bill arrives, weeks later); this frozen copy keeps
+  // the figure if the bottle record is deleted.
+  costAud?: number
   // Stamped when the tech proceeded with a charge/recover where the
   // bottle's refrigerant didn't match the unit's. Frozen at the time
   // of work — even if the unit's refrigerantType is later edited, the
@@ -921,6 +931,24 @@ export interface Technician {
   updatedAt?: string
 }
 
+// Refrigerant-handling risk management plan (an ARC RTA condition). The
+// canonical checklist items live in lib/compliance.ts (RISK_PLAN_ITEMS);
+// this stores each item's state keyed by its stable item key, plus the
+// review stamp the audit pack prints.
+export interface RiskPlanItemState {
+  done: boolean
+  note?: string
+}
+
+export interface RiskPlan {
+  items: Record<string, RiskPlanItemState>
+  // Who completed the most recent review, and when.
+  reviewedAt?: string
+  reviewedBy?: string
+  // Merge tiebreaker — the copy touched most recently wins wholesale.
+  updatedAt: string
+}
+
 export interface AppState {
   bottles: Bottle[]
   sites: Site[]
@@ -1001,6 +1029,10 @@ export interface AppState {
   // an owner/supervisor can restore it from the change log. See
   // RecycleBinEntry. Unioned (never reset-pruned) by the sync merge.
   recycleBin: RecycleBinEntry[]
+  // Refrigerant-handling risk management plan — an ARC RTA condition.
+  // A guided checklist reviewed periodically; the review stamp prints
+  // on the audit pack. Merged wholesale by newest updatedAt.
+  riskPlan?: RiskPlan
   // When the scalar settings block (business identity, location, units,
   // theme…) was last changed. A coarse fallback for the merge when the
   // per-field stamps below are absent (older states).
@@ -1329,6 +1361,8 @@ export function transactionLabel(k: TransactionKind): string {
       return 'Transfer'
     case 'return':
       return 'Return'
+    case 'sell':
+      return 'Sold'
     case 'adjust':
       return 'Adjust'
     case 'intake':
@@ -1366,7 +1400,13 @@ export function transactionLoss(t: Transaction): number {
 // bottle's currentSiteId (see the store) — charge/recover/adjust leave
 // the bottle where it is.
 export function isMovement(k: TransactionKind): boolean {
-  return k === 'transfer' || k === 'return'
+  return k === 'transfer' || k === 'return' || k === 'sell'
+}
+
+// Movements that take the cylinder OUT of the fleet (back to a supplier
+// or off to a buyer) — the "destination is not one of our sites" cases.
+export function isOutboundMovement(k: TransactionKind): boolean {
+  return k === 'return' || k === 'sell'
 }
 
 // The site a bottle was located at immediately BEFORE the given movement
@@ -1381,7 +1421,7 @@ export function siteIdBeforeMovement(
   transactions: readonly Transaction[],
 ): string | undefined {
   const prev = movementBefore(tx, transactions)
-  if (!prev || prev.kind === 'return') return undefined
+  if (!prev || isOutboundMovement(prev.kind)) return undefined
   return prev.siteId
 }
 
@@ -1418,13 +1458,15 @@ export function movementSummary(
   // frozen onto the row when the site was deleted.
   const prev = movementBefore(tx, transactions)
   const from =
-    prev && prev.kind !== 'return'
+    prev && !isOutboundMovement(prev.kind)
       ? siteName(prev.siteId) ?? prev.siteName ?? 'Stock'
       : 'Stock'
   const to =
     tx.kind === 'return'
       ? tx.returnDestination?.trim() || 'Stock'
-      : siteName(tx.siteId) ?? tx.siteName ?? 'Stock'
+      : tx.kind === 'sell'
+        ? tx.returnDestination?.trim() || 'Sold'
+        : siteName(tx.siteId) ?? tx.siteName ?? 'Stock'
   return { from, to }
 }
 

@@ -57,6 +57,56 @@ export function profileFor(j: Jurisdiction | undefined): ComplianceProfile {
   return COMPLIANCE_PROFILES[j ?? 'AU'] ?? COMPLIANCE_PROFILES.AU
 }
 
+// ── Risk management plan (ARC RTA condition) ─────────────────────────
+// ARC's RTA conditions include holding a risk management plan for the
+// business's refrigerant handling. This is the app's guided version:
+// stable keys (stored state hangs off them — never renumber), with the
+// wording kept practical rather than legalistic. Reviewed against the
+// CoP 2025 obligations at each COMPLIANCE.md pass.
+export interface RiskPlanItemDef {
+  key: string
+  label: string
+  hint: string
+}
+
+export const RISK_PLAN_ITEMS: readonly RiskPlanItemDef[] = [
+  {
+    key: 'leak_prevention',
+    label: 'Leak prevention & minimisation',
+    hint: 'Every charge and recovery is leak-tested and leaks are rectified before topping up (CoP 2025). The app records the leak-test answer on each entry.',
+  },
+  {
+    key: 'recovery_equipment',
+    label: 'Recovery equipment maintained',
+    hint: 'Recovery units, hoses and manifolds are serviced and in good order; scales/gauges are checked so recorded weights are trustworthy.',
+  },
+  {
+    key: 'cylinder_storage',
+    label: 'Cylinder storage, transport & testing',
+    hint: 'Cylinders stored secured, upright and ventilated; within their AS 2030 test date (the app tracks due dates); transported restrained and documented.',
+  },
+  {
+    key: 'licensing',
+    label: 'Licence coverage',
+    hint: 'Everyone who handles refrigerant holds a current RHL of the right class; expiries are tracked (the app alerts before they lapse).',
+  },
+  {
+    key: 'record_keeping',
+    label: 'Record-keeping responsibility',
+    hint: 'A named person is responsible for the quarterly records being complete and producible within 14 days of a written request.',
+  },
+  {
+    key: 'trading',
+    label: 'Refrigerant bought and sold correctly',
+    hint: 'Refrigerant is purchased from and sold to appropriately authorised parties only, with the paperwork (invoices, dockets) captured.',
+  },
+  {
+    key: 'emergency',
+    label: 'Incident & emergency response',
+    hint: 'A procedure exists for major leaks/spills: ventilate, isolate, PPE on hand, and the incident is recorded in the log with photos.',
+  },
+] as const
+
 // ── Compliance dataset stamp ──────────────────────────────────────────
 // The regulated facts baked into this build — the GWP table and its AR4
 // basis, filling ratios, the AS 2030 10-year retest default, licence

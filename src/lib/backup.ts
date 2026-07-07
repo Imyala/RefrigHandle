@@ -2,7 +2,9 @@ import type { AppState } from './types'
 import { transactionLoss } from './types'
 import { exportAttachments } from './attachments'
 import { formatDateTime, localDateTimeInput } from './datetime'
-import { createZip } from './zip'
+import { createZip, type ZipEntry } from './zip'
+import { getRecordedHead, verifyAuditChains } from './auditChain'
+import { COMPLIANCE_DATASET, complianceVerifiedLabel } from './compliance'
 
 // Backup freshness tracking. Until records live on a server (team
 // accounts), every byte of compliance history exists only in this
@@ -167,6 +169,140 @@ export async function downloadRecordsZip(state: AppState): Promise<void> {
   ])
   triggerDownload(zip, `refrighandle-records-${stamp}.zip`)
   markBackedUp()
+}
+
+// --- Audit pack ZIP -------------------------------------------------------
+
+// Decode a data: URL to raw bytes for the ZIP. Returns null on anything
+// malformed — one unreadable photo must not sink the whole pack.
+function dataUrlBytes(dataUrl: string): Uint8Array | null {
+  try {
+    const comma = dataUrl.indexOf(',')
+    if (comma < 0) return null
+    const meta = dataUrl.slice(0, comma)
+    const payload = dataUrl.slice(comma + 1)
+    if (!/;base64$/i.test(meta)) return null
+    const bin = atob(payload)
+    const bytes = new Uint8Array(bin.length)
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i)
+    return bytes
+  } catch {
+    return null
+  }
+}
+
+function extFor(mime: string): string {
+  if (mime === 'image/jpeg') return 'jpg'
+  if (mime === 'image/png') return 'png'
+  if (mime === 'image/webp') return 'webp'
+  return 'bin'
+}
+
+export interface AuditPackOptions {
+  from?: string // inclusive local day, YYYY-MM-DD
+  to?: string
+  periodLabel: string
+}
+
+// The one-file auditor hand-off: the period's movement CSV, the complete
+// JSON backup, every photo and signature as a real image file (named by
+// the record it documents, cross-referenceable to the CSV's id column),
+// and a VERIFICATION.txt with the hash-chain result and the compliance
+// ruleset stamp. Photos/signatures are included in full — attachments
+// aren't dated by period, and an auditor would rather have too much
+// evidence than a gap.
+export async function buildAuditPackZip(
+  state: AppState,
+  opts: AuditPackOptions,
+): Promise<Blob> {
+  const stamp = new Date().toISOString().slice(0, 10)
+  const entries: ZipEntry[] = []
+
+  const csv = buildLogCsv(state, opts.from, opts.to)
+  entries.push({ name: 'refrigerant-log.csv', data: CSV_BOM + csv })
+
+  const attachments = await exportAttachments()
+  let photoCount = 0
+  let signatureCount = 0
+  let skipped = 0
+  const seq = new Map<string, number>()
+  for (const a of attachments) {
+    const bytes = dataUrlBytes(a.dataUrl)
+    if (!bytes) {
+      skipped += 1
+      continue
+    }
+    const keyBase = `${a.kind}-${a.entityType}-${a.entityId}`
+    const n = (seq.get(keyBase) ?? 0) + 1
+    seq.set(keyBase, n)
+    const folder = a.kind === 'signature' ? 'signatures' : 'photos'
+    entries.push({
+      name: `${folder}/${a.entityType}-${a.entityId}-${n}.${extFor(a.mimeType)}`,
+      data: bytes,
+    })
+    if (a.kind === 'signature') signatureCount += 1
+    else photoCount += 1
+  }
+
+  const json = await buildBackupJson(state)
+  entries.push({ name: 'full-backup.json', data: json })
+
+  const report = await verifyAuditChains(state.auditLog, getRecordedHead())
+  const verification = [
+    'REFRIGHANDLE AUDIT PACK — VERIFICATION STATEMENT',
+    '='.repeat(60),
+    '',
+    `Business:        ${state.businessName || '(not set)'}`,
+    `ABN:             ${state.businessAbn || '(not set)'}`,
+    `ARC RTA:         ${state.arcAuthorisationNumber || '(not set)'}`,
+    `Period:          ${opts.periodLabel}`,
+    `Generated:       ${new Date().toISOString()}`,
+    '',
+    'CHANGE-LOG INTEGRITY (tamper-evident hash chain)',
+    `  Entries:       ${report.total} (${report.sealed} sealed, ${report.unsealed} pending seal)`,
+    `  Device chains: ${report.chains}`,
+    `  Result:        ${report.valid ? 'VERIFIED — no tampering detected in any sealed chain' : 'FAILED — one or more sealed chains did not verify'}`,
+    ...(report.valid
+      ? []
+      : report.problems
+          .slice(0, 10)
+          .map((p) => `  Problem:       [${p.chainId} #${p.seq ?? '?'}] ${p.message}`)),
+    '',
+    'COMPLIANCE RULESET',
+    `  Version:       v${COMPLIANCE_DATASET.version} (verified against DCCEEW/ARC sources on ${complianceVerifiedLabel()})`,
+    `  Basis:         ${COMPLIANCE_DATASET.summary}`,
+    '',
+    'CONTENTS',
+    `  refrigerant-log.csv   Movement ledger for the period (active + deleted-row audit trail)`,
+    `  full-backup.json      Complete dataset snapshot incl. change log and attachments`,
+    `  photos/               ${photoCount} photo${photoCount === 1 ? '' : 's'} (all records on this device; filenames reference the record id in the CSV)`,
+    `  signatures/           ${signatureCount} customer signature${signatureCount === 1 ? '' : 's'}`,
+    ...(skipped ? [`  (${skipped} attachment${skipped === 1 ? '' : 's'} could not be decoded and were skipped)`] : []),
+    '',
+    'Deleted log entries are never erased: they appear in the CSV under',
+    'DELETED TRANSACTIONS with who/when/why, and in the JSON backup.',
+    `Exported from RefrigHandle on ${stamp}.`,
+  ].join('\n')
+  entries.push({ name: 'VERIFICATION.txt', data: verification })
+
+  return createZip(entries)
+}
+
+// Build + hand off the pack in one tap (device share sheet where files
+// can be shared, download otherwise). Counts as a backup — the ZIP
+// contains the complete JSON snapshot.
+export async function shareAuditPackZip(
+  state: AppState,
+  opts: AuditPackOptions,
+): Promise<ShareOutcome> {
+  const zip = await buildAuditPackZip(state, opts)
+  const out = await shareOrDownload(
+    zip,
+    `refrighandle-audit-pack-${new Date().toISOString().slice(0, 10)}.zip`,
+    `RefrigHandle audit pack — ${opts.periodLabel}`,
+  )
+  if (out !== 'cancelled') markBackedUp()
+  return out
 }
 
 // The audit-friendly CSV of the refrigerant log: active transactions, then
@@ -358,6 +494,98 @@ export async function shareLogCsv(
     new Blob([CSV_BOM + csv], { type: 'text/csv' }),
     csvFilename(from, to),
     'RefrigHandle refrigerant log',
+  )
+}
+
+// Purchases CSV in Xero's bills-import column layout, one row per intake
+// (cylinder entering the system) that has a recorded cost. This is a
+// bookkeeping hand-off, not a compliance record: share it to the
+// bookkeeper or a Xero files inbox, review, and import as draft bills.
+// AccountCode is left for the business's own chart of accounts; Xero
+// prompts for unmapped fields at import. Cost prefers the LIVE bottle
+// value (bills usually get entered later) over the intake-time freeze.
+export function buildPurchasesCsv(
+  state: AppState,
+  from?: string,
+  to?: string,
+): string {
+  const inRange = (iso: string) => {
+    if (!from && !to) return true
+    const day = localDateTimeInput(new Date(iso), state.location.timezone).slice(
+      0,
+      10,
+    )
+    if (from && day < from) return false
+    if (to && day > to) return false
+    return true
+  }
+  const header = [
+    '*ContactName',
+    '*InvoiceNumber',
+    '*InvoiceDate',
+    '*DueDate',
+    'Description',
+    '*Quantity',
+    '*UnitAmount',
+    '*AccountCode',
+    '*TaxType',
+  ]
+  const rows: string[][] = [header]
+  const intakes = state.transactions.filter(
+    (t) => t.kind === 'intake' && !t.deletedAt && inRange(t.date),
+  )
+  for (const t of intakes) {
+    const b = state.bottles.find((x) => x.id === t.bottleId)
+    const cost = b?.costAud ?? t.costAud
+    if (!cost || cost <= 0) continue
+    const day = localDateTimeInput(
+      new Date(t.date),
+      t.tz || state.location.timezone,
+    ).slice(0, 10)
+    const auDate = day.split('-').reverse().join('/')
+    const bottleNumber = t.bottleNumber ?? b?.bottleNumber ?? ''
+    const refrigerant = t.bottleRefrigerantType ?? b?.refrigerantType ?? ''
+    // Live bottle values first throughout — a bookkeeping export should
+    // reflect corrections; the frozen copies only cover deleted bottles.
+    rows.push([
+      b?.supplier ?? t.supplier ?? 'Unknown supplier',
+      b?.invoiceNumber ?? t.invoiceNumber ?? `RH-${bottleNumber || t.id.slice(0, 8)}`,
+      auDate,
+      auDate,
+      `Refrigerant ${refrigerant} — cylinder ${bottleNumber}, ${t.amount.toFixed(2)} kg net`,
+      '1',
+      cost.toFixed(2),
+      '',
+      'GST on Expenses',
+    ])
+  }
+  return rows
+    .map((r) =>
+      r
+        .map((cell) => {
+          let s = String(cell ?? '')
+          if (/^[=@]/.test(s) || (/^[+-]/.test(s) && !/^[+-]?\d+(\.\d+)?$/.test(s))) {
+            s = `'${s}`
+          }
+          return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
+        })
+        .join(','),
+    )
+    .join('\n')
+}
+
+// Share the purchases CSV to the bookkeeper / a Xero files inbox.
+export async function sharePurchasesCsv(
+  state: AppState,
+  from?: string,
+  to?: string,
+): Promise<ShareOutcome> {
+  const csv = buildPurchasesCsv(state, from, to)
+  const range = from || to ? `-${from || 'start'}-to-${to || 'now'}` : ''
+  return shareOrDownload(
+    new Blob([CSV_BOM + csv], { type: 'text/csv' }),
+    `refrighandle-purchases${range}-${new Date().toISOString().slice(0, 10)}.csv`,
+    'RefrigHandle purchases (Xero bills format)',
   )
 }
 

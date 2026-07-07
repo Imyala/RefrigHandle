@@ -37,9 +37,12 @@ import {
   COMPLIANCE_DATASET,
   complianceVerifiedLabel,
   profileFor,
+  RISK_PLAN_ITEMS,
 } from '../lib/compliance'
 import { formatDateTime, formatPlainDate, localDateTimeInput } from '../lib/datetime'
 import { formatWeight } from '../lib/units'
+import { shareAuditPackZip } from '../lib/backup'
+import { useToast } from '../lib/toast'
 
 // The auditor hand-off. One print-optimised "Compliance & Audit Pack" that
 // gathers everything an ARC permit-condition check asks for into a single
@@ -66,7 +69,8 @@ export function AuditReportCard() {
         change-log integrity stamp, the compliance scorecard, the ARC
         quarterly record, the movement log, and the cylinder, equipment and
         technician registers — for a chosen quarter, ready to print or save
-        as PDF.
+        as PDF. Or share the whole pack as one ZIP: the movement CSV, a full
+        backup, every photo and signature, and a tamper-check statement.
       </p>
       <Button onClick={() => setOpen(true)}>Generate audit pack</Button>
       {open && <AuditReportModal onClose={() => setOpen(false)} />}
@@ -78,6 +82,8 @@ function AuditReportModal({ onClose }: { onClose: () => void }) {
   const { state } = useStore()
   const profile = profileFor(state.jurisdiction)
   const tz = state.location.timezone
+  const toast = useToast()
+  const [zipBusy, setZipBusy] = useState(false)
 
   const live = useMemo(
     () => state.transactions.filter((t) => !t.deletedAt),
@@ -212,6 +218,44 @@ function AuditReportModal({ onClose }: { onClose: () => void }) {
   const unit = state.unit
   const generatedAt = formatDateTime(new Date().toISOString(), tz, state.clock)
 
+  // The period as an inclusive [from, to] day range for the ZIP export's
+  // CSV — every mode reduces to a contiguous range ('all' is open-ended).
+  // Mirrors inRange; expressed as dates because the CSV builder filters
+  // on local calendar days.
+  function zipRange(): { from?: string; to?: string } {
+    if (mode === 'quarter' && selected) {
+      const p = (n: number) => String(n).padStart(2, '0')
+      const mEnd = selected.q * 3
+      const lastDay = new Date(selected.year, mEnd, 0).getDate()
+      return {
+        from: `${selected.year}-${p(mEnd - 2)}-01`,
+        to: `${selected.year}-${p(mEnd)}-${p(lastDay)}`,
+      }
+    }
+    if (mode === 'year' && selectedYear) {
+      return { from: `${selectedYear}-01-01`, to: `${selectedYear}-12-31` }
+    }
+    if (mode === 'custom') {
+      return { from: fromDate || undefined, to: toDate || undefined }
+    }
+    return {}
+  }
+
+  async function shareZip() {
+    if (zipBusy) return
+    setZipBusy(true)
+    try {
+      const out = await shareAuditPackZip(state, { ...zipRange(), periodLabel })
+      if (out === 'downloaded') {
+        toast.show('Sharing isn’t available here — saved the ZIP instead.', 'success')
+      }
+    } catch {
+      toast.show('Could not build the audit pack ZIP.', 'error')
+    } finally {
+      setZipBusy(false)
+    }
+  }
+
   return (
     <Modal open onClose={onClose} title="Audit pack" size="lg">
       <div className="no-print mb-3 space-y-2">
@@ -233,9 +277,21 @@ function AuditReportModal({ onClose }: { onClose: () => void }) {
               />
             </Field>
           </div>
-          <Button variant="secondary" onClick={() => window.print()}>
-            Print / Save PDF
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="secondary" onClick={() => window.print()}>
+              Print / Save PDF
+            </Button>
+            {/* Everything in one file: period CSV + full JSON + every
+                photo/signature as real images + the verification
+                statement — email it to the auditor in one move. */}
+            <Button
+              variant="secondary"
+              onClick={() => void shareZip()}
+              disabled={zipBusy}
+            >
+              {zipBusy ? 'Building…' : 'Share ZIP…'}
+            </Button>
+          </div>
         </div>
         {mode === 'quarter' && (
           <Field label="Quarter">
@@ -336,6 +392,19 @@ function AuditReportModal({ onClose }: { onClose: () => void }) {
                   </td>
                 </tr>
               ))}
+              {/* Risk management plan status — an RTA condition an audit
+                  asks about; the plan itself prints from Settings. */}
+              <tr className="border-b border-slate-200 align-top dark:border-slate-800">
+                <td className="py-1 pr-2 font-medium">Risk management plan</td>
+                <td className="py-1 pr-2 text-slate-600 dark:text-slate-300">
+                  {state.riskPlan?.reviewedAt
+                    ? `Reviewed ${formatPlainDate(state.riskPlan.reviewedAt)}${state.riskPlan.reviewedBy ? ` by ${state.riskPlan.reviewedBy}` : ''} · ${RISK_PLAN_ITEMS.filter((d) => state.riskPlan?.items[d.key]?.done).length}/${RISK_PLAN_ITEMS.length} items in place`
+                    : 'Not yet reviewed — see Settings → Risk management plan'}
+                </td>
+                <td className="py-1 text-right font-semibold whitespace-nowrap">
+                  {state.riskPlan?.reviewedAt ? '✓ On file' : '⚠ Missing'}
+                </td>
+              </tr>
             </tbody>
           </table>
         </Section>
@@ -362,7 +431,8 @@ function AuditReportModal({ onClose }: { onClose: () => void }) {
             Purchased = cylinders entering the system. Charged = into
             equipment. Recovered = out of equipment into cylinders
             (bottle-to-bottle decants excluded). Returned = net refrigerant in
-            cylinders when returned. Loss = recorded hose / decant losses.
+            cylinders when returned. Sold = net refrigerant in cylinders sold
+            to another party. Loss = recorded hose / decant losses.
             Figures in kilograms. Corrected entries are counted in place of the
             originals they supersede.
           </p>
@@ -686,6 +756,7 @@ function RefrigerantTable({
               <Th>Charged</Th>
               <Th>Recovered</Th>
               <Th>Returned</Th>
+              <Th>Sold</Th>
               <Th>Adjust ±</Th>
               <Th last>Loss</Th>
             </tr>
@@ -701,6 +772,7 @@ function RefrigerantTable({
                 <Num v={r.chargedKg} />
                 <Num v={r.recoveredKg} />
                 <Num v={r.returnedKg} />
+                <Num v={r.soldKg} />
                 <Num v={r.adjustKg} signed />
                 <Num v={r.lossKg} last />
               </tr>
@@ -711,6 +783,7 @@ function RefrigerantTable({
               <Num v={sum((t) => t.chargedKg)} />
               <Num v={sum((t) => t.recoveredKg)} />
               <Num v={sum((t) => t.returnedKg)} />
+              <Num v={sum((t) => t.soldKg)} />
               <Num v={sum((t) => t.adjustKg)} signed />
               <Num v={sum((t) => t.lossKg)} last />
             </tr>

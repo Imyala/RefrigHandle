@@ -149,6 +149,7 @@ function QuarterlyReportModal({ onClose }: { onClose: () => void }) {
                     <th className="py-1 pr-2 text-right">Charged kg</th>
                     <th className="py-1 pr-2 text-right">Recovered kg</th>
                     <th className="py-1 pr-2 text-right">Returned kg</th>
+                    <th className="py-1 pr-2 text-right">Sold kg</th>
                     <th className="py-1 pr-2 text-right">Adjust ± kg</th>
                     <th className="py-1 text-right">Loss kg</th>
                   </tr>
@@ -164,6 +165,7 @@ function QuarterlyReportModal({ onClose }: { onClose: () => void }) {
                       <Num v={r.chargedKg} />
                       <Num v={r.recoveredKg} />
                       <Num v={r.returnedKg} />
+                      <Num v={r.soldKg} />
                       <Num v={r.adjustKg} signed />
                       <Num v={r.lossKg} last />
                     </tr>
@@ -174,6 +176,7 @@ function QuarterlyReportModal({ onClose }: { onClose: () => void }) {
                     <Num v={sum((t) => t.chargedKg)} />
                     <Num v={sum((t) => t.recoveredKg)} />
                     <Num v={sum((t) => t.returnedKg)} />
+                    <Num v={sum((t) => t.soldKg)} />
                     <Num v={sum((t) => t.adjustKg)} signed />
                     <Num v={sum((t) => t.lossKg)} last />
                   </tr>
@@ -189,9 +192,10 @@ function QuarterlyReportModal({ onClose }: { onClose: () => void }) {
             refrigerant into equipment. Recovered = refrigerant out of
             equipment into cylinders (bottle-to-bottle decants excluded).
             Returned = net refrigerant in cylinders at the time they were
-            returned to a store/supplier. Loss = recorded hose / decant
-            losses. Deleted log entries are excluded; they remain available
-            in the JSON/CSV export audit trail.
+            returned to a store/supplier. Sold = net refrigerant in cylinders
+            sold to another party. Loss = recorded hose / decant losses.
+            Deleted log entries are excluded; they remain available in the
+            JSON/CSV export audit trail.
           </p>
         </section>
 

@@ -225,7 +225,7 @@ export default function Sites() {
         <div className="no-scrollbar -mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
           <button
             onClick={() => setStateFilter('all')}
-            className={`shrink-0 rounded-full px-3 py-1.5 text-sm font-medium transition ${
+            className={`min-h-11 shrink-0 rounded-full px-3 py-1.5 text-sm font-medium transition ${
               stateFilter === 'all'
                 ? 'bg-brand-600 text-white'
                 : 'bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-200'
@@ -237,7 +237,7 @@ export default function Sites() {
             <button
               key={st}
               onClick={() => setStateFilter(st)}
-              className={`shrink-0 rounded-full px-3 py-1.5 text-sm font-medium transition ${
+              className={`min-h-11 shrink-0 rounded-full px-3 py-1.5 text-sm font-medium transition ${
                 stateFilter === st
                   ? 'bg-brand-600 text-white'
                   : 'bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-200'
@@ -677,7 +677,7 @@ function SiteDetail({
                 <button
                   type="button"
                   onClick={() => setShowDecommissioned((v) => !v)}
-                  className="text-xs font-medium text-brand-600 hover:underline"
+                  className="inline-flex min-h-11 items-center text-xs font-medium text-brand-600 hover:underline"
                 >
                   {showDecommissioned ? 'Hide' : 'Show'}
                 </button>

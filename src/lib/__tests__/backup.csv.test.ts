@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildLogCsv } from '../backup'
+import { buildAuditPackZip, buildLogCsv, buildPurchasesCsv } from '../backup'
 import { makeBottle, makeState, makeTx } from './fixtures'
 
 describe('buildLogCsv', () => {
@@ -41,5 +41,69 @@ describe('buildLogCsv', () => {
     const rowA = lines.find((l) => l.startsWith('a,'))!.split(',')
     // 2026-06-18T03:00Z is 13:00 on 18 June in Brisbane (UTC+10).
     expect(rowA[idx]).toBe('18/06/2026')
+  })
+})
+
+describe('buildPurchasesCsv', () => {
+  const state = makeState({
+    businessName: 'Acme',
+    bottles: [
+      makeBottle({ id: 'b1', bottleNumber: 'B-1', refrigerantType: 'R32', costAud: 412.5, supplier: 'BOC', invoiceNumber: 'INV-9' }),
+      makeBottle({ id: 'b2', bottleNumber: 'B-2', refrigerantType: 'R410A' }),
+    ],
+    location: { country: 'Australia', region: 'QLD', city: 'Brisbane', timezone: 'Australia/Brisbane' },
+    transactions: [
+      makeTx({ id: 'i1', kind: 'intake', bottleId: 'b1', amount: 9, date: '2026-06-18T03:00:00.000Z' }),
+      // No cost recorded anywhere -> not a bill, stays out of the export.
+      makeTx({ id: 'i2', kind: 'intake', bottleId: 'b2', amount: 5, date: '2026-06-19T03:00:00.000Z' }),
+      // Costed but not an intake -> ignored.
+      makeTx({ id: 'c1', kind: 'charge', bottleId: 'b1', amount: 1, date: '2026-06-20T03:00:00.000Z' }),
+    ],
+  })
+
+  it('emits one Xero bill row per costed intake, dd/mm/yyyy dates', () => {
+    const csv = buildPurchasesCsv(state)
+    const lines = csv.split('\n')
+    expect(lines[0]).toContain('*ContactName')
+    expect(lines[0]).toContain('*TaxType')
+    expect(lines.length).toBe(2) // header + the single costed intake
+    expect(lines[1]).toContain('BOC')
+    expect(lines[1]).toContain('INV-9')
+    expect(lines[1]).toContain('18/06/2026')
+    expect(lines[1]).toContain('412.50')
+    expect(lines[1]).toContain('GST on Expenses')
+    expect(lines[1]).toContain('cylinder B-1')
+  })
+
+  it('honours the date range', () => {
+    expect(buildPurchasesCsv(state, '2026-06-19', undefined).split('\n').length).toBe(1)
+  })
+})
+
+describe('buildAuditPackZip', () => {
+  it('bundles the CSV, JSON backup and a verification statement', async () => {
+    const state = makeState({
+      businessName: 'Acme',
+      businessAbn: '51824753556',
+      bottles: [makeBottle({ id: 'b1', bottleNumber: 'B-1' })],
+      transactions: [
+        makeTx({ id: 'a', kind: 'charge', bottleId: 'b1', amount: 2, date: '2026-06-18T03:00:00.000Z' }),
+      ],
+    })
+    const blob = await buildAuditPackZip(state, {
+      from: '2026-06-01',
+      to: '2026-06-30',
+      periodLabel: 'Q2 2026',
+    })
+    expect(blob.type).toBe('application/zip')
+    const text = new TextDecoder('latin1').decode(
+      new Uint8Array(await blob.arrayBuffer()),
+    )
+    expect(text).toContain('refrigerant-log.csv')
+    expect(text).toContain('full-backup.json')
+    expect(text).toContain('VERIFICATION.txt')
+    expect(text).toContain('Period:          Q2 2026')
+    expect(text).toContain('COMPLIANCE RULESET')
+    expect(text).toContain('Acme')
   })
 })

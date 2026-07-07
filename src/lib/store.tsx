@@ -42,6 +42,8 @@ import {
   TECHNICIAN_PURGE_DAYS,
   TERMS_VERSION,
   daysUntilPurge,
+  type RiskPlan,
+  type RiskPlanItemState,
 } from './types'
 import {
   BOTTLE_FIELDS,
@@ -74,7 +76,7 @@ import {
 import { mergeStates } from './merge'
 import { deviceChainId, rebaseChainHead, sealAuditLog } from './auditChain'
 import { buildDemoState } from './demo'
-import { profileFor } from './compliance'
+import { profileFor, RISK_PLAN_ITEMS } from './compliance'
 import { deviceTimeZone } from './datetime'
 import { useToast } from './toast'
 
@@ -265,6 +267,12 @@ interface StoreApi {
   exitDemo: () => void
   // Re-accept the Terms after a version bump (see TermsGate).
   acceptTerms: () => void
+  // Save the risk management plan checklist (ARC RTA condition). Pass
+  // markReviewed to stamp who/when — printed on the audit pack.
+  saveRiskPlan: (
+    items: Record<string, RiskPlanItemState>,
+    markReviewed: boolean,
+  ) => void
   setLocation: (l: LocationSettings) => void
   setUnit: (u: WeightUnit) => void
   setTheme: (t: Theme) => void
@@ -765,6 +773,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         // the log row survives later edits/deletion of the bottle.
         supplier: bottle.supplier || undefined,
         invoiceNumber: bottle.invoiceNumber || undefined,
+        costAud: bottle.costAud || undefined,
         technician: activeTech?.name ?? (s.technician || undefined),
         technicianLicence:
           (activeTech?.arcLicenceNumber || undefined) ??
@@ -1361,7 +1370,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (t.kind === 'charge') after = before - bottleDelta
       else if (t.kind === 'recover') after = before + bottleDelta
       else if (t.kind === 'adjust') after = before + bottleDelta // signed
-      // transfer / return don't change weight
+      // transfer / return / sell don't change weight
       after = Math.max(0, Math.round(after * 1000) / 1000)
 
       // Bottle-to-bottle recover: also decrement the source bottle
@@ -1425,7 +1434,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (t.kind === 'transfer' && t.siteId) {
         updatedBottle.currentSiteId = t.siteId
         updatedBottle.status = 'on_site'
-      } else if (t.kind === 'return') {
+      } else if (t.kind === 'return' || t.kind === 'sell') {
+        // Both take the cylinder out of the fleet; 'returned' is the
+        // app's "no longer ours" status. The ledger row keeps the
+        // distinction (Sold, with the buyer as the destination).
         updatedBottle.currentSiteId = undefined
         updatedBottle.status = 'returned'
       }
@@ -2332,6 +2344,37 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     }))
   }, [])
 
+  const saveRiskPlan: StoreApi['saveRiskPlan'] = useCallback(
+    (items, markReviewed) => {
+      setState((s) => {
+        const now = new Date().toISOString()
+        const activeTech = s.technicians.find(
+          (t) => t.id === s.activeTechnicianId,
+        )
+        const doneCount = Object.values(items).filter((i) => i.done).length
+        const plan: RiskPlan = {
+          items,
+          reviewedAt: markReviewed ? now : s.riskPlan?.reviewedAt,
+          reviewedBy: markReviewed
+            ? activeTech?.name ?? (s.technician || undefined)
+            : s.riskPlan?.reviewedBy,
+          updatedAt: now,
+        }
+        return {
+          ...s,
+          riskPlan: plan,
+          auditLog: withAudit(s, {
+            action: 'settings',
+            entity: 'settings',
+            target: 'Risk management plan',
+            summary: `Risk management plan ${markReviewed ? 'reviewed' : 'updated'} — ${doneCount}/${RISK_PLAN_ITEMS.length} items in place`,
+          }),
+        }
+      })
+    },
+    [],
+  )
+
   const requestAccountClosure: StoreApi['requestAccountClosure'] = useCallback(
     (req) => {
       if (!ensureRole('owner', 'Closing the account')) return
@@ -2683,6 +2726,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       startDemo,
       exitDemo,
       acceptTerms,
+      saveRiskPlan,
       setLocation,
       setUnit,
       setTheme,
@@ -2739,6 +2783,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       startDemo,
       exitDemo,
       acceptTerms,
+      saveRiskPlan,
       setLocation,
       setUnit,
       setTheme,

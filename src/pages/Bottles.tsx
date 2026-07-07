@@ -433,7 +433,7 @@ export default function Bottles() {
               <button
                 key={f}
                 onClick={() => setFilter(f)}
-                className={`shrink-0 rounded-full px-3 py-1.5 text-sm font-medium transition ${
+                className={`min-h-11 shrink-0 rounded-full px-3 py-1.5 text-sm font-medium transition ${
                   filter === f
                     ? 'bg-brand-600 text-white'
                     : 'bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-200'
@@ -462,7 +462,7 @@ export default function Bottles() {
               <button
                 key={val}
                 onClick={() => setGrouping(val)}
-                className={`rounded-full px-3 py-1 text-xs font-medium transition ${
+                className={`min-h-11 rounded-full px-3 py-1 text-xs font-medium transition ${
                   grouping === val
                     ? 'bg-brand-600 text-white'
                     : 'bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-200'
@@ -490,7 +490,7 @@ export default function Bottles() {
               setFilter('all')
               setQuery('')
             }}
-            className="shrink-0 font-medium text-brand-600 hover:underline dark:text-brand-400"
+            className="inline-flex min-h-11 shrink-0 items-center font-medium text-brand-600 hover:underline dark:text-brand-400"
           >
             Clear filter
           </button>
@@ -502,7 +502,7 @@ export default function Bottles() {
           <button
             type="button"
             onClick={() => setLabelsFor(visible)}
-            className="text-xs font-medium text-brand-600 hover:underline dark:text-brand-400"
+            className="inline-flex min-h-11 items-center text-xs font-medium text-brand-600 hover:underline dark:text-brand-400"
           >
             🏷 Print scannable labels ({visible.length})
           </button>
@@ -1124,6 +1124,9 @@ function BottleForm({
   const [notes, setNotes] = useState(bottle?.notes ?? '')
   const [supplier, setSupplier] = useState(bottle?.supplier ?? '')
   const [invoiceNumber, setInvoiceNumber] = useState(bottle?.invoiceNumber ?? '')
+  const [costAud, setCostAud] = useState(
+    bottle?.costAud != null ? String(bottle.costAud) : '',
+  )
   const [lastHydro, setLastHydro] = useState(
     toYearMonth(bottle?.lastHydroTestDate ?? ''),
   )
@@ -1140,6 +1143,7 @@ function BottleForm({
       !!(
         (bottle?.supplier ?? '') !== '' ||
         (bottle?.invoiceNumber ?? '') !== '' ||
+        bottle?.costAud != null ||
         toYearMonth(bottle?.lastHydroTestDate ?? '') !== '' ||
         toYearMonth(bottle?.nextHydroTestDate ?? '') !== ''
       ),
@@ -1225,6 +1229,7 @@ function BottleForm({
     setNotes(bottle?.notes ?? '')
     setSupplier(bottle?.supplier ?? '')
     setInvoiceNumber(bottle?.invoiceNumber ?? '')
+    setCostAud(bottle?.costAud != null ? String(bottle.costAud) : '')
     setCapacityWeight(
       initialDisplay(
         wcFromSafeFill(bottle?.initialNetWeight ?? 0, bottle?.refrigerantType),
@@ -1273,6 +1278,10 @@ function BottleForm({
       notes: notes.trim() || undefined,
       supplier: supplier.trim() || undefined,
       invoiceNumber: invoiceNumber.trim() || undefined,
+      costAud:
+        parseFloat(costAud) > 0
+          ? Math.round(parseFloat(costAud) * 100) / 100
+          : undefined,
       lastHydroTestDate: lastHydro || undefined,
       nextHydroTestDate: nextHydro || undefined,
     })
@@ -1453,7 +1462,7 @@ function BottleForm({
           type="button"
           onClick={() => setShowMoreDetails((v) => !v)}
           aria-expanded={showMoreDetails}
-          className="text-sm font-medium text-brand-600 hover:underline dark:text-brand-400"
+          className="inline-flex min-h-11 items-center text-sm font-medium text-brand-600 hover:underline dark:text-brand-400"
         >
           {showMoreDetails
             ? 'Hide supplier & cylinder test'
@@ -1481,6 +1490,18 @@ function BottleForm({
             />
           </Field>
         </div>
+
+        <Field
+          label="Purchase cost (AUD, ex-GST)"
+          hint="Optional — feeds the Purchases CSV for your bookkeeper / Xero. Fine to add later when the bill arrives."
+        >
+          <TextInput
+            inputMode="decimal"
+            value={costAud}
+            onChange={(e) => setCostAud(e.target.value)}
+            placeholder="e.g. 412.50"
+          />
+        </Field>
 
         <div className="rounded-xl border border-slate-200 p-3 dark:border-slate-800">
           <div className="mb-1 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">

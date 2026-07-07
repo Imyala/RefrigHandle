@@ -88,8 +88,8 @@ function jobBlock(t: Transaction, state: AppState): string[] {
       ? `Bottle gross: ${kgToDisplay(t.weightBefore, unit).toFixed(2)} → ${formatWeight(t.weightAfter, unit)}`
       : '',
     loss > 0 ? `Loss: ${formatWeight(loss, unit)}` : '',
-    t.kind === 'return' && t.returnDestination
-      ? `Returned to: ${t.returnDestination}${t.docketNumber ? ` · Docket ${t.docketNumber}` : ''}`
+    (t.kind === 'return' || t.kind === 'sell') && t.returnDestination
+      ? `${t.kind === 'sell' ? 'Sold to' : 'Returned to'}: ${t.returnDestination}${t.docketNumber ? ` · Docket ${t.docketNumber}` : ''}`
       : '',
     t.kind === 'intake' && (t.supplier || t.invoiceNumber)
       ? `Supplier: ${t.supplier ?? ''}${t.invoiceNumber ? ` · Invoice ${t.invoiceNumber}` : ''}`
@@ -154,6 +154,7 @@ const TOTALS_ORDER: TransactionKind[] = [
   'recover',
   'transfer',
   'return',
+  'sell',
   'intake',
   'adjust',
 ]

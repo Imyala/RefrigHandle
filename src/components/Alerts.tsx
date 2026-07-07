@@ -114,7 +114,7 @@ function useBackupAlert(): ReactNode {
           </div>
           <Link
             to="/settings"
-            className="shrink-0 whitespace-nowrap text-xs font-medium text-amber-900 hover:underline dark:text-amber-200"
+            className="inline-flex min-h-11 shrink-0 items-center whitespace-nowrap text-xs font-medium text-amber-900 hover:underline dark:text-amber-200"
           >
             Settings
           </Link>
@@ -151,7 +151,7 @@ function useBackupAlert(): ReactNode {
         </div>
         <Link
           to="/settings"
-          className="shrink-0 whitespace-nowrap text-xs font-medium text-amber-900 hover:underline dark:text-amber-200"
+          className="inline-flex min-h-11 shrink-0 items-center whitespace-nowrap text-xs font-medium text-amber-900 hover:underline dark:text-amber-200"
         >
           Settings
         </Link>
@@ -245,7 +245,7 @@ function useLicenceAlert(): ReactNode {
         <Link
           to="/settings"
           state={{ scrollTo }}
-          className="shrink-0 whitespace-nowrap text-xs font-medium text-amber-900 hover:underline dark:text-amber-200"
+          className="inline-flex min-h-11 shrink-0 items-center whitespace-nowrap text-xs font-medium text-amber-900 hover:underline dark:text-amber-200"
         >
           Settings
         </Link>
@@ -314,7 +314,7 @@ function useHydroAlert(): ReactNode {
         </div>
         <Link
           to="/bottles"
-          className="shrink-0 whitespace-nowrap text-xs font-medium text-red-900 hover:underline dark:text-red-200"
+          className="inline-flex min-h-11 shrink-0 items-center whitespace-nowrap text-xs font-medium text-red-900 hover:underline dark:text-red-200"
         >
           View bottles
         </Link>

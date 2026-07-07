@@ -91,10 +91,19 @@ input[type='number'] {
  * along with their PDF. Forces light colours so dark-mode users still
  * get a printer-friendly page.
  * ----------------------------------------------------------------- */
+/* Counterpart to .no-print: hidden on screen, shown on paper (e.g. a
+   note printed as prose while its editable input stays screen-only). */
+.print-only {
+  display: none;
+}
+
 @media print {
   @page {
     size: A4;
     margin: 16mm;
+  }
+  .print-region .print-only {
+    display: block !important;
   }
   html,
   html.dark,

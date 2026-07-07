@@ -406,3 +406,35 @@ describe('recycle bin merge', () => {
     expect(merged.bottles.some((x) => x.id === 'b1')).toBe(true)
   })
 })
+
+describe('riskPlan merge', () => {
+  it('the copy touched most recently wins wholesale', () => {
+    const older = {
+      items: { leak_prevention: { done: true } },
+      reviewedAt: '2026-05-01T00:00:00.000Z',
+      updatedAt: '2026-05-01T00:00:00.000Z',
+    }
+    const newer = {
+      items: { leak_prevention: { done: false }, licensing: { done: true } },
+      updatedAt: '2026-06-01T00:00:00.000Z',
+    }
+    const merged = mergeStates(
+      makeState({ riskPlan: older }),
+      makeState({ riskPlan: newer }),
+    )
+    expect(merged.riskPlan).toEqual(newer)
+    // Symmetric: order of devices must not matter.
+    const merged2 = mergeStates(
+      makeState({ riskPlan: newer }),
+      makeState({ riskPlan: older }),
+    )
+    expect(merged2.riskPlan).toEqual(newer)
+  })
+
+  it("a device with no plan adopts the other side's", () => {
+    const plan = { items: {}, updatedAt: '2026-06-01T00:00:00.000Z' }
+    expect(
+      mergeStates(makeState({}), makeState({ riskPlan: plan })).riskPlan,
+    ).toEqual(plan)
+  })
+})

@@ -24,6 +24,24 @@ describe('quarterlyTotals', () => {
     expect(r.recoveredKg).toBe(1) // decant not counted
   })
 
+  it("counts a sale's net contents in the reg-141 'sold' bucket", () => {
+    const bottle = makeBottle({ id: 'b1', refrigerantType: 'R32', tareWeight: 10 })
+    const live = [
+      // Sold with 19 kg gross on a 10 kg tare -> 9 kg of refrigerant sold.
+      makeTx({
+        bottleId: 'b1',
+        kind: 'sell',
+        amount: 0,
+        weightBefore: 19,
+        bottleTareWeight: 10,
+        date: '2026-05-10T02:00:00.000Z',
+      }),
+    ]
+    const [r] = quarterlyTotals(live, [bottle], Q2, TZ)
+    expect(r.soldKg).toBe(9)
+    expect(r.returnedKg).toBe(0)
+  })
+
   it('excludes movements outside the selected quarter', () => {
     const bottle = makeBottle({ id: 'b1' })
     const live = [

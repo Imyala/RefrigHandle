@@ -221,7 +221,7 @@ export default function AuditLog() {
             <button
               key={f}
               onClick={() => setFilter(f)}
-              className={`shrink-0 rounded-full px-3 py-1.5 text-sm font-medium transition ${
+              className={`min-h-11 shrink-0 rounded-full px-3 py-1.5 text-sm font-medium transition ${
                 filter === f
                   ? 'bg-brand-600 text-white'
                   : 'bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-200'
@@ -238,7 +238,7 @@ export default function AuditLog() {
           <button
             type="button"
             onClick={() => setShowDateRange((v) => !v)}
-            className="text-sm font-medium text-brand-600 hover:underline"
+            className="inline-flex min-h-11 items-center text-sm font-medium text-brand-600 hover:underline"
             aria-expanded={showDateRange}
           >
             {showDateRange ? 'Hide date range' : 'Filter by date range'}

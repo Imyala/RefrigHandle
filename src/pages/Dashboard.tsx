@@ -185,7 +185,7 @@ export default function Dashboard() {
           liveTransactions.length > 5 ? (
             <Link
               to="/transactions"
-              className="text-sm font-medium text-brand-600 hover:underline"
+              className="inline-flex min-h-11 items-center text-sm font-medium text-brand-600 hover:underline"
             >
               View all
             </Link>
@@ -350,8 +350,11 @@ function RecentActivityItem({ t }: { t: Transaction }) {
           {t.reason && (
             <DetailLine label="Reason" value={REASON_LABELS[t.reason]} />
           )}
-          {t.kind === 'return' && t.returnDestination && (
-            <DetailLine label="Returned to" value={t.returnDestination} />
+          {(t.kind === 'return' || t.kind === 'sell') && t.returnDestination && (
+            <DetailLine
+              label={t.kind === 'sell' ? 'Sold to' : 'Returned to'}
+              value={t.returnDestination}
+            />
           )}
           {t.amount > 0 && (
             <DetailLine

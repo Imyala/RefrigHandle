@@ -185,14 +185,14 @@ function DemoBanner() {
           <button
             type="button"
             onClick={() => void exitGuest()}
-            className="rounded-lg border border-amber-600/60 px-3 py-1.5 text-xs font-semibold text-amber-800 transition hover:bg-amber-100 dark:text-amber-200 dark:hover:bg-amber-900/40"
+            className="min-h-11 rounded-lg border border-amber-600/60 px-3 py-1.5 text-xs font-semibold text-amber-800 transition hover:bg-amber-100 dark:text-amber-200 dark:hover:bg-amber-900/40"
           >
             Exit guest mode
           </button>
           <button
             type="button"
             onClick={() => void setUp()}
-            className="rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-amber-700"
+            className="min-h-11 rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-amber-700"
           >
             Set up my business
           </button>

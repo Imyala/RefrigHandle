@@ -219,6 +219,7 @@ export interface QuarterTotals {
   chargedKg: number // charge rows, equipment side
   recoveredKg: number // recover from equipment (bottle-to-bottle excluded)
   returnedKg: number // net refrigerant in cylinders when returned
+  soldKg: number // net refrigerant in cylinders sold to another party (reg 141 'sold')
   adjustKg: number // signed manual adjustments
   lossKg: number // hose / decant losses on charge & recover rows
   rows: number
@@ -246,6 +247,7 @@ export function rangeTotals(
         chargedKg: 0,
         recoveredKg: 0,
         returnedKg: 0,
+        soldKg: 0,
         adjustKg: 0,
         lossKg: 0,
         rows: 0,
@@ -275,6 +277,12 @@ export function rangeTotals(
       const tare = t.bottleTareWeight ?? bottle?.tareWeight
       if (tare != null) {
         b.returnedKg += Math.max(0, t.weightBefore - tare)
+      }
+    } else if (t.kind === 'sell') {
+      // Reg 141's "sold" quantity — net contents of the cylinder at sale.
+      const tare = t.bottleTareWeight ?? bottle?.tareWeight
+      if (tare != null) {
+        b.soldKg += Math.max(0, t.weightBefore - tare)
       }
     } else if (t.kind === 'adjust') {
       b.adjustKg += t.amount

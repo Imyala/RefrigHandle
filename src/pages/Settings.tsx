@@ -15,6 +15,7 @@ import { InstallAppButton } from '../components/InstallAppButton'
 import { DiagnosticsCard } from '../components/Diagnostics'
 import { StorageHealthCard } from '../components/StorageHealth'
 import { QuarterlyReportCard } from '../components/QuarterlyReport'
+import { RiskPlanCard } from '../components/RiskPlan'
 import { AuditReportCard } from '../components/AuditReport'
 import { useStore } from '../lib/store'
 import { uid } from '../lib/storage'
@@ -70,6 +71,7 @@ import {
   getLastBackupAt,
   shareBackup,
   shareLogCsv,
+  sharePurchasesCsv,
 } from '../lib/backup'
 import { importAttachments } from '../lib/attachments'
 import type { PickerOption } from '../components/Picker'
@@ -363,6 +365,21 @@ export default function Settings() {
     }
   }
 
+  async function sharePurchases() {
+    try {
+      const out = await sharePurchasesCsv(
+        state,
+        exportFrom || undefined,
+        exportTo || undefined,
+      )
+      if (out === 'downloaded') {
+        toast.show('Sharing isn’t available here — saved the file instead.', 'success')
+      }
+    } catch {
+      toast.show('Could not share the purchases CSV.', 'error')
+    }
+  }
+
   async function importJson(file: File) {
     let data: Record<string, unknown>
     try {
@@ -499,6 +516,9 @@ export default function Settings() {
       {/* The quarterly record matches the ARC RTA permit conditions. */}
       <QuarterlyReportCard />
 
+      {/* Risk management plan — an RTA condition alongside the records. */}
+      <RiskPlanCard />
+
       <Card>
         <div className="mb-1 text-sm font-semibold text-slate-700 dark:text-slate-200">
           Change log
@@ -524,6 +544,9 @@ export default function Settings() {
           on this device. <strong>Export</strong> saves the file here;{' '}
           <strong>Share</strong> hands it to another app — email it straight
           to your auditor or bookkeeper, or drop it in Drive.{' '}
+          <strong>Purchases CSV</strong> lists cylinder buys with recorded
+          costs in Xero's bills-import layout — share it to your Xero files
+          email, then import as draft bills (add your account code there).{' '}
           {lastBackupAt ? (
             <>
               Last full backup:{' '}
@@ -585,6 +608,13 @@ export default function Settings() {
             disabled={backupBusy !== null}
           >
             Share CSV…
+          </Button>
+          <Button
+            variant="secondary"
+            onClick={() => void sharePurchases()}
+            disabled={backupBusy !== null}
+          >
+            Purchases CSV (Xero)…
           </Button>
           <Button
             variant="secondary"
