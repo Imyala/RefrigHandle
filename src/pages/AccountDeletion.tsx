@@ -234,7 +234,7 @@ export default function AccountDeletion() {
               I understand that keeping my records for the legally required
               period is my own responsibility — my refrigerant-handling records
               under the Ozone Protection and Synthetic Greenhouse Gas Management
-              Regulations 1995 (the ARC / ARCtick scheme), and my business and
+              Regulations, as amended (the ARC / ARCtick scheme), and my business and
               financial records under the Australian Taxation Office (ATO) and,
               if I trade as a company, ASIC under the Corporations Act 2001.
             </span>

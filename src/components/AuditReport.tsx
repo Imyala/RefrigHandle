@@ -33,7 +33,11 @@ import {
   type ComplianceLevel,
   type QuarterTotals,
 } from '../lib/reports'
-import { profileFor } from '../lib/compliance'
+import {
+  COMPLIANCE_DATASET,
+  complianceVerifiedLabel,
+  profileFor,
+} from '../lib/compliance'
 import { formatDateTime, formatPlainDate, localDateTimeInput } from '../lib/datetime'
 import { formatWeight } from '../lib/units'
 
@@ -617,7 +621,8 @@ function AuditReportModal({ onClose }: { onClose: () => void }) {
             otherwise disposed of, retained for the period required by
             applicable regulations. Deleted log entries are excluded here and
             remain available in the full JSON/CSV export audit trail. Generated
-            {' '}{generatedAt}.
+            {' '}{generatedAt}. Compliance ruleset v{COMPLIANCE_DATASET.version},
+            verified against DCCEEW/ARC sources on {complianceVerifiedLabel()}.
           </p>
         </footer>
       </div>

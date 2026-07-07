@@ -1124,6 +1124,19 @@ export function refrigerantLabel(name: string, favorites: readonly string[]): st
   return favorites.includes(name) ? `★ ${name}` : name
 }
 
+// The type a new-bottle form should start on. With no favourites set the
+// R-number-ordered list puts R12 — a phased-out CFC nobody buys — first,
+// and a rushed tap-through would stamp R12 onto the compliance record.
+// Prefer the user's first favourite; otherwise fall back to R410A, the
+// most common charge in the Australian field.
+export function defaultRefrigerantType(
+  ordered: readonly string[],
+  favorites: readonly string[],
+): string {
+  if (ordered.length && favorites.includes(ordered[0])) return ordered[0]
+  return ordered.includes('R410A') ? 'R410A' : (ordered[0] ?? 'R410A')
+}
+
 export function netWeight(b: Bottle): number {
   return Math.max(0, b.grossWeight - b.tareWeight)
 }
@@ -1417,13 +1430,16 @@ export function movementSummary(
 
 // Global Warming Potential (100-year, AR4 — IPCC Fourth Assessment).
 // AR4 is the GWP basis used by Australia's Ozone Protection and
-// Synthetic Greenhouse Gas Management Act 1989 / Regulations 1995, the
-// EU F-Gas Regulation 517/2014, and most current product compliance
-// labelling. Update to AR5/AR6 only when the regulator does — the
-// reported tonnes-CO2-e on existing equipment changes if you don't.
+// Synthetic Greenhouse Gas Management Act 1989 and its Regulations (as
+// amended) — deliberately retained by DCCEEW for consistency with the
+// Montreal Protocol HFC phase-down baseline. Update to AR5/AR6 only
+// when the regulator does — the reported tonnes-CO2-e on existing
+// equipment changes if you don't. (The EU's F-gas rules, Regulation
+// (EU) 2024/573, have moved on from AR4; Australia has not.)
 //
 // Sources cross-checked: IPCC AR4 WG1 Ch 2 Table 2.14, AIRAH DA19,
-// EU F-gas Annex I/II. R1234yf/ze use AR5 values (AR4 omitted them).
+// DCCEEW published GWP tables. R1234yf/ze use AR5 values (AR4 omitted
+// them). Verified as of COMPLIANCE_DATASET.verifiedAsOf (lib/compliance).
 export const REFRIGERANT_GWP: Record<string, number> = {
   // Legacy CFC / HCFC (phase-out)
   R12: 10900,

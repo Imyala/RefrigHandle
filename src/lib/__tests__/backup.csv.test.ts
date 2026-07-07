@@ -31,4 +31,15 @@ describe('buildLogCsv', () => {
     expect(lines.some((l) => l.startsWith('a,'))).toBe(true)
     expect(lines.some((l) => l.startsWith('b,'))).toBe(false)
   })
+
+  it('carries a dd/mm/yyyy local_date column in the record timezone', () => {
+    const csv = buildLogCsv(state)
+    const lines = csv.split('\n')
+    const header = lines[1].split(',')
+    const idx = header.indexOf('local_date')
+    expect(idx).toBeGreaterThan(-1)
+    const rowA = lines.find((l) => l.startsWith('a,'))!.split(',')
+    // 2026-06-18T03:00Z is 13:00 on 18 June in Brisbane (UTC+10).
+    expect(rowA[idx]).toBe('18/06/2026')
+  })
 })

@@ -41,6 +41,12 @@ export const COMPLIANCE_PROFILES: Record<Jurisdiction, ComplianceProfile> = {
     businessNumberShort: 'ABN',
     validateBusinessNumber: (s) => s.trim() === '' || isValidAbn(s),
     businessNumberHint: 'Your 11-digit Australian Business Number.',
+    // Conservative figure. Regulation 141 (OPSGGM Regulations) requires
+    // up-to-date quarterly records producible within 14 days of a written
+    // request, and ARC permit-condition checks ask for the last two
+    // quarters; no shorter statutory period is stated, so the app holds
+    // (and tells users to keep) five years — re-verify against reg 141 /
+    // ARC guidance at each COMPLIANCE.md review.
     recordRetentionYears: 5,
     citation:
       'Recorded against AS/NZS 5149.4 §6 (service records), the Australia and New Zealand Refrigerant Handling Code of Practice 2025, and AIRAH DA19. GWP values per IPCC AR4 (100-year) as adopted by the Ozone Protection and Synthetic Greenhouse Gas Management Regulations.',
@@ -49,4 +55,46 @@ export const COMPLIANCE_PROFILES: Record<Jurisdiction, ComplianceProfile> = {
 
 export function profileFor(j: Jurisdiction | undefined): ComplianceProfile {
   return COMPLIANCE_PROFILES[j ?? 'AU'] ?? COMPLIANCE_PROFILES.AU
+}
+
+// ── Compliance dataset stamp ──────────────────────────────────────────
+// The regulated facts baked into this build — the GWP table and its AR4
+// basis, filling ratios, the AS 2030 10-year retest default, licence
+// durations, leak-watch thresholds, the retention period, and the code
+// editions cited above — were last verified against the sources below on
+// this date. The stamp is shown in Settings and on printed reports so a
+// ruleset that predates a standards change is VISIBLY stale, never
+// silently stale. Bump `verifiedAsOf` (and version) each time the
+// COMPLIANCE.md review checklist is completed — even when nothing
+// changed, so "verified recently" stays an honest claim.
+export const COMPLIANCE_DATASET = {
+  version: '2026.07',
+  verifiedAsOf: '2026-07-07',
+  summary:
+    'GWP per IPCC AR4 (100-year) as used by the OPSGGM legislation · ' +
+    'ANZ Refrigerant Handling Code of Practice 2025 · AS/NZS 5149:2016 · ' +
+    'AS 2030 (10-year cylinder test stamp) · ARC RTA quarterly record',
+  sources: [
+    'DCCEEW — ozone/SGG legislation, GWP values, HFC phase-down',
+    'ARC (arctick.org) — RTA conditions, reporting templates, licence types',
+    'Ozone Protection and SGG Management Act 1989 and Regulations (as amended)',
+  ],
+} as const
+
+// Human-readable "verified" date for the stamp (en-AU, e.g. "7 July 2026").
+export function complianceVerifiedLabel(): string {
+  return new Date(
+    COMPLIANCE_DATASET.verifiedAsOf + 'T00:00:00',
+  ).toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' })
+}
+
+// True once the dataset is more than ~two quarters old — the point where
+// "current" can no longer be assumed and the user should look for an app
+// update. Pure client-side date math so the nudge works fully offline.
+export const COMPLIANCE_STALE_DAYS = 190
+
+export function complianceDataStale(now: Date = new Date()): boolean {
+  const verified = new Date(COMPLIANCE_DATASET.verifiedAsOf + 'T00:00:00')
+  const days = (now.getTime() - verified.getTime()) / 86400000
+  return days > COMPLIANCE_STALE_DAYS
 }

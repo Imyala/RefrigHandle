@@ -1,5 +1,5 @@
 import type { ButtonHTMLAttributes, InputHTMLAttributes, SelectHTMLAttributes, TextareaHTMLAttributes, ReactNode } from 'react'
-import { useRef } from 'react'
+import { useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 
 type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
@@ -213,6 +213,11 @@ export function EmptyState({
   )
 }
 
+// Modals can stack (e.g. the custom-cylinder form opens over the bottle
+// form), so each open modal registers on a shared stack and Escape peels
+// only the top layer.
+const modalStack: (() => void)[] = []
+
 export function Modal({
   open,
   title,
@@ -233,6 +238,30 @@ export function Modal({
   // losing whatever the user was editing. Tracking the mousedown origin
   // means a drag-select that strays onto the backdrop never closes it.
   const pressedOnOverlayRef = useRef(false)
+  // Ref so the Escape listener always calls the latest onClose without
+  // re-subscribing on every render (callers pass inline arrows). Synced
+  // in an effect — the lint rule (correctly) bans ref writes in render.
+  const onCloseRef = useRef(onClose)
+  useEffect(() => {
+    onCloseRef.current = onClose
+  }, [onClose])
+  useEffect(() => {
+    if (!open) return
+    const close = () => onCloseRef.current()
+    modalStack.push(close)
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && modalStack[modalStack.length - 1] === close) {
+        e.stopPropagation()
+        close()
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => {
+      const i = modalStack.indexOf(close)
+      if (i >= 0) modalStack.splice(i, 1)
+      window.removeEventListener('keydown', onKey)
+    }
+  }, [open])
   if (!open) return null
   const overlayCls =
     size === 'lg'

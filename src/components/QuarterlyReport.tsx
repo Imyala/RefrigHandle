@@ -12,6 +12,7 @@ import {
 } from '../lib/types'
 import { quarterlyTotals, type QuarterTotals } from '../lib/reports'
 import { formatDateTime, localDateTimeInput } from '../lib/datetime'
+import { COMPLIANCE_DATASET, complianceVerifiedLabel } from '../lib/compliance'
 
 // ARC quarterly refrigerant record (Refrigerant Trading Authorisation
 // permit condition). RTA holders must keep quarterly records of
@@ -202,7 +203,11 @@ function QuarterlyReportModal({ onClose }: { onClose: () => void }) {
             refrigerant acquired, recovered, sold or otherwise disposed of,
             retained for the period required by applicable regulations).
           </p>
-          <p className="mt-2">Generated {generatedAt}.</p>
+          <p className="mt-2">
+            Generated {generatedAt}. Compliance ruleset v
+            {COMPLIANCE_DATASET.version}, verified against DCCEEW/ARC sources
+            on {complianceVerifiedLabel()}.
+          </p>
           <IntegrityStamp />
           <div className="mt-4 grid grid-cols-2 gap-6 print:mt-8">
             <div>

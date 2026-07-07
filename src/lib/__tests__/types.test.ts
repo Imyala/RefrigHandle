@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   chargeSanity,
+  defaultRefrigerantType,
   expiryStatus,
   fillingRatio,
   gwpFor,
@@ -318,5 +319,18 @@ describe('structured names', () => {
   it('compose and split round-trip a simple first+last name', () => {
     const parts = splitName('Jane Smith')
     expect(composeName(parts)).toBe('Jane Smith')
+  })
+})
+
+describe('defaultRefrigerantType', () => {
+  const ordered = ['R12', 'R22', 'R32', 'R410A'] // master R-number order
+  it('never starts a new bottle on R12 when the user has no favourites', () => {
+    expect(defaultRefrigerantType(ordered, [])).toBe('R410A')
+  })
+  it('prefers the first favourite (favourites sort to the front)', () => {
+    expect(defaultRefrigerantType(['R32', 'R12', 'R22', 'R410A'], ['R32'])).toBe('R32')
+  })
+  it('falls back to the first entry when R410A is not in the list', () => {
+    expect(defaultRefrigerantType(['R290', 'R600A'], [])).toBe('R290')
   })
 })

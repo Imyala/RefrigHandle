@@ -91,6 +91,46 @@ function triggerDownload(blob: Blob, filename: string): void {
   URL.revokeObjectURL(url)
 }
 
+// UTF-8 byte-order mark. Excel (the app every bookkeeper and auditor
+// actually opens a CSV in) mis-decodes UTF-8 as ANSI without it, turning
+// site names and notes with any non-ASCII character into mojibake. Added
+// at the download/share boundary so buildLogCsv stays a pure string
+// builder for tests and the ZIP path.
+const CSV_BOM = '\uFEFF'
+
+export type ShareOutcome = 'shared' | 'downloaded' | 'cancelled'
+
+// Hand a file to another app via the device share sheet (Mail, Drive,
+// WhatsApp, a Xero files inbox…) when the platform can share files —
+// the only reliable way out of an installed PWA on iOS — and fall back
+// to a plain download everywhere else.
+export async function shareOrDownload(
+  blob: Blob,
+  filename: string,
+  title?: string,
+): Promise<ShareOutcome> {
+  if (typeof navigator !== 'undefined' && 'canShare' in navigator) {
+    const payload = {
+      files: [new File([blob], filename, { type: blob.type })],
+      title: title ?? filename,
+    }
+    if (navigator.canShare(payload)) {
+      try {
+        await navigator.share(payload)
+        return 'shared'
+      } catch (e) {
+        // Cancelling the share sheet must not surprise-download the file.
+        if (e instanceof DOMException && e.name === 'AbortError') {
+          return 'cancelled'
+        }
+        // Any other failure (permission, transient) — fall through.
+      }
+    }
+  }
+  triggerDownload(blob, filename)
+  return 'downloaded'
+}
+
 export async function downloadBackup(state: AppState): Promise<void> {
   const json = await buildBackupJson(state)
   triggerDownload(
@@ -100,13 +140,27 @@ export async function downloadBackup(state: AppState): Promise<void> {
   markBackedUp()
 }
 
+// Share the full JSON backup to another app (email it to the office,
+// drop it in Drive…). Only a completed share/download counts as a
+// backup — a cancelled share sheet must not reset the freshness nudge.
+export async function shareBackup(state: AppState): Promise<ShareOutcome> {
+  const json = await buildBackupJson(state)
+  const out = await shareOrDownload(
+    new Blob([json], { type: 'application/json' }),
+    `refrighandle-${new Date().toISOString().slice(0, 10)}.json`,
+    'RefrigHandle full backup',
+  )
+  if (out !== 'cancelled') markBackedUp()
+  return out
+}
+
 // One ZIP holding the complete JSON backup and the auditor-readable CSV log
 // — the records a business must retain for 5–7 years, downloaded in a
 // single file at account closure.
 export async function downloadRecordsZip(state: AppState): Promise<void> {
   const stamp = new Date().toISOString().slice(0, 10)
   const json = await buildBackupJson(state)
-  const csv = buildLogCsv(state)
+  const csv = CSV_BOM + buildLogCsv(state)
   const zip = createZip([
     { name: `refrighandle-backup-${stamp}.json`, data: json },
     { name: `refrighandle-log-${stamp}.csv`, data: csv },
@@ -138,6 +192,7 @@ export function buildLogCsv(
   const liveHeader = [
     'id',
     'date',
+    'local_date',
     'local_datetime',
     'timezone',
     'kind',
@@ -186,9 +241,18 @@ export function buildLogCsv(
     const s = state.sites.find((x) => x.id === t.siteId)
     const u = state.units.find((x) => x.id === t.unitId)
     const loss = transactionLoss(t)
+    // dd/mm/yyyy in the record's own timezone — the column a spreadsheet
+    // user (or a Xero import) actually sorts and filters on; the ISO
+    // `date` and long-form `local_datetime` stay for precision.
+    const localDay = localDateTimeInput(
+      new Date(t.date),
+      t.tz || state.location.timezone,
+    ).slice(0, 10)
+    const auDate = localDay.split('-').reverse().join('/')
     return [
       t.id,
       t.date,
+      auDate,
       formatDateTime(t.date, t.tz || state.location.timezone, state.clock, true),
       t.tz || state.location.timezone || '',
       t.kind,
@@ -269,16 +333,32 @@ export function buildLogCsv(
     .join('\n')
 }
 
+function csvFilename(from?: string, to?: string): string {
+  const range = from || to ? `-${from || 'start'}-to-${to || 'now'}` : ''
+  return `refrighandle-log${range}-${new Date().toISOString().slice(0, 10)}.csv`
+}
+
 export function downloadLogCsv(state: AppState, from?: string, to?: string): void {
   const csv = buildLogCsv(state, from, to)
-  const blob = new Blob([csv], { type: 'text/csv' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  const range = from || to ? `-${from || 'start'}-to-${to || 'now'}` : ''
-  a.download = `refrighandle-log${range}-${new Date().toISOString().slice(0, 10)}.csv`
-  a.click()
-  URL.revokeObjectURL(url)
+  triggerDownload(
+    new Blob([CSV_BOM + csv], { type: 'text/csv' }),
+    csvFilename(from, to),
+  )
+}
+
+// Share the audit CSV to another app (mail it straight to the auditor
+// or bookkeeper, drop it in a Xero files inbox…).
+export async function shareLogCsv(
+  state: AppState,
+  from?: string,
+  to?: string,
+): Promise<ShareOutcome> {
+  const csv = buildLogCsv(state, from, to)
+  return shareOrDownload(
+    new Blob([CSV_BOM + csv], { type: 'text/csv' }),
+    csvFilename(from, to),
+    'RefrigHandle refrigerant log',
+  )
 }
 
 export interface BackupStatus {

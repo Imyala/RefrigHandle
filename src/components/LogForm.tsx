@@ -536,9 +536,23 @@ export function LogForm({
     : techOther.trim() || undefined
   const stampedRhl = pickedTech?.arcLicenceNumber || undefined
 
-  function doSave(share: boolean) {
+  async function doSave(share: boolean) {
     if (!bottleId) return
     if (submitBlocked) return
+    // A charge/recovery that names no site, no unit and no equipment text
+    // is weak audit evidence — an auditor can't tie it to any plant. Nudge
+    // rather than block: workshop pre-charges and bench work are
+    // legitimate, but a location should be the deliberate exception.
+    if (showCompliance && !siteId && !unitId && !equipment.trim()) {
+      const ok = await confirm({
+        title: 'No site or equipment named',
+        message:
+          'This entry doesn’t say where the refrigerant went or came from. Audit records are much stronger with a site or equipment on them. Save it without one?',
+        confirmLabel: 'Save anyway',
+        cancelLabel: 'Go back',
+      })
+      if (!ok) return
+    }
     const signedAmountKg = kind === 'adjust' ? amountKg : Math.abs(amountKg)
     onSave({
       bottleId,
@@ -665,7 +679,7 @@ export function LogForm({
       <form
         onSubmit={(e) => {
           e.preventDefault()
-          doSave(false)
+          void doSave(false)
         }}
         className="space-y-3"
       >
@@ -1438,7 +1452,7 @@ export function LogForm({
           variant="secondary"
           full
           disabled={submitBlocked}
-          onClick={() => doSave(true)}
+          onClick={() => void doSave(true)}
         >
           {correcting ? 'Log correction & share' : 'Save & share'}
         </Button>

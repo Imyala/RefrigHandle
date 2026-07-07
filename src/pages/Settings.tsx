@@ -43,7 +43,12 @@ import {
   APP_VERSION,
   APP_COMMIT,
 } from '../lib/types'
-import { profileFor } from '../lib/compliance'
+import {
+  COMPLIANCE_DATASET,
+  complianceDataStale,
+  complianceVerifiedLabel,
+  profileFor,
+} from '../lib/compliance'
 import { formatDateTime, formatPlainDate } from '../lib/datetime'
 import { useToast } from '../lib/toast'
 import { useConfirm } from '../lib/confirm'
@@ -58,7 +63,14 @@ import {
   verifyAuditChains,
   type ChainReport,
 } from '../lib/auditChain'
-import { downloadBackup, downloadLogCsv, downloadRecordsZip, getLastBackupAt } from '../lib/backup'
+import {
+  downloadBackup,
+  downloadLogCsv,
+  downloadRecordsZip,
+  getLastBackupAt,
+  shareBackup,
+  shareLogCsv,
+} from '../lib/backup'
 import { importAttachments } from '../lib/attachments'
 import type { PickerOption } from '../components/Picker'
 
@@ -315,6 +327,42 @@ export default function Settings() {
     downloadLogCsv(state, exportFrom || undefined, exportTo || undefined)
   }
 
+  // Share hands the file to another app via the device share sheet —
+  // email straight to the auditor/bookkeeper, Drive, a Xero files
+  // inbox. Falls back to a plain download where sharing files isn't
+  // supported (most desktops), with a toast so the fallback isn't
+  // mistaken for a failed share.
+  async function shareJson() {
+    if (backupBusy) return
+    setBackupBusy('export')
+    try {
+      const out = await shareBackup(state)
+      if (out !== 'cancelled') setLastBackupAt(getLastBackupAt())
+      if (out === 'downloaded') {
+        toast.show('Sharing isn’t available here — saved the file instead.', 'success')
+      }
+    } catch {
+      toast.show('Could not share the backup file.', 'error')
+    } finally {
+      setBackupBusy(null)
+    }
+  }
+
+  async function shareCsv() {
+    try {
+      const out = await shareLogCsv(
+        state,
+        exportFrom || undefined,
+        exportTo || undefined,
+      )
+      if (out === 'downloaded') {
+        toast.show('Sharing isn’t available here — saved the file instead.', 'success')
+      }
+    } catch {
+      toast.show('Could not share the CSV file.', 'error')
+    }
+  }
+
   async function importJson(file: File) {
     let data: Record<string, unknown>
     try {
@@ -473,7 +521,9 @@ export default function Settings() {
         </div>
         <p className="mb-3 text-xs text-slate-500">
           CSV is the audit-friendly log. JSON is a full backup of all data
-          on this device.{' '}
+          on this device. <strong>Export</strong> saves the file here;{' '}
+          <strong>Share</strong> hands it to another app — email it straight
+          to your auditor or bookkeeper, or drop it in Drive.{' '}
           {lastBackupAt ? (
             <>
               Last full backup:{' '}
@@ -521,6 +571,20 @@ export default function Settings() {
             disabled={backupBusy !== null}
           >
             Export log CSV
+          </Button>
+          <Button
+            variant="secondary"
+            onClick={() => void shareJson()}
+            disabled={backupBusy !== null}
+          >
+            Share JSON…
+          </Button>
+          <Button
+            variant="secondary"
+            onClick={() => void shareCsv()}
+            disabled={backupBusy !== null}
+          >
+            Share CSV…
           </Button>
           <Button
             variant="secondary"
@@ -1222,12 +1286,25 @@ export default function Settings() {
         </Link>
       </div>
 
+      {/* Only rendered once the bundled ruleset is old enough that
+          "current" can't be assumed — visible staleness, never silent. */}
+      {complianceDataStale() && (
+        <div className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-100">
+          This app’s compliance ruleset was last verified on{' '}
+          {complianceVerifiedLabel()} — more than two quarters ago. Australian
+          requirements may have changed since; check for an app update.
+        </div>
+      )}
+
       {/* App version, injected at build time and bumped on every deploy
           (see APP_VERSION). Kept tiny and last so it's available for
-          support without drawing the eye. */}
+          support without drawing the eye. The compliance-dataset stamp
+          rides with it so anyone — the owner or an auditor — can see how
+          current the built-in Australian ruleset is. */}
       <p className="px-1 pt-1 text-center text-[10px] text-slate-300 dark:text-slate-600">
         App version {APP_VERSION}
-        {APP_COMMIT ? ` · ${APP_COMMIT}` : ''}
+        {APP_COMMIT ? ` · ${APP_COMMIT}` : ''} · Compliance ruleset v
+        {COMPLIANCE_DATASET.version} (verified {complianceVerifiedLabel()})
       </p>
 
       <TechnicianModal

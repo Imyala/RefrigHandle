@@ -21,6 +21,7 @@ import {
   type TransactionKind,
   BOTTLE_KIND_LABELS,
   REFRIGERANT_TYPES,
+  defaultRefrigerantType,
   fillingRatio,
   hydroStatusFor,
   isDuplicateActiveBottleNumber,
@@ -1092,7 +1093,8 @@ function BottleForm({
     bottle?.bottleKind ?? 'standard',
   )
   const [refrigerantType, setRefrigerantType] = useState(
-    bottle?.refrigerantType ?? types[0] ?? 'R410A',
+    bottle?.refrigerantType ??
+      defaultRefrigerantType(types, state.favoriteRefrigerants),
   )
   const [tareWeight, setTareWeight] = useState(initialDisplay(bottle?.tareWeight ?? 0))
   const [grossWeight, setGrossWeight] = useState(
@@ -1206,7 +1208,10 @@ function BottleForm({
     setLastResetKey(resetKey)
     setBottleNumber(bottle?.bottleNumber ?? '')
     setBottleKind(bottle?.bottleKind ?? 'standard')
-    setRefrigerantType(bottle?.refrigerantType ?? types[0] ?? 'R410A')
+    setRefrigerantType(
+      bottle?.refrigerantType ??
+        defaultRefrigerantType(types, state.favoriteRefrigerants),
+    )
     setTareWeight(initialDisplay(bottle?.tareWeight ?? 0))
     setGrossWeight(initialDisplay(bottle?.grossWeight ?? 0))
     setStatus(

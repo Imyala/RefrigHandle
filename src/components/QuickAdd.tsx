@@ -7,6 +7,7 @@ import { displayToKg } from '../lib/units'
 import {
   type Bottle,
   type Unit,
+  defaultRefrigerantType,
   isDuplicateActiveBottleNumber,
   isDuplicateBottleNumber,
 } from '../lib/types'
@@ -38,7 +39,9 @@ export function BottleQuickAdd({
   const { state } = useStore()
   const displayUnit = state.unit
   const [bottleNumber, setBottleNumber] = useState('')
-  const [refrigerantType, setRefrigerantType] = useState(types[0] ?? 'R410A')
+  const [refrigerantType, setRefrigerantType] = useState(
+    defaultRefrigerantType(types, state.favoriteRefrigerants),
+  )
   const [tare, setTare] = useState('')
   const [gross, setGross] = useState('')
 
@@ -46,7 +49,7 @@ export function BottleQuickAdd({
   if (open && !lastOpen) {
     setLastOpen(true)
     setBottleNumber('')
-    setRefrigerantType(types[0] ?? 'R410A')
+    setRefrigerantType(defaultRefrigerantType(types, state.favoriteRefrigerants))
     setTare('')
     setGross('')
   } else if (!open && lastOpen) {
