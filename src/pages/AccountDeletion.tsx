@@ -118,7 +118,7 @@ export default function AccountDeletion() {
               Before closing your account, export and securely retain your own
               copies of all records.
             </strong>{' '}
-            RefrigHandle should not be relied upon as your sole archive or
+            Refrigister should not be relied upon as your sole archive or
             backup system. A copy of your records (a full backup plus the
             audit-log CSV) downloaded to this device when you opened this page —
             save the file somewhere safe.
@@ -135,7 +135,7 @@ export default function AccountDeletion() {
           </p>
           <p>
             Closing the account erases the app's data <strong>from this
-            device</strong> a few minutes after closure. RefrigHandle holds no
+            device</strong> a few minutes after closure. Refrigister holds no
             server copy of your data. If your business enabled the optional
             self-hosted cloud sync, the synced copy lives in your own Supabase
             project — delete that row yourself (the sync notes show how), and
@@ -248,7 +248,7 @@ export default function AccountDeletion() {
             />
             <span>
               I confirm I have downloaded or backed up all my records, and
-              accept that once my account is closed RefrigHandle no longer
+              accept that once my account is closed Refrigister no longer
               holds, keeps, or is responsible for them, and is not responsible
               for my compliance with the laws above.
             </span>
@@ -260,7 +260,7 @@ export default function AccountDeletion() {
           </p>
         )}
         <p className="mt-3 border-t border-slate-200 pt-3 text-xs text-slate-500 dark:border-slate-800">
-          RefrigHandle is a record-keeping tool, not a record-keeping service
+          Refrigister is a record-keeping tool, not a record-keeping service
           or a provider of legal or compliance advice. Meeting your retention
           and reporting obligations is your responsibility — if you're unsure
           what applies to you, check with the ATO, the ARC, ASIC, or your own

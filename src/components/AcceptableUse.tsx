@@ -15,40 +15,40 @@ export function AcceptableUseContent() {
     <div className="space-y-4 text-sm text-slate-700 dark:text-slate-300">
       <p className="text-xs text-slate-500">Effective date: {EFFECTIVE_DATE}</p>
       <p>
-        This Acceptable Use Policy (“Policy”) forms part of the RefrigHandle
+        This Acceptable Use Policy (“Policy”) forms part of the Refrigister
         Terms of Use and applies to all Account Owners and Authorised Users.
       </p>
       <p>
-        By accessing or using RefrigHandle, you agree to comply with this
+        By accessing or using Refrigister, you agree to comply with this
         Policy.
       </p>
 
       <Section title="1. Purpose">
         <p>
-          RefrigHandle is intended to assist businesses in recording and
+          Refrigister is intended to assist businesses in recording and
           managing refrigerant-related information.
         </p>
         <p>
           This Policy exists to protect the security, reliability and integrity
-          of the Services and to ensure that all users can use RefrigHandle
+          of the Services and to ensure that all users can use Refrigister
           safely and lawfully.
         </p>
       </Section>
 
       <Section title="2. Lawful use">
-        <p>You may only use RefrigHandle for lawful purposes.</p>
+        <p>You may only use Refrigister for lawful purposes.</p>
         <p>
           You must comply with all applicable laws, regulations and industry
           requirements relevant to your activities.
         </p>
-        <p>RefrigHandle does not authorise or permit unlawful conduct.</p>
+        <p>Refrigister does not authorise or permit unlawful conduct.</p>
       </Section>
 
       <Section title="3. Prohibited activities">
         <p>You must not:</p>
         <Bullets
           items={[
-            'use RefrigHandle for illegal purposes;',
+            'use Refrigister for illegal purposes;',
             'provide false or misleading information;',
             'impersonate another person or organisation;',
             'attempt to gain unauthorised access to accounts, systems or data;',
@@ -57,7 +57,7 @@ export function AcceptableUseContent() {
             'conduct denial-of-service attacks or similar activities;',
             'use automated tools to scrape or extract information without permission;',
             'reverse engineer, decompile or attempt to discover source code except where permitted by law;',
-            'use the Services in a manner likely to damage RefrigHandle or other users.',
+            'use the Services in a manner likely to damage Refrigister or other users.',
           ]}
         />
       </Section>
@@ -84,7 +84,7 @@ export function AcceptableUseContent() {
             'access information belonging to another Account Owner without authorisation;',
             'attempt to bypass security restrictions;',
             'copy or distribute data that they are not entitled to access;',
-            'use information obtained through RefrigHandle for unlawful purposes.',
+            'use information obtained through Refrigister for unlawful purposes.',
           ]}
         />
       </Section>
@@ -93,10 +93,10 @@ export function AcceptableUseContent() {
         <p>Users must not:</p>
         <Bullets
           items={[
-            'copy or reproduce RefrigHandle software;',
+            'copy or reproduce Refrigister software;',
             'remove copyright notices;',
-            'use RefrigHandle branding without permission;',
-            'create competing products using RefrigHandle software or content.',
+            'use Refrigister branding without permission;',
+            'create competing products using Refrigister software or content.',
           ]}
         />
         <p>
@@ -106,7 +106,7 @@ export function AcceptableUseContent() {
       </Section>
 
       <Section title="7. Age restrictions">
-        <p>All users of RefrigHandle must be at least 18 years of age.</p>
+        <p>All users of Refrigister must be at least 18 years of age.</p>
         <p>
           The Account Owner is responsible for ensuring compliance with this
           requirement.
@@ -130,7 +130,7 @@ export function AcceptableUseContent() {
       </Section>
 
       <Section title="9. Fair usage">
-        <p>RefrigHandle is intended for ordinary and reasonable business use.</p>
+        <p>Refrigister is intended for ordinary and reasonable business use.</p>
         <p>
           Users must not use the Services in a manner that unreasonably consumes
           system resources, negatively affects other users, or places excessive
@@ -143,11 +143,11 @@ export function AcceptableUseContent() {
             'excessive uploads unrelated to the purpose of the Services;',
             'automated or abusive activity;',
             'attempts to bypass subscription limits;',
-            'using RefrigHandle for purposes unrelated to refrigerant management and associated business operations.',
+            'using Refrigister for purposes unrelated to refrigerant management and associated business operations.',
           ]}
         />
         <p>
-          RefrigHandle may impose reasonable usage limits, restrict
+          Refrigister may impose reasonable usage limits, restrict
           functionality or require users to upgrade to an appropriate
           subscription plan where necessary to maintain the stability and
           performance of the Services.
@@ -155,8 +155,8 @@ export function AcceptableUseContent() {
       </Section>
 
       <Section title="10. Monitoring and enforcement">
-        <p>RefrigHandle may investigate suspected breaches of this Policy.</p>
-        <p>Where reasonably necessary, RefrigHandle may:</p>
+        <p>Refrigister may investigate suspected breaches of this Policy.</p>
+        <p>Where reasonably necessary, Refrigister may:</p>
         <Bullets
           items={[
             'suspend access;',
@@ -167,35 +167,35 @@ export function AcceptableUseContent() {
           ]}
         />
         <p>
-          RefrigHandle is not required to provide advance notice where immediate
+          Refrigister is not required to provide advance notice where immediate
           action is necessary to protect the Services or other users.
         </p>
       </Section>
 
       <Section title="11. Licence information">
         <p>
-          RefrigHandle does not verify Refrigerant Handling Licence numbers or
+          Refrigister does not verify Refrigerant Handling Licence numbers or
           the identity of users. Users and businesses are solely responsible for
           ensuring that all licence information entered into the platform is
           accurate, current, and compliant with applicable laws and regulations.
-          RefrigHandle relies on information provided by users and makes no
+          Refrigister relies on information provided by users and makes no
           representation regarding the validity of any licence.
         </p>
       </Section>
 
       <Section title="12. Changes to this Policy">
-        <p>RefrigHandle may amend this Policy from time to time.</p>
+        <p>Refrigister may amend this Policy from time to time.</p>
         <p>
           Updated versions become effective when published through the
-          RefrigHandle website or application. Continued use of the Services
+          Refrigister website or application. Continued use of the Services
           constitutes acceptance of the revised Policy.
         </p>
       </Section>
 
       <Section title="13. Contact information">
-        <p>RefrigHandle</p>
+        <p>Refrigister</p>
         <p>
-          For questions about this Policy, contact us at legal@refrighandle.com.
+          For questions about this Policy, contact us at legal@refrigister.com.
         </p>
       </Section>
     </div>

@@ -15,20 +15,20 @@ export function PrivacyContent() {
     <div className="space-y-4 text-sm text-slate-700 dark:text-slate-300">
       <p className="text-xs text-slate-500">Effective date: {EFFECTIVE_DATE}</p>
       <p>
-        This Privacy Policy explains how RefrigHandle collects, uses, stores and
-        protects information when providing the RefrigHandle platform and
+        This Privacy Policy explains how Refrigister collects, uses, stores and
+        protects information when providing the Refrigister platform and
         related services.
       </p>
       <p>
-        By using RefrigHandle, you acknowledge that information may be collected
+        By using Refrigister, you acknowledge that information may be collected
         and processed in accordance with this Privacy Policy.
       </p>
 
       <Section title="1. Introduction">
         <p>
-          RefrigHandle is committed to protecting privacy and handling
+          Refrigister is committed to protecting privacy and handling
           information responsibly. This Privacy Policy applies to all users of
-          RefrigHandle, including Account Owners and Authorised Users.
+          Refrigister, including Account Owners and Authorised Users.
         </p>
       </Section>
 
@@ -36,7 +36,7 @@ export function PrivacyContent() {
         <p>
           <strong>Account Owner</strong> means the business, company, sole
           trader, partnership, trust, government entity or other organisation
-          that has registered for RefrigHandle.
+          that has registered for Refrigister.
         </p>
         <p>
           <strong>Authorised User</strong> means an employee, contractor or
@@ -44,7 +44,7 @@ export function PrivacyContent() {
         </p>
         <p>
           <strong>Business Data</strong> means information entered into
-          RefrigHandle, including customer records, site records, refrigerant
+          Refrigister, including customer records, site records, refrigerant
           records, cylinder records, audit logs, technician information, notes
           and attachments.
         </p>
@@ -56,11 +56,11 @@ export function PrivacyContent() {
 
       <Section title="3. Information the app holds — and where it lives">
         <p>
-          RefrigHandle is an offline-first application.{' '}
+          Refrigister is an offline-first application.{' '}
           <strong>
             Everything you enter is stored on your own device
           </strong>{' '}
-          (in your browser's local storage) — RefrigHandle does not operate
+          (in your browser's local storage) — Refrigister does not operate
           server accounts and does not receive, see, or hold a copy of your
           data.
         </p>
@@ -77,10 +77,10 @@ export function PrivacyContent() {
         <SubHead>What leaves your device</SubHead>
         <Bullets
           items={[
-            'Nothing, by default. There are no analytics, no tracking, no advertising identifiers, and RefrigHandle does not collect your IP address, email, phone number or billing details — the app has no billing today.',
+            'Nothing, by default. There are no analytics, no tracking, no advertising identifiers, and Refrigister does not collect your IP address, email, phone number or billing details — the app has no billing today.',
             'Optional cloud sync (off by default): if your business sets up its own Supabase project and turns sync on, your Business Data (excluding photos and signatures) is uploaded to THAT project — infrastructure your business chooses and controls, in the region it picks. See the in-app sync notes for the security model.',
             'Password screening: when you set a profile password, the first 5 characters of a one-way hash (SHA-1 prefix) are sent to the Have I Been Pwned breach-checking service to warn you if the password is known-breached. The password itself, and never anything identifying you, cannot be derived from this prefix (k-anonymity). If you are offline the check is skipped.',
-            'Standard web hosting: like any website, the server that delivers the app (e.g. GitHub Pages) may keep ordinary access logs (IP address, browser type) under its own privacy policy. RefrigHandle does not receive these.',
+            'Standard web hosting: like any website, the server that delivers the app (e.g. GitHub Pages) may keep ordinary access logs (IP address, browser type) under its own privacy policy. Refrigister does not receive these.',
           ]}
         />
       </Section>
@@ -100,7 +100,7 @@ export function PrivacyContent() {
       <Section title="5. Business Data ownership">
         <p>Business Data remains the property of the Account Owner.</p>
         <p>
-          Authorised Users acknowledge that information entered into RefrigHandle
+          Authorised Users acknowledge that information entered into Refrigister
           is entered on behalf of the Account Owner.
         </p>
         <p>
@@ -133,19 +133,19 @@ export function PrivacyContent() {
         <Bullets
           items={[
             'Have I Been Pwned — anonymous breached-password screening when you set a profile password;',
-            'Supabase — only if your business sets up and enables its own sync project; the project belongs to your business, not to RefrigHandle.',
+            'Supabase — only if your business sets up and enables its own sync project; the project belongs to your business, not to Refrigister.',
           ]}
         />
         <p>
-          RefrigHandle uses no analytics, advertising, email delivery or
+          Refrigister uses no analytics, advertising, email delivery or
           payment providers.
         </p>
       </Section>
 
       <Section title="8. Disclosure of information">
         <p>
-          RefrigHandle does not sell personal information — and because your
-          data lives on your devices (or in your own sync project), RefrigHandle
+          Refrigister does not sell personal information — and because your
+          data lives on your devices (or in your own sync project), Refrigister
           is not in a position to disclose it. Disclosure of Business Data is
           controlled by the Account Owner: who they hand a device to, who they
           share a Team ID with, and who they send exports to.
@@ -154,7 +154,7 @@ export function PrivacyContent() {
 
       <Section title="9. Overseas processing">
         <p>
-          By default, no information is processed overseas by RefrigHandle. If
+          By default, no information is processed overseas by Refrigister. If
           your business enables the optional sync, your data is stored in the
           Supabase region your business selected when it created its project —
           choose an Australian region if your obligations require onshore
@@ -178,7 +178,7 @@ export function PrivacyContent() {
         <p>
           The Account Owner remains responsible for retaining records for the
           periods required by applicable laws and regulations and should not
-          rely solely on RefrigHandle as a long-term archival service.
+          rely solely on Refrigister as a long-term archival service.
         </p>
       </Section>
 
@@ -192,18 +192,18 @@ export function PrivacyContent() {
         <Bullets
           items={[
             'Export and securely retain copies of all records before closing — the erase is immediate on that device;',
-            'if your business used the optional self-hosted sync, also delete the row in your own Supabase project (the in-app sync notes show the one-line SQL) — RefrigHandle has no access to it and cannot delete it for you;',
-            'RefrigHandle retains nothing after closure, because it held nothing: there is no server-side account to delete.',
+            'if your business used the optional self-hosted sync, also delete the row in your own Supabase project (the in-app sync notes show the one-line SQL) — Refrigister has no access to it and cannot delete it for you;',
+            'Refrigister retains nothing after closure, because it held nothing: there is no server-side account to delete.',
           ]}
         />
       </Section>
 
       <Section title="12. Cookies and analytics">
         <p>
-          RefrigHandle uses <strong>no cookies and no analytics</strong>. The
+          Refrigister uses <strong>no cookies and no analytics</strong>. The
           browser's local storage is used solely to keep your own records and
           settings on your device — nothing in it is read by, or transmitted
-          to, RefrigHandle or any third party.
+          to, Refrigister or any third party.
         </p>
       </Section>
 
@@ -212,7 +212,7 @@ export function PrivacyContent() {
           Your information is on your device, so you can access and correct it
           directly in the app at any time (corrections to compliance records
           are made as append-only re-statements, preserving the original for
-          audit). RefrigHandle itself holds no Personal Information about you
+          audit). Refrigister itself holds no Personal Information about you
           to produce or correct; for questions, contact us at the address in
           section 18.
         </p>
@@ -220,16 +220,16 @@ export function PrivacyContent() {
 
       <Section title="14. Age restrictions">
         <p>
-          RefrigHandle is intended for use by businesses and organisations and is
+          Refrigister is intended for use by businesses and organisations and is
           not directed toward persons under 18 years of age. All users of
-          RefrigHandle, including Authorised Users, must be at least 18 years of
+          Refrigister, including Authorised Users, must be at least 18 years of
           age.
         </p>
         <p>
-          RefrigHandle does not knowingly collect personal information from
-          persons under 18 years of age. If RefrigHandle becomes aware that
+          Refrigister does not knowingly collect personal information from
+          persons under 18 years of age. If Refrigister becomes aware that
           information relating to a person under 18 years of age has been
-          collected, RefrigHandle may suspend access, remove the information, or
+          collected, Refrigister may suspend access, remove the information, or
           take any other action considered appropriate.
         </p>
         <p>
@@ -239,9 +239,9 @@ export function PrivacyContent() {
       </Section>
 
       <Section title="15. Regulatory status">
-        <p>RefrigHandle is an independent software platform.</p>
+        <p>Refrigister is an independent software platform.</p>
         <p>
-          Unless expressly stated otherwise, RefrigHandle is not operated by,
+          Unless expressly stated otherwise, Refrigister is not operated by,
           endorsed by, or acting on behalf of the Australian Refrigeration
           Council (ARC), ARCtick, the Australian Taxation Office (ATO), ASIC, or
           any government authority.
@@ -254,11 +254,11 @@ export function PrivacyContent() {
 
       <Section title="16. Licence information">
         <p>
-          RefrigHandle does not verify Refrigerant Handling Licence numbers or
+          Refrigister does not verify Refrigerant Handling Licence numbers or
           the identity of users. Users and businesses are solely responsible for
           ensuring that all licence information entered into the platform is
           accurate, current, and compliant with applicable laws and regulations.
-          RefrigHandle relies on information provided by users and makes no
+          Refrigister relies on information provided by users and makes no
           representation regarding the validity of any licence.
         </p>
       </Section>
@@ -266,7 +266,7 @@ export function PrivacyContent() {
       <Section title="17. Changes to this Privacy Policy">
         <p>This Privacy Policy may be updated from time to time.</p>
         <p>
-          The latest version will be made available through the RefrigHandle
+          The latest version will be made available through the Refrigister
           website or application. Continued use of the Services after publication
           of an updated Privacy Policy constitutes acceptance of the revised
           Privacy Policy.
@@ -274,10 +274,10 @@ export function PrivacyContent() {
       </Section>
 
       <Section title="18. Contact information">
-        <p>RefrigHandle</p>
+        <p>Refrigister</p>
         <p>
           For privacy enquiries, or to request access to or correction of your
-          information, contact us at legal@refrighandle.com.
+          information, contact us at legal@refrigister.com.
         </p>
       </Section>
     </div>

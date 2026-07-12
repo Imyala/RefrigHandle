@@ -71,7 +71,7 @@ export function buildReminderEvents(
       t.licenceExpiry,
       LICENCE_WARN_DAYS,
       `Renew refrigerant handling licence — ${t.name}`,
-      'ARC Refrigerant Handling Licence renewal. Update the expiry in RefrigHandle once renewed.',
+      'ARC Refrigerant Handling Licence renewal. Update the expiry in Refrigister once renewed.',
     )
   }
 
@@ -82,7 +82,7 @@ export function buildReminderEvents(
       state.arcAuthorisationExpiry,
       LICENCE_WARN_DAYS,
       `Renew Refrigerant Trading Authorisation${state.businessName ? ` — ${state.businessName}` : ''}`,
-      'ARC RTA renewal. Update the expiry in RefrigHandle once renewed.',
+      'ARC RTA renewal. Update the expiry in Refrigister once renewed.',
     )
   }
 
@@ -94,7 +94,7 @@ export function buildReminderEvents(
       b.nextHydroTestDate,
       CYLINDER_WARN_DAYS,
       `Cylinder test due (AS 2030) — ${b.bottleNumber}`,
-      'Send the cylinder for its periodic test, or record the new stamp in RefrigHandle.',
+      'Send the cylinder for its periodic test, or record the new stamp in Refrigister.',
     )
   }
 
@@ -120,7 +120,7 @@ export function buildReminderEvents(
       date: addDays(end, -QUARTER_WARN_DAYS),
       summary: `ARC quarterly record — ${quarterLabel(q)} closes ${end.split('-').reverse().join('/')}`,
       description:
-        'Check the quarter in RefrigHandle: leak-test answers complete, cylinders accounted for, then print or share the quarterly record.',
+        'Check the quarter in Refrigister: leak-test answers complete, cylinders accounted for, then print or share the quarterly record.',
     })
   }
 
@@ -144,10 +144,10 @@ export function buildReminderIcs(
   const lines = [
     'BEGIN:VCALENDAR',
     'VERSION:2.0',
-    'PRODID:-//RefrigHandle//Reminders//EN',
+    'PRODID:-//Refrigister//Reminders//EN',
     'CALSCALE:GREGORIAN',
     'METHOD:PUBLISH',
-    'X-WR-CALNAME:RefrigHandle reminders',
+    'X-WR-CALNAME:Refrigister reminders',
   ]
   for (const e of events) {
     lines.push(
@@ -176,8 +176,8 @@ export async function shareReminderCalendar(
   const ics = buildReminderIcs(events, new Date().toISOString())
   const outcome = await shareOrDownload(
     new Blob([ics], { type: 'text/calendar' }),
-    'refrighandle-reminders.ics',
-    'RefrigHandle reminders',
+    'refrigister-reminders.ics',
+    'Refrigister reminders',
   )
   return { outcome, count: events.length }
 }

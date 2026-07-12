@@ -15,25 +15,25 @@ export function DisclaimerContent() {
     <div className="space-y-4 text-sm text-slate-700 dark:text-slate-300">
       <p className="text-xs text-slate-500">Effective date: {EFFECTIVE_DATE}</p>
       <p>
-        This Disclaimer applies to the RefrigHandle website, applications, tools,
+        This Disclaimer applies to the Refrigister website, applications, tools,
         calculators, reports, articles and all other content made available by
-        RefrigHandle.
+        Refrigister.
       </p>
 
       <Section title="1. Purpose">
         <p>
-          The information provided by RefrigHandle is intended for general
+          The information provided by Refrigister is intended for general
           informational and educational purposes only.
         </p>
         <p>
           While reasonable efforts are made to maintain accurate and up-to-date
-          information, RefrigHandle does not guarantee the completeness, accuracy
+          information, Refrigister does not guarantee the completeness, accuracy
           or suitability of any information provided.
         </p>
       </Section>
 
       <Section title="2. No professional advice">
-        <p>Information provided by RefrigHandle does not constitute:</p>
+        <p>Information provided by Refrigister does not constitute:</p>
         <Bullets
           items={[
             'legal advice;',
@@ -64,7 +64,7 @@ export function DisclaimerContent() {
           ]}
         />
         <p>
-          RefrigHandle does not assume responsibility for decisions made by users.
+          Refrigister does not assume responsibility for decisions made by users.
         </p>
       </Section>
 
@@ -91,7 +91,7 @@ export function DisclaimerContent() {
           bodies are provided for informational purposes only.
         </p>
         <p>
-          RefrigHandle does not guarantee that such information is current,
+          Refrigister does not guarantee that such information is current,
           complete or applicable to every circumstance.
         </p>
         <p>
@@ -102,7 +102,7 @@ export function DisclaimerContent() {
 
       <Section title="6. No association with regulatory authorities">
         <p>
-          Unless expressly stated otherwise, RefrigHandle is an independent
+          Unless expressly stated otherwise, Refrigister is an independent
           software platform and is not operated by, endorsed by, or acting on
           behalf of:
         </p>
@@ -123,7 +123,7 @@ export function DisclaimerContent() {
           provided as tools to assist users.
         </p>
         <p>
-          RefrigHandle does not guarantee that calculations or generated
+          Refrigister does not guarantee that calculations or generated
           information will be free from error.
         </p>
         <p>
@@ -142,25 +142,25 @@ export function DisclaimerContent() {
           before use.
         </p>
         <p>
-          RefrigHandle accepts no responsibility for decisions made solely on the
+          Refrigister accepts no responsibility for decisions made solely on the
           basis of AI-generated information.
         </p>
       </Section>
 
       <Section title="9. External links">
         <p>
-          The RefrigHandle website or Services may contain links to third-party
+          The Refrigister website or Services may contain links to third-party
           websites.
         </p>
         <p>
-          RefrigHandle does not control and is not responsible for the content,
+          Refrigister does not control and is not responsible for the content,
           accuracy or practices of third-party websites.
         </p>
       </Section>
 
       <Section title="10. Limitation of liability">
         <p>
-          To the maximum extent permitted by law, RefrigHandle excludes liability
+          To the maximum extent permitted by law, Refrigister excludes liability
           for any loss, damage or expense arising from reliance on information
           provided through the Services.
         </p>
@@ -171,7 +171,7 @@ export function DisclaimerContent() {
       </Section>
 
       <Section title="11. Changes to this Disclaimer">
-        <p>RefrigHandle may amend this Disclaimer from time to time.</p>
+        <p>Refrigister may amend this Disclaimer from time to time.</p>
         <p>
           Updated versions become effective when published through the website or
           application. Continued use of the Services constitutes acceptance of the
@@ -180,10 +180,10 @@ export function DisclaimerContent() {
       </Section>
 
       <Section title="12. Contact information">
-        <p>RefrigHandle</p>
+        <p>Refrigister</p>
         <p>
           For questions about this Disclaimer, contact us at
-          legal@refrighandle.com.
+          legal@refrigister.com.
         </p>
       </Section>
     </div>

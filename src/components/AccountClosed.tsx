@@ -71,7 +71,7 @@ function AccountClosedScreen({ closure }: { closure: AccountClosure }) {
 
   function emailRequest() {
     window.location.href = `mailto:?subject=${encodeURIComponent(
-      `Account closure — ${closure.businessName || 'RefrigHandle'}`,
+      `Account closure — ${closure.businessName || 'Refrigister'}`,
     )}&body=${encodeURIComponent(requestText)}`
   }
 
@@ -80,7 +80,7 @@ function AccountClosedScreen({ closure }: { closure: AccountClosure }) {
       <div className="w-full max-w-md space-y-4">
         <div className="text-center">
           <h1 className="text-xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
-            Refrigerant Handling
+            Refrigister
           </h1>
           <p className="mt-0.5 text-[11px] font-medium uppercase tracking-[0.18em] text-red-600 dark:text-red-400">
             Account closed
@@ -92,7 +92,7 @@ function AccountClosedScreen({ closure }: { closure: AccountClosure }) {
             Your account was closed on <strong>{stamp}</strong>.
           </p>
           <p className="mt-3 text-sm text-slate-700 dark:text-slate-300">
-            To use RefrigHandle again, set the app up fresh — and restore the
+            To use Refrigister again, set the app up fresh — and restore the
             backup that downloaded at closure to bring your records back.
           </p>
           <p className="mt-3 text-xs text-slate-500 dark:text-slate-400">

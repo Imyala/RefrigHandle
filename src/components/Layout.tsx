@@ -69,7 +69,7 @@ export function Layout() {
       >
         <div className="mx-auto flex max-w-3xl flex-col items-center text-center">
           <h1 className="text-xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
-            Refrigerant Handling
+            Refrigister
           </h1>
           <p className="mt-0.5 text-[11px] font-medium uppercase tracking-[0.18em] text-brand-600 dark:text-brand-400">
             Tracking &amp; audit log

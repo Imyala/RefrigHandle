@@ -926,7 +926,7 @@ export interface Technician {
   licenceExpiry?: string
   // When the licence self-declaration was made at account creation — the
   // creator confirmed a current RHL appropriate for the work and that the
-  // details are accurate. RefrigHandle does not verify licences (see the
+  // details are accurate. Refrigister does not verify licences (see the
   // Terms). Optional: profiles created before this requirement lack it.
   licenceDeclaredAt?: string
   // Optional soft lock for switching the active profile on a shared

@@ -139,7 +139,7 @@ export function InstallAppButton({ variant = 'compact' }: InstallAppButtonProps)
           <>
             <p className="text-sm text-slate-600 dark:text-slate-300">
               iOS Safari doesn't show an install prompt, but you can still
-              add Refrigerant Handling to your home screen so it works
+              add Refrigister to your home screen so it works
               fully offline.
             </p>
             <ol className="mt-3 space-y-2 text-sm text-slate-700 dark:text-slate-200">
@@ -176,7 +176,7 @@ export function InstallAppButton({ variant = 'compact' }: InstallAppButtonProps)
           <>
             <p className="text-sm text-slate-600 dark:text-slate-300">
               Your browser hasn't surfaced the install dialog yet. You
-              can still install Refrigerant Handling manually so it
+              can still install Refrigister manually so it
               opens like a normal app and works offline.
             </p>
             <ol className="mt-3 space-y-2 text-sm text-slate-700 dark:text-slate-200">

@@ -70,7 +70,7 @@ export function StorageHealthCard() {
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `refrighandle-damaged-${b.savedAt.slice(0, 19).replace(/[:T]/g, '-')}.json`
+    a.download = `refrigister-damaged-${b.savedAt.slice(0, 19).replace(/[:T]/g, '-')}.json`
     a.click()
     URL.revokeObjectURL(url)
   }

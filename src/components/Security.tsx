@@ -15,25 +15,25 @@ export function SecurityContent() {
     <div className="space-y-4 text-sm text-slate-700 dark:text-slate-300">
       <p className="text-xs text-slate-500">Effective date: {EFFECTIVE_DATE}</p>
       <p>
-        This Security Policy explains RefrigHandle’s approach to protecting
+        This Security Policy explains Refrigister’s approach to protecting
         information and sets out the process for reporting potential security
         vulnerabilities.
       </p>
 
       <Section title="1. Purpose">
         <p>
-          RefrigHandle recognises the importance of protecting Business Data and
+          Refrigister recognises the importance of protecting Business Data and
           maintaining the security, integrity and availability of the Services.
         </p>
         <p>
-          While no system can guarantee absolute security, RefrigHandle seeks to
+          While no system can guarantee absolute security, Refrigister seeks to
           implement reasonable administrative, technical and operational
           safeguards.
         </p>
       </Section>
 
       <Section title="2. Security measures">
-        <p>RefrigHandle may implement security measures including:</p>
+        <p>Refrigister may implement security measures including:</p>
         <Bullets
           items={[
             'user authentication controls;',
@@ -50,7 +50,7 @@ export function SecurityContent() {
 
       <Section title="3. Shared responsibility">
         <p>
-          Security is a shared responsibility between RefrigHandle and the Account
+          Security is a shared responsibility between Refrigister and the Account
           Owner.
         </p>
         <p>The Account Owner is responsible for:</p>
@@ -64,14 +64,14 @@ export function SecurityContent() {
           ]}
         />
         <p>
-          RefrigHandle is not responsible for security incidents caused by actions
+          Refrigister is not responsible for security incidents caused by actions
           or omissions of the Account Owner or Authorised Users.
         </p>
       </Section>
 
       <Section title="4. No guarantee of security">
         <p>
-          Although reasonable efforts are made to protect information, RefrigHandle
+          Although reasonable efforts are made to protect information, Refrigister
           cannot guarantee that the Services will be free from:
         </p>
         <Bullets
@@ -90,8 +90,8 @@ export function SecurityContent() {
 
       <Section title="5. Security incidents">
         <p>
-          Where RefrigHandle becomes aware of a significant security incident
-          affecting the Services, RefrigHandle may:
+          Where Refrigister becomes aware of a significant security incident
+          affecting the Services, Refrigister may:
         </p>
         <Bullets
           items={[
@@ -103,13 +103,13 @@ export function SecurityContent() {
         />
         <p>
           The timing and content of any notifications will be determined by
-          RefrigHandle based on the circumstances of the incident.
+          Refrigister based on the circumstances of the incident.
         </p>
       </Section>
 
       <Section title="6. Responsible disclosure">
         <p>
-          If a person discovers a suspected vulnerability affecting RefrigHandle,
+          If a person discovers a suspected vulnerability affecting Refrigister,
           they are encouraged to report it responsibly.
         </p>
         <p>
@@ -126,7 +126,7 @@ export function SecurityContent() {
             'disrupting the Services;',
             'conducting denial-of-service attacks;',
             'exploiting vulnerabilities for personal gain;',
-            'publicly disclosing vulnerabilities before RefrigHandle has had a reasonable opportunity to investigate.',
+            'publicly disclosing vulnerabilities before Refrigister has had a reasonable opportunity to investigate.',
           ]}
         />
         <p>Any unauthorised activity may result in legal action.</p>
@@ -134,29 +134,29 @@ export function SecurityContent() {
 
       <Section title="8. Third-party services">
         <p>
-          RefrigHandle relies on third-party providers for certain aspects of the
+          Refrigister relies on third-party providers for certain aspects of the
           Services.
         </p>
         <p>
-          RefrigHandle is not responsible for vulnerabilities or incidents arising
+          Refrigister is not responsible for vulnerabilities or incidents arising
           solely from third-party systems outside its reasonable control.
         </p>
       </Section>
 
       <Section title="9. Changes to this Policy">
-        <p>RefrigHandle may amend this Policy from time to time.</p>
+        <p>Refrigister may amend this Policy from time to time.</p>
         <p>
           Updated versions become effective when published through the
-          RefrigHandle website or application. Continued use of the Services
+          Refrigister website or application. Continued use of the Services
           constitutes acceptance of the revised Policy.
         </p>
       </Section>
 
       <Section title="10. Contact information">
-        <p>RefrigHandle</p>
+        <p>Refrigister</p>
         <p>
           To report a suspected security vulnerability, contact us at
-          legal@refrighandle.com.
+          legal@refrigister.com.
         </p>
       </Section>
     </div>

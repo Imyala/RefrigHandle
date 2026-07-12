@@ -55,7 +55,7 @@ function SignInScreen({ profiles }: { profiles: Technician[] }) {
       <div className="w-full max-w-md space-y-4">
         <div className="text-center">
           <h1 className="text-xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
-            {state.businessName || 'Refrigerant Handling'}
+            {state.businessName || 'Refrigister'}
           </h1>
           <p className="mt-0.5 text-[11px] font-medium uppercase tracking-[0.18em] text-brand-600 dark:text-brand-400">
             Sign in

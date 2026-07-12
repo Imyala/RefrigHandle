@@ -36,7 +36,7 @@ const COMMON_PASSWORDS: ReadonlySet<string> = new Set(
     'changeme', 'change', 'default', 'test', 'test123', 'temp',
     'aaaaaa', 'abcdef', 'abcd1234', 'abc12345', 'pass', 'pass123',
     'money', 'access', 'summer', 'winter', 'spring', 'autumn',
-    'refrigerant', 'refrighandle',
+    'refrigerant', 'refrighandle', 'refrigister',
   ].map((p) => p.toLowerCase()),
 )
 

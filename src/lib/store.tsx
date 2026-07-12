@@ -2144,7 +2144,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           entity: 'settings',
           entityId: tech.id,
           target: 'Policy acceptance',
-          summary: `Accepted the Terms of Use, Privacy Policy, Acceptable Use Policy, Billing & Refund Policy and all other RefrigHandle policies (version ${TERMS_VERSION})`,
+          summary: `Accepted the Terms of Use, Privacy Policy, Acceptable Use Policy, Billing & Refund Policy and all other Refrigister policies (version ${TERMS_VERSION})`,
         }),
         mk({
           action: 'create',
@@ -2338,7 +2338,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         action: 'settings',
         entity: 'settings',
         target: 'Policy acceptance',
-        summary: `Re-accepted the RefrigHandle policies (version ${TERMS_VERSION})`,
+        summary: `Re-accepted the Refrigister policies (version ${TERMS_VERSION})`,
       }),
     }))
   }, [])

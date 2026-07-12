@@ -137,7 +137,7 @@ export async function downloadBackup(state: AppState): Promise<void> {
   const json = await buildBackupJson(state)
   triggerDownload(
     new Blob([json], { type: 'application/json' }),
-    `refrighandle-${new Date().toISOString().slice(0, 10)}.json`,
+    `refrigister-${new Date().toISOString().slice(0, 10)}.json`,
   )
   markBackedUp()
 }
@@ -149,8 +149,8 @@ export async function shareBackup(state: AppState): Promise<ShareOutcome> {
   const json = await buildBackupJson(state)
   const out = await shareOrDownload(
     new Blob([json], { type: 'application/json' }),
-    `refrighandle-${new Date().toISOString().slice(0, 10)}.json`,
-    'RefrigHandle full backup',
+    `refrigister-${new Date().toISOString().slice(0, 10)}.json`,
+    'Refrigister full backup',
   )
   if (out !== 'cancelled') markBackedUp()
   return out
@@ -164,10 +164,10 @@ export async function downloadRecordsZip(state: AppState): Promise<void> {
   const json = await buildBackupJson(state)
   const csv = CSV_BOM + buildLogCsv(state)
   const zip = createZip([
-    { name: `refrighandle-backup-${stamp}.json`, data: json },
-    { name: `refrighandle-log-${stamp}.csv`, data: csv },
+    { name: `refrigister-backup-${stamp}.json`, data: json },
+    { name: `refrigister-log-${stamp}.csv`, data: csv },
   ])
-  triggerDownload(zip, `refrighandle-records-${stamp}.zip`)
+  triggerDownload(zip, `refrigister-records-${stamp}.zip`)
   markBackedUp()
 }
 
@@ -249,7 +249,7 @@ export async function buildAuditPackZip(
 
   const report = await verifyAuditChains(state.auditLog, getRecordedHead())
   const verification = [
-    'REFRIGHANDLE AUDIT PACK — VERIFICATION STATEMENT',
+    'REFRIGISTER AUDIT PACK — VERIFICATION STATEMENT',
     '='.repeat(60),
     '',
     `Business:        ${state.businessName || '(not set)'}`,
@@ -281,7 +281,7 @@ export async function buildAuditPackZip(
     '',
     'Deleted log entries are never erased: they appear in the CSV under',
     'DELETED TRANSACTIONS with who/when/why, and in the JSON backup.',
-    `Exported from RefrigHandle on ${stamp}.`,
+    `Exported from Refrigister on ${stamp}.`,
   ].join('\n')
   entries.push({ name: 'VERIFICATION.txt', data: verification })
 
@@ -298,8 +298,8 @@ export async function shareAuditPackZip(
   const zip = await buildAuditPackZip(state, opts)
   const out = await shareOrDownload(
     zip,
-    `refrighandle-audit-pack-${new Date().toISOString().slice(0, 10)}.zip`,
-    `RefrigHandle audit pack — ${opts.periodLabel}`,
+    `refrigister-audit-pack-${new Date().toISOString().slice(0, 10)}.zip`,
+    `Refrigister audit pack — ${opts.periodLabel}`,
   )
   if (out !== 'cancelled') markBackedUp()
   return out
@@ -471,7 +471,7 @@ export function buildLogCsv(
 
 function csvFilename(from?: string, to?: string): string {
   const range = from || to ? `-${from || 'start'}-to-${to || 'now'}` : ''
-  return `refrighandle-log${range}-${new Date().toISOString().slice(0, 10)}.csv`
+  return `refrigister-log${range}-${new Date().toISOString().slice(0, 10)}.csv`
 }
 
 export function downloadLogCsv(state: AppState, from?: string, to?: string): void {
@@ -493,7 +493,7 @@ export async function shareLogCsv(
   return shareOrDownload(
     new Blob([CSV_BOM + csv], { type: 'text/csv' }),
     csvFilename(from, to),
-    'RefrigHandle refrigerant log',
+    'Refrigister refrigerant log',
   )
 }
 
@@ -584,8 +584,8 @@ export async function sharePurchasesCsv(
   const range = from || to ? `-${from || 'start'}-to-${to || 'now'}` : ''
   return shareOrDownload(
     new Blob([CSV_BOM + csv], { type: 'text/csv' }),
-    `refrighandle-purchases${range}-${new Date().toISOString().slice(0, 10)}.csv`,
-    'RefrigHandle purchases (Xero bills format)',
+    `refrigister-purchases${range}-${new Date().toISOString().slice(0, 10)}.csv`,
+    'Refrigister purchases (Xero bills format)',
   )
 }
 

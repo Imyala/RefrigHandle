@@ -48,24 +48,24 @@ export function TermsContent() {
   return (
     <div className="space-y-3 text-sm text-slate-700 dark:text-slate-300">
       <p className="text-xs text-slate-500">Effective date: {EFFECTIVE_DATE}</p>
-      <Section title="What RefrigHandle is">
-        RefrigHandle is designed to assist with recording and tracking
+      <Section title="What Refrigister is">
+        Refrigister is designed to assist with recording and tracking
         refrigerant activities. It is{' '}
         <strong>not a record-keeping service</strong>. Users are responsible for
         maintaining their own records and backups and should not rely solely on
-        RefrigHandle for statutory record retention. Data loss can occur despite
+        Refrigister for statutory record retention. Data loss can occur despite
         reasonable safeguards, and users are responsible for maintaining their
         own backups.
       </Section>
       <Section title="Definitions">
         <p>
-          <strong>Services</strong> means the RefrigHandle platform,
+          <strong>Services</strong> means the Refrigister platform,
           applications, website and related services.
         </p>
         <p>
           <strong>Account Owner</strong> means the business, company, sole
           trader, partnership, trust, government entity or other organisation
-          that has registered for RefrigHandle.
+          that has registered for Refrigister.
         </p>
         <p>
           <strong>Authorised User</strong> means an employee, contractor or
@@ -73,7 +73,7 @@ export function TermsContent() {
         </p>
         <p>
           <strong>Business Data</strong> means information entered into
-          RefrigHandle, including customer records, site records, refrigerant
+          Refrigister, including customer records, site records, refrigerant
           records, cylinder records, audit logs, technician information, notes
           and attachments.
         </p>
@@ -92,38 +92,38 @@ export function TermsContent() {
         advice from the relevant authority or your own adviser.
       </Section>
       <Section title="Licence information">
-        RefrigHandle does not verify Refrigerant Handling Licence numbers or the
+        Refrigister does not verify Refrigerant Handling Licence numbers or the
         identity of users. Users and businesses are solely responsible for
         ensuring that all licence information entered into the platform is
         accurate, current, and compliant with applicable laws and regulations.
-        RefrigHandle relies on information provided by users and makes no
+        Refrigister relies on information provided by users and makes no
         representation regarding the validity of any licence.
       </Section>
       <Section title="No legal or compliance advice">
-        Information provided by RefrigHandle is general in nature and should not
+        Information provided by Refrigister is general in nature and should not
         be relied upon as legal, taxation or compliance advice. If you are
         unsure what applies to you, check with the ATO, the ARC, ASIC, or your
         own adviser.
       </Section>
       <Section title="Provided “as is”">
         The app is provided on an “as is” basis without warranties of any kind.
-        To the extent permitted by law, RefrigHandle and its operators exclude
+        To the extent permitted by law, Refrigister and its operators exclude
         liability for indirect, incidental or consequential loss arising from
         the use of the app. Nothing in these terms excludes rights that cannot
         lawfully be excluded under the Australian Consumer Law.
       </Section>
       <Section title="Privacy">
-        RefrigHandle’s collection, storage and processing of personal
+        Refrigister’s collection, storage and processing of personal
         information is governed by the Privacy Policy.
       </Section>
       <Section title="Closing your account">
         You may request account closure at any time. Before closing your
         account, export and securely retain your own copies of all records —
-        RefrigHandle should not be relied upon as your sole archive or backup
+        Refrigister should not be relied upon as your sole archive or backup
         system. Once an account is closed, access may no longer be available,
         and any future reactivation requests will be considered at
-        RefrigHandle’s discretion. Account data may be deleted after closure in
-        accordance with RefrigHandle’s Privacy Policy and internal data
+        Refrigister’s discretion. Account data may be deleted after closure in
+        accordance with Refrigister’s Privacy Policy and internal data
         retention practices.
       </Section>
       <Section title="Related policies">
@@ -204,7 +204,7 @@ function TermsAcceptScreen() {
       >
         <div className="mx-auto flex max-w-2xl flex-col items-center text-center">
           <h1 className="text-xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
-            Refrigerant Handling
+            Refrigister
           </h1>
           <p className="mt-0.5 text-[11px] font-medium uppercase tracking-[0.18em] text-brand-600 dark:text-brand-400">
             Updated terms

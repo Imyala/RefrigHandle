@@ -15,7 +15,7 @@ export function BillingRefundContent() {
     <div className="space-y-4 text-sm text-slate-700 dark:text-slate-300">
       <p className="text-xs text-slate-500">Effective date: {EFFECTIVE_DATE}</p>
       <p>
-        This Billing and Refund Policy forms part of the RefrigHandle Terms of
+        This Billing and Refund Policy forms part of the Refrigister Terms of
         Use.
       </p>
       <p>
@@ -26,7 +26,7 @@ export function BillingRefundContent() {
       <Section title="1. Purpose">
         <p>
           This Policy explains how subscription charges, billing, cancellations
-          and refund requests are handled by RefrigHandle.
+          and refund requests are handled by Refrigister.
         </p>
         <p>By subscribing to the Services, the Account Owner accepts this Policy.</p>
       </Section>
@@ -45,7 +45,7 @@ export function BillingRefundContent() {
           not based upon usage levels.
         </p>
         <p>
-          RefrigHandle may change subscription plans, pricing and billing
+          Refrigister may change subscription plans, pricing and billing
           arrangements from time to time.
         </p>
       </Section>
@@ -65,7 +65,7 @@ export function BillingRefundContent() {
 
       <Section title="4. No refunds for change of mind">
         <p>
-          Unless required by law, RefrigHandle does not provide refunds for:
+          Unless required by law, Refrigister does not provide refunds for:
         </p>
         <Bullets
           items={[
@@ -78,7 +78,7 @@ export function BillingRefundContent() {
             'staff training requirements;',
             'business closure;',
             'loss of internet access;',
-            'temporary interruptions outside RefrigHandle’s reasonable control;',
+            'temporary interruptions outside Refrigister’s reasonable control;',
             'failure to cancel before renewal;',
             'unused portions of subscription periods.',
           ]}
@@ -99,9 +99,9 @@ export function BillingRefundContent() {
       <Section title="6. Outstanding amounts">
         <p>
           Cancellation or account closure does not cancel or extinguish any
-          outstanding fees, invoices or payment obligations owed to RefrigHandle.
+          outstanding fees, invoices or payment obligations owed to Refrigister.
         </p>
-        <p>RefrigHandle reserves the right to pursue recovery of unpaid amounts.</p>
+        <p>Refrigister reserves the right to pursue recovery of unpaid amounts.</p>
       </Section>
 
       <Section title="7. Account suspension or termination">
@@ -120,8 +120,8 @@ export function BillingRefundContent() {
 
       <Section title="8. Billing errors">
         <p>
-          If RefrigHandle determines that an incorrect charge or duplicate
-          payment has occurred, RefrigHandle may issue a refund or account credit
+          If Refrigister determines that an incorrect charge or duplicate
+          payment has occurred, Refrigister may issue a refund or account credit
           at its discretion.
         </p>
       </Section>
@@ -141,7 +141,7 @@ export function BillingRefundContent() {
       <Section title="10. Subscription changes">
         <p>
           Upgrades, downgrades and plan changes may take effect immediately or at
-          the beginning of the next billing cycle, as determined by RefrigHandle.
+          the beginning of the next billing cycle, as determined by Refrigister.
         </p>
         <p>
           Unused portions of previous subscription periods are generally
@@ -151,7 +151,7 @@ export function BillingRefundContent() {
 
       <Section title="11. Discretionary refunds">
         <p>
-          RefrigHandle may, but is not obliged to, provide refunds, credits or
+          Refrigister may, but is not obliged to, provide refunds, credits or
           other remedies on a case-by-case basis.
         </p>
         <p>
@@ -163,7 +163,7 @@ export function BillingRefundContent() {
       <Section title="12. Chargebacks and payment disputes">
         <p>
           If an Account Owner initiates a chargeback, payment reversal or dispute
-          through a financial institution or payment provider, RefrigHandle may:
+          through a financial institution or payment provider, Refrigister may:
         </p>
         <Bullets
           items={[
@@ -175,14 +175,14 @@ export function BillingRefundContent() {
         />
         <p>
           The existence of a payment dispute does not automatically cancel
-          obligations owed to RefrigHandle.
+          obligations owed to Refrigister.
         </p>
       </Section>
 
       <Section title="13. Late payments">
         <p>
           Where payment is not successfully processed or an invoice remains
-          unpaid after its due date, RefrigHandle may, without limiting any other
+          unpaid after its due date, Refrigister may, without limiting any other
           rights available:
         </p>
         <Bullets
@@ -200,12 +200,12 @@ export function BillingRefundContent() {
           suspension or termination.
         </p>
         <p>
-          Any costs reasonably incurred by RefrigHandle in recovering overdue
+          Any costs reasonably incurred by Refrigister in recovering overdue
           amounts, including collection costs and fees charged by payment
           providers, may be recoverable to the extent permitted by law.
         </p>
         <p>
-          RefrigHandle is not responsible for losses suffered by the Account
+          Refrigister is not responsible for losses suffered by the Account
           Owner arising from suspension or restriction resulting from unpaid
           amounts.
         </p>
@@ -224,18 +224,18 @@ export function BillingRefundContent() {
       </Section>
 
       <Section title="15. Changes to this Policy">
-        <p>RefrigHandle may amend this Billing and Refund Policy from time to time.</p>
+        <p>Refrigister may amend this Billing and Refund Policy from time to time.</p>
         <p>
           Updated versions become effective when published through the
-          RefrigHandle website or application. Continued use of the Services
+          Refrigister website or application. Continued use of the Services
           constitutes acceptance of the revised Policy.
         </p>
       </Section>
 
       <Section title="16. Contact information">
-        <p>RefrigHandle</p>
+        <p>Refrigister</p>
         <p>
-          For billing enquiries, contact us at legal@refrighandle.com.
+          For billing enquiries, contact us at legal@refrigister.com.
         </p>
       </Section>
     </div>

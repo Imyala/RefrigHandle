@@ -70,7 +70,7 @@ export function PrivacyScreen() {
         <rect x="5" y="11" width="14" height="10" rx="2" />
         <path d="M8 11V8a4 4 0 0 1 8 0v3" />
       </svg>
-      <p className="text-lg font-semibold tracking-tight">Refrigerant Handling</p>
+      <p className="text-lg font-semibold tracking-tight">Refrigister</p>
       <p className="text-sm text-white/80">Hidden while in the background</p>
     </div>
   )

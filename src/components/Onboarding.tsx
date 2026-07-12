@@ -151,7 +151,7 @@ function OnboardingScreen() {
   const [password, setPassword] = useState('')
   const [confirmPw, setConfirmPw] = useState('')
   // Licence self-declaration — confirms a current RHL and accurate details.
-  // Required to finish setup; RefrigHandle does not verify licences.
+  // Required to finish setup; Refrigister does not verify licences.
   const [licenceDeclared, setLicenceDeclared] = useState(false)
   const [busy, setBusy] = useState(false)
   // Async "known-bad password" reason (too common / found in a breach),
@@ -401,7 +401,7 @@ function OnboardingScreen() {
           : required.filter((k) => !Array.isArray(data[k]))
       if (missing.length > 0) {
         toast.show(
-          `That file does not look like a RefrigHandle backup (missing: ${missing.join(', ')}).`,
+          `That file does not look like a Refrigister backup (missing: ${missing.join(', ')}).`,
           'error',
         )
         return
@@ -430,7 +430,7 @@ function OnboardingScreen() {
         <main className="mx-auto flex w-full max-w-md flex-1 flex-col justify-center px-5 py-10">
           <div className="text-center">
             <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
-              RefrigHandle
+              Refrigister
             </h1>
             <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
               Refrigerant tracking and ARC-ready compliance records, filled in
@@ -444,7 +444,7 @@ function OnboardingScreen() {
               Sign in
             </Button>
             <p className="text-center text-[11px] text-slate-400">
-              Already use RefrigHandle? Bring your records onto this device.
+              Already use Refrigister? Bring your records onto this device.
             </p>
             <Button full variant="secondary" onClick={() => setView('setup')}>
               Create account
@@ -560,7 +560,7 @@ function OnboardingScreen() {
               }}
             />
             <p className="text-center text-[11px] text-slate-400">
-              Already use RefrigHandle on another device? Restore the backup
+              Already use Refrigister on another device? Restore the backup
               exported there (Settings → Backup &amp; export → Export JSON) —
               cylinders, sites, the full log, photos and signatures all come
               across, and you sign in with the same profiles and passwords as
@@ -595,7 +595,7 @@ function OnboardingScreen() {
             ← Back
           </button>
           <h1 className="text-xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
-            Refrigerant Handling
+            Refrigister
           </h1>
           <p className="mt-0.5 text-[11px] font-medium uppercase tracking-[0.18em] text-brand-600 dark:text-brand-400">
             Create account
@@ -745,7 +745,7 @@ function OnboardingScreen() {
               <Field
                 label="Username"
                 error={techUsernameErr}
-                hint="Optional for now — nothing is sent anywhere. With your business ID it becomes your sign-in when RefrigHandle cloud accounts arrive."
+                hint="Optional for now — nothing is sent anywhere. With your business ID it becomes your sign-in when Refrigister cloud accounts arrive."
               >
                 <TextInput
                   autoComplete="username"
@@ -908,7 +908,7 @@ function OnboardingScreen() {
                 <PolicyRef onClick={() => setViewingPolicy('billing')}>
                   Billing &amp; Refund Policy
                 </PolicyRef>
-                , and all other applicable policies of RefrigHandle. *
+                , and all other applicable policies of Refrigister. *
               </span>
             </label>
             {attempted && !agreedToPolicies && (

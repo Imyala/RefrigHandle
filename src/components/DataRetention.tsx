@@ -16,24 +16,24 @@ export function DataRetentionContent() {
     <div className="space-y-4 text-sm text-slate-700 dark:text-slate-300">
       <p className="text-xs text-slate-500">Effective date: {EFFECTIVE_DATE}</p>
       <p>
-        This Data Retention and Deletion Policy forms part of the RefrigHandle
+        This Data Retention and Deletion Policy forms part of the Refrigister
         Terms of Use and Privacy Policy.
       </p>
 
       <Section title="1. Purpose">
         <p>
-          This Policy explains how RefrigHandle manages the retention, export,
+          This Policy explains how Refrigister manages the retention, export,
           closure and deletion of information stored within the Services.
         </p>
         <p>
           Nothing in this Policy transfers legal record-keeping obligations from
-          the Account Owner to RefrigHandle.
+          the Account Owner to Refrigister.
         </p>
       </Section>
 
       <Section title="2. Ownership of records">
         <p>
-          All Business Data entered into RefrigHandle remains the property of the
+          All Business Data entered into Refrigister remains the property of the
           Account Owner.
         </p>
         <p>The Account Owner is responsible for:</p>
@@ -45,12 +45,12 @@ export function DataRetentionContent() {
             'retaining records for any required statutory periods.',
           ]}
         />
-        <p>RefrigHandle is not a records custodian or archival service.</p>
+        <p>Refrigister is not a records custodian or archival service.</p>
       </Section>
 
       <Section title="3. Active accounts">
         <p>
-          While an Account remains active, RefrigHandle may retain Business Data
+          While an Account remains active, Refrigister may retain Business Data
           for the purpose of:
         </p>
         <Bullets
@@ -70,12 +70,12 @@ export function DataRetentionContent() {
           copies of records it wishes to preserve.
         </p>
         <p>
-          RefrigHandle may provide export tools, reports or downloadable files to
+          Refrigister may provide export tools, reports or downloadable files to
           assist with this process.
         </p>
         <p>
           The availability of export functionality does not transfer
-          responsibility for record retention to RefrigHandle.
+          responsibility for record retention to Refrigister.
         </p>
       </Section>
 
@@ -98,7 +98,7 @@ export function DataRetentionContent() {
 
       <Section title="6. Retention after closure">
         <p>
-          Following account closure, RefrigHandle may retain certain information
+          Following account closure, Refrigister may retain certain information
           for a reasonable period where necessary for:
         </p>
         <Bullets
@@ -121,14 +121,14 @@ export function DataRetentionContent() {
         </p>
         <p>Once permanently deleted, information may not be recoverable.</p>
         <p>
-          RefrigHandle is not responsible for losses arising from the Account
+          Refrigister is not responsible for losses arising from the Account
           Owner’s failure to maintain independent copies of records.
         </p>
       </Section>
 
       <Section title="8. Backup systems">
         <p>
-          RefrigHandle may maintain backup systems to assist with disaster
+          Refrigister may maintain backup systems to assist with disaster
           recovery and service continuity.
         </p>
         <p>
@@ -144,13 +144,13 @@ export function DataRetentionContent() {
       <Section title="9. Legal requirements">
         <p>
           Where required by law, court order or lawful request from an authorised
-          authority, RefrigHandle may retain or disclose information as required.
+          authority, Refrigister may retain or disclose information as required.
         </p>
       </Section>
 
       <Section title="10. Business transfers">
         <p>
-          If RefrigHandle or its assets are sold, merged or transferred, Business
+          If Refrigister or its assets are sold, merged or transferred, Business
           Data and associated information may be transferred to the successor
           entity, subject to applicable laws.
         </p>
@@ -158,22 +158,22 @@ export function DataRetentionContent() {
 
       <Section title="11. No guarantee of recovery">
         <p>
-          RefrigHandle does not guarantee that deleted information can be
+          Refrigister does not guarantee that deleted information can be
           recovered.
         </p>
         <p>
-          The Account Owner should not rely upon RefrigHandle as its sole backup
+          The Account Owner should not rely upon Refrigister as its sole backup
           or long-term storage solution.
         </p>
       </Section>
 
       <Section title="12. Abandoned accounts">
         <p>
-          RefrigHandle may identify Accounts that have remained inactive for an
+          Refrigister may identify Accounts that have remained inactive for an
           extended period.
         </p>
         <p>
-          Where an Account is considered abandoned, RefrigHandle may, at its
+          Where an Account is considered abandoned, Refrigister may, at its
           discretion:
         </p>
         <Bullets
@@ -187,24 +187,24 @@ export function DataRetentionContent() {
         />
         <p>
           The Account Owner remains responsible for maintaining independent copies
-          of records and should not rely upon RefrigHandle to retain inactive or
+          of records and should not rely upon Refrigister to retain inactive or
           abandoned Accounts indefinitely.
         </p>
       </Section>
 
       <Section title="13. Changes to this Policy">
-        <p>RefrigHandle may amend this Policy from time to time.</p>
+        <p>Refrigister may amend this Policy from time to time.</p>
         <p>
           Updated versions become effective when published through the
-          RefrigHandle website or application. Continued use of the Services
+          Refrigister website or application. Continued use of the Services
           constitutes acceptance of the revised Policy.
         </p>
       </Section>
 
       <Section title="14. Contact information">
-        <p>RefrigHandle</p>
+        <p>Refrigister</p>
         <p>
-          For questions about this Policy, contact us at legal@refrighandle.com.
+          For questions about this Policy, contact us at legal@refrigister.com.
         </p>
       </Section>
     </div>

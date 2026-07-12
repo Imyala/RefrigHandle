@@ -1287,7 +1287,7 @@ export default function Settings() {
           </div>
         </div>
         <p className="mb-3 text-xs text-slate-500">
-          Add Refrigerant Handling to your home screen so it opens like
+          Add Refrigister to your home screen so it opens like
           a normal app and keeps working without internet — every page,
           every bottle, every transaction is stored locally on the
           device.
@@ -1574,7 +1574,7 @@ function TechnicianModal({
   const [password, setPassword] = useState('')
   const [confirmPw, setConfirmPw] = useState('')
   // Licence self-declaration — required when creating a new account. Places
-  // responsibility for licence accuracy on the user (RefrigHandle does not
+  // responsibility for licence accuracy on the user (Refrigister does not
   // verify licences). Not shown when editing an existing profile.
   const [licenceDeclared, setLicenceDeclared] = useState(false)
   const [attempted, setAttempted] = useState(false)

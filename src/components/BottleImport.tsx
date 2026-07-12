@@ -120,8 +120,8 @@ function BottleImportModal({ onClose }: { onClose: () => void }) {
             onClick={() =>
               void shareOrDownload(
                 new Blob(['\uFEFF' + IMPORT_TEMPLATE_CSV], { type: 'text/csv' }),
-                'refrighandle-import-template.csv',
-                'RefrigHandle import template',
+                'refrigister-import-template.csv',
+                'Refrigister import template',
               )
             }
             className="inline-flex min-h-11 items-center text-xs font-medium text-brand-600 hover:underline dark:text-brand-400"

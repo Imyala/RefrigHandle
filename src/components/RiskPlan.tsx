@@ -95,7 +95,7 @@ function RiskPlanModal({ onClose }: { onClose: () => void }) {
       <div className="print-region space-y-4 text-sm text-slate-900 dark:text-slate-100">
         <header className="border-b border-slate-300 pb-3 dark:border-slate-700">
           <div className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-            Refrigerant Handling — Risk Management Plan
+            Refrigister — Risk Management Plan
           </div>
           <div className="mt-1 text-lg font-semibold">
             {state.businessName || 'Business name not set in Settings'}
