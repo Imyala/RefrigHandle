@@ -1,0 +1,93 @@
+name: CI (test before merge)
+
+# Runs on every pull request into main so a change is proven green — lint,
+# unit tests, and a real production build — BEFORE it can be merged and fan
+# out to any platform. Also uploads the built web app as a downloadable
+# artifact so you (or a reviewer) can click through the actual change.
+#
+# Make this a required check in the repo's branch-protection rules for main,
+# so nothing merges without it passing. Linux-only and cheap on Actions
+# minutes — native (Android/iOS/desktop) builds are deliberately kept OUT of
+# the per-PR path and live in the release workflow instead.
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  # One in-flight run per PR; a new push cancels the previous run.
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Test
+        run: npm run test
+
+      - name: Build (preview)
+        env:
+          # Preview builds are served from a host root (or opened from the
+          # artifact), so no repo sub-path — leave BASE_PATH at '/'.
+          VITE_APP_BUILD: ${{ github.run_number }}
+          VITE_APP_COMMIT: ${{ github.sha }}
+          # Point previews at STAGING, never production data. These are
+          # optional — unset just yields a fully-offline preview build.
+          # The backend seam picks Oracle when its URL is set, else Supabase.
+          VITE_ORACLE_API_URL: ${{ secrets.STAGING_ORACLE_API_URL }}
+          VITE_SUPABASE_URL: ${{ secrets.STAGING_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.STAGING_SUPABASE_ANON_KEY }}
+        run: npm run build
+
+      # Always available: download this artifact from the run's summary page
+      # and open index.html (or drag the folder onto any static host) to
+      # click through the change. Works today, no host account needed.
+      - name: Upload preview build
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-preview-${{ github.run_number }}
+          path: dist
+          retention-days: 7
+
+      # ---------------------------------------------------------------
+      # Optional: auto-deploy a live preview URL once you pick a host.
+      # Uncomment ONE block and add its secrets. Both support private
+      # repos on their free tiers and post a unique URL per PR.
+      #
+      # Cloudflare Pages:
+      #   - name: Deploy preview (Cloudflare Pages)
+      #     uses: cloudflare/pages-action@v1
+      #     with:
+      #       apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      #       accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      #       projectName: refrighandle
+      #       directory: dist
+      #
+      # Netlify:
+      #   - name: Deploy preview (Netlify)
+      #     uses: nwtgck/actions-netlify@v3
+      #     with:
+      #       publish-dir: dist
+      #       deploy-message: 'PR #${{ github.event.number }}'
+      #     env:
+      #       NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+      #       NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
+      # ---------------------------------------------------------------

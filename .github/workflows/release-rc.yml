@@ -1,0 +1,124 @@
+name: Release candidate (staging)
+
+# The "test the real thing before production" path. Cut a release candidate
+# by pushing a pre-release tag:
+#
+#   git tag v1.2.0-rc1 && git push origin v1.2.0-rc1
+#
+# That builds the app against the STAGING backend (never production data),
+# publishes it as a GitHub *pre-release* with the web build attached, and is
+# where the native RC channels (TestFlight, Play Internal, desktop
+# pre-release) hang once those shells are scaffolded. When the RC checks out,
+# promote it to production by pushing the final tag (v1.2.0) — see deploy.yml
+# / the production release path.
+
+on:
+  push:
+    tags:
+      - 'v*-rc*'
+  workflow_dispatch:
+
+permissions:
+  contents: write # create the pre-release and attach assets
+
+concurrency:
+  group: release-rc-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  web-staging:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install
+        run: npm ci
+
+      # A release candidate must still be green — never ship an RC that
+      # skipped the suite.
+      - name: Lint
+        run: npm run lint
+
+      - name: Test
+        run: npm run test
+
+      - name: Build (staging)
+        env:
+          VITE_APP_BUILD: ${{ github.run_number }}
+          VITE_APP_COMMIT: ${{ github.sha }}
+          # STAGING backend — the whole point of an RC is to exercise the
+          # real client/server path without touching live records. The seam
+          # selects Oracle when its URL is set, otherwise Supabase.
+          VITE_ORACLE_API_URL: ${{ secrets.STAGING_ORACLE_API_URL }}
+          VITE_SUPABASE_URL: ${{ secrets.STAGING_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.STAGING_SUPABASE_ANON_KEY }}
+        run: npm run build
+
+      - name: Package web build
+        run: |
+          cd dist
+          zip -r "../refrighandle-web-${{ github.ref_name }}.zip" .
+
+      - name: Publish pre-release
+        uses: softprops/action-gh-release@v2
+        with:
+          prerelease: true
+          name: 'RC ${{ github.ref_name }}'
+          body: |
+            Automated **release candidate** built against the staging backend.
+
+            - Web build attached below (download, unzip, open `index.html`,
+              or deploy to a staging host).
+            - Native RC channels (TestFlight / Play Internal / desktop
+              pre-release) attach here once those shells are scaffolded.
+
+            Not for production. Promote by pushing the final `vX.Y.Z` tag.
+          files: refrighandle-web-*.zip
+
+  # -------------------------------------------------------------------
+  # Native RC channels — enable each as its shell lands. Left commented so
+  # this workflow stays green today (no Android/iOS/desktop project or
+  # signing secrets exist yet). Each needs: the shell scaffolded, signing
+  # secrets added to the repo, and `npx cap sync` (mobile) in the build.
+  #
+  # android-internal:
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - uses: actions/setup-node@v4
+  #       with: { node-version: '20', cache: 'npm' }
+  #     - run: npm ci
+  #     - run: npm run build
+  #     - run: npx cap sync android
+  #     # ...set up JDK, decode keystore from secrets, ./gradlew bundleRelease,
+  #     # then upload the signed .aab to the Play Internal testing track via
+  #     # r0adkll/upload-google-play (service-account JSON in a secret).
+  #
+  # ios-testflight:
+  #   runs-on: macos-14        # iOS builds REQUIRE a macOS runner (10x minutes)
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - uses: actions/setup-node@v4
+  #       with: { node-version: '20', cache: 'npm' }
+  #     - run: npm ci
+  #     - run: npm run build
+  #     - run: npx cap sync ios
+  #     # ...install certs/profiles (fastlane match), xcodebuild -exportArchive,
+  #     # then upload to TestFlight via the App Store Connect API key (secrets).
+  #
+  # desktop-prerelease:
+  #   strategy: { matrix: { os: [windows-latest, macos-14, ubuntu-latest] } }
+  #   runs-on: ${{ matrix.os }}
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - uses: actions/setup-node@v4
+  #       with: { node-version: '20', cache: 'npm' }
+  #     - run: npm ci
+  #     # ...Tauri (or Electron) build with code-signing secrets, then attach
+  #     # the signed installers to this same pre-release for testers.
+  # -------------------------------------------------------------------
