@@ -1050,6 +1050,42 @@ export default function Settings() {
 
       <Card>
         <div className="mb-1 text-sm font-semibold text-slate-700 dark:text-slate-200">
+          Privacy &amp; screen
+        </div>
+        <p className="mb-3 text-xs text-slate-500">
+          Keeps your records off the screen when you're not looking at them.
+        </p>
+        <div className="space-y-3">
+          <label className="flex items-start justify-between gap-3">
+            <span className="text-sm text-slate-700 dark:text-slate-200">
+              <span className="font-medium">
+                Hide records when the app is in the background
+              </span>
+              <span className="mt-0.5 block text-xs text-slate-500">
+                Covers the screen the moment the app loses focus or is sent to
+                the background — so your records don't show in the app-switcher
+                preview or to someone glancing over while you step away. Clears
+                as soon as you return.
+              </span>
+              <span className="mt-1.5 block rounded-lg bg-slate-100 px-2.5 py-1.5 text-[11px] leading-snug text-slate-500 dark:bg-slate-800/60 dark:text-slate-400">
+                Heads up: a web app can't stop a deliberate screenshot or screen
+                recording — no browser allows it. That needs a native app build.
+                This setting is a background privacy cover, not a screenshot
+                block.
+              </span>
+            </span>
+            <input
+              type="checkbox"
+              className="mt-0.5 h-4 w-4 shrink-0 accent-brand-600"
+              checked={devicePrefs.privacyScreen}
+              onChange={(e) => setDevicePref('privacyScreen', e.target.checked)}
+            />
+          </label>
+        </div>
+      </Card>
+
+      <Card>
+        <div className="mb-1 text-sm font-semibold text-slate-700 dark:text-slate-200">
           Refrigerants
         </div>
         <p className="mb-3 text-xs text-slate-500">

@@ -11,6 +11,7 @@ import { ToastProvider } from './lib/toast'
 import { ConfirmProvider } from './lib/confirm'
 import { ThemeApplier } from './lib/theme'
 import { TermsGate } from './components/Terms'
+import { PrivacyScreen } from './components/PrivacyScreen'
 
 // Route components are lazy-loaded so the first paint ships only the shell
 // and the landing route's code, not every page, the PDF/quarterly report,
@@ -43,6 +44,10 @@ export default function App() {
       <ConfirmProvider>
         <StoreProvider>
           <ThemeApplier />
+          {/* Sits above every gate so the privacy cover works on any screen,
+              including sign-in. Renders nothing unless the pref is on AND the
+              app is backgrounded/unfocused. */}
+          <PrivacyScreen />
           <LocationTimezoneSync />
           <AccountClosedGate>
             <OnboardingGate>
