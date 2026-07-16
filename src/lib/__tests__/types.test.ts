@@ -2,10 +2,12 @@ import { describe, expect, it } from 'vitest'
 import {
   chargeSanity,
   defaultRefrigerantType,
+  exceedsGwpBan,
   expiryStatus,
   fillingRatio,
   gwpFor,
   hydroStatusFor,
+  isFlammable,
   isOverfilled,
   netWeight,
   overfillKg,
@@ -16,6 +18,7 @@ import {
   daysUntilPurge,
   formatBuildVersion,
   isTechnicianActive,
+  safetyClassFor,
   splitName,
   quarterKey,
   quarterOfDay,
@@ -129,7 +132,7 @@ describe('bottle weight math', () => {
   })
 })
 
-describe('safe fill ratios (DOT/CFR-49 style)', () => {
+describe('safe fill ratios (WC × 0.80 × liquid density at 25 °C)', () => {
   it('uses the per-refrigerant filling ratio', () => {
     expect(fillingRatio('R290')).toBe(0.43) // flammable hydrocarbon
     expect(fillingRatio('r290')).toBe(0.43) // case-insensitive
@@ -139,6 +142,29 @@ describe('safe fill ratios (DOT/CFR-49 style)', () => {
   it('falls back to 80% of water capacity for unknown refrigerants', () => {
     expect(fillingRatio('R-CUSTOM-BLEND')).toBe(0.8)
     expect(safeFillKgFor(47.4)).toBe(37.92)
+  })
+
+  it('corrected FR values align with WC×0.8×ρ formula', () => {
+    // R134A: ρ₂₅ ≈ 1.21 kg/L → FR ≈ 0.97 (was 1.04)
+    expect(fillingRatio('R134A')).toBe(0.97)
+    // R22: ρ₂₅ ≈ 1.19 kg/L → FR ≈ 0.95 (was 1.04)
+    expect(fillingRatio('R22')).toBe(0.95)
+    // R1234YF: ρ₂₅ ≈ 1.09 kg/L → FR ≈ 0.87 (was 1.04)
+    expect(fillingRatio('R1234YF')).toBe(0.87)
+    // R1233ZD: ρ₂₅ ≈ 1.25 kg/L → FR ≈ 1.00 (was 1.20)
+    expect(fillingRatio('R1233ZD')).toBe(1.00)
+    // R744 (CO2): ρ₂₅ ≈ 0.72 kg/L → FR ≈ 0.57 (was 0.68)
+    expect(fillingRatio('R744')).toBe(0.57)
+    // R717 (ammonia): ρ₂₅ ≈ 0.60 kg/L → FR ≈ 0.48 (was 0.53)
+    expect(fillingRatio('R717')).toBe(0.48)
+    // R508B: components above critical at 25°C — uses conservative fallback
+    expect(fillingRatio('R508B')).toBe(0.80)
+  })
+
+  it('new refrigerants have correct FR values', () => {
+    expect(fillingRatio('R454C')).toBe(0.84)
+    expect(fillingRatio('R513A')).toBe(0.92)
+    expect(fillingRatio('R515B')).toBe(0.92)
   })
 })
 
@@ -198,6 +224,62 @@ describe('GWP / CO2-equivalent (IPCC AR4)', () => {
   it('unknown refrigerant yields undefined, not zero', () => {
     expect(gwpFor('R-MYSTERY')).toBeUndefined()
     expect(tonnesCO2eFor(10, 'R-MYSTERY')).toBeUndefined()
+  })
+  it('new refrigerants have correct GWP values', () => {
+    expect(gwpFor('R454C')).toBe(148)
+    expect(gwpFor('R513A')).toBe(573)
+    expect(gwpFor('R515B')).toBe(299)
+  })
+})
+
+describe('GWP equipment ban (DCCEEW, effective 1 Jul 2025)', () => {
+  it('flags refrigerants above 750 GWP', () => {
+    expect(exceedsGwpBan('R410A')).toBe(true)  // GWP 2088
+    expect(exceedsGwpBan('R404A')).toBe(true)  // GWP 3922
+  })
+  it('allows refrigerants at or below 750 GWP', () => {
+    expect(exceedsGwpBan('R32')).toBe(false)   // GWP 675
+    expect(exceedsGwpBan('R454B')).toBe(false) // GWP 466
+    expect(exceedsGwpBan('R744')).toBe(false)  // GWP 1 (CO2)
+  })
+  it('returns false for unknown refrigerants (no GWP tabulated)', () => {
+    expect(exceedsGwpBan('R-MYSTERY')).toBe(false)
+    expect(exceedsGwpBan(undefined)).toBe(false)
+  })
+})
+
+describe('ASHRAE 34 safety class', () => {
+  it('identifies A2L mildly flammable refrigerants', () => {
+    expect(safetyClassFor('R32')).toBe('A2L')
+    expect(safetyClassFor('R454B')).toBe('A2L')
+    expect(safetyClassFor('R454C')).toBe('A2L')
+    expect(safetyClassFor('R1234YF')).toBe('A2L')
+  })
+  it('identifies A3 highly flammable hydrocarbons', () => {
+    expect(safetyClassFor('R290')).toBe('A3')
+    expect(safetyClassFor('R600A')).toBe('A3')
+    expect(safetyClassFor('R1270')).toBe('A3')
+  })
+  it('identifies B2L ammonia', () => {
+    expect(safetyClassFor('R717')).toBe('B2L')
+  })
+  it('identifies A1 non-flammable refrigerants', () => {
+    expect(safetyClassFor('R410A')).toBe('A1')
+    expect(safetyClassFor('R134A')).toBe('A1')
+    expect(safetyClassFor('R513A')).toBe('A1')
+    expect(safetyClassFor('R515B')).toBe('A1')
+  })
+  it('is case-insensitive and returns undefined for unknown', () => {
+    expect(safetyClassFor('r32')).toBe('A2L')
+    expect(safetyClassFor('R-MYSTERY')).toBeUndefined()
+    expect(safetyClassFor(undefined)).toBeUndefined()
+  })
+  it('isFlammable returns true for A2L, A3, B2L only', () => {
+    expect(isFlammable('R32')).toBe(true)   // A2L
+    expect(isFlammable('R290')).toBe(true)  // A3
+    expect(isFlammable('R717')).toBe(true)  // B2L
+    expect(isFlammable('R410A')).toBe(false) // A1
+    expect(isFlammable(undefined)).toBe(false)
   })
 })
 

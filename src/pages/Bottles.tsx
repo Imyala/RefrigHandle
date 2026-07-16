@@ -1080,7 +1080,7 @@ function BottleActionSheet({
             </div>
           ) : hydro.status === 'overdue' ? (
             <div className="mt-2 rounded-xl bg-red-50 p-2.5 text-xs font-medium text-red-900 dark:bg-red-900/20 dark:text-red-100">
-              ⛔ Hydrostatic test overdue
+              ⛔ Periodic pressure test overdue (AS 2030)
               {hydro.monthsUntilDue != null
                 ? ` by ${Math.abs(hydro.monthsUntilDue)} ${
                     Math.abs(hydro.monthsUntilDue) === 1 ? 'month' : 'months'
@@ -1090,7 +1090,7 @@ function BottleActionSheet({
             </div>
           ) : hydro.status === 'due_soon' ? (
             <div className="mt-2 rounded-xl bg-amber-50 p-2.5 text-xs font-medium text-amber-900 dark:bg-amber-900/20 dark:text-amber-100">
-              ⚠ Hydrostatic test due{' '}
+              ⚠ Periodic pressure test due (AS 2030){' '}
               {hydro.monthsUntilDue === 0 ? 'this month' : 'next month'} — plan a
               retest soon.
             </div>
@@ -1141,14 +1141,14 @@ function BottleActionSheet({
                         lastYm && plusYearsYm(lastYm, 10) === nextYm
                       if (!nextYm || prevAuto) setNextYm(auto)
                     }}
-                    ariaLabel="Last hydro test (month and year)"
+                    ariaLabel="Last pressure test date (month and year)"
                   />
                 </Field>
                 <Field label="Next due">
                   <MonthInput
                     value={nextYm}
                     onChange={setNextYm}
-                    ariaLabel="Next hydro test due (month and year)"
+                    ariaLabel="Next pressure test due (month and year)"
                   />
                 </Field>
               </div>
@@ -1684,14 +1684,14 @@ function BottleForm({
                     lastHydro && plusYearsYm(lastHydro, 10) === nextHydro
                   if (!nextHydro || prevAuto) setNextHydro(auto)
                 }}
-                ariaLabel="Last hydro test (month and year)"
+                ariaLabel="Last pressure test date (month and year)"
               />
             </Field>
             <Field label="Next test due">
               <MonthInput
                 value={nextHydro}
                 onChange={setNextHydro}
-                ariaLabel="Next hydro test due (month and year)"
+                ariaLabel="Next pressure test due (month and year)"
               />
             </Field>
           </div>

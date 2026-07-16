@@ -1,10 +1,17 @@
 import { useMemo, useState } from 'react'
 import { Button, Modal, TextInput } from './ui'
 import { useStore } from '../lib/store'
-import { REFRIGERANT_TYPES, sortRefrigerants } from '../lib/types'
+import { REFRIGERANT_TYPES, safetyClassFor, sortRefrigerants } from '../lib/types'
 
 const inputStyle =
   'flex w-full items-center justify-between rounded-xl border border-slate-300 bg-white px-3 py-3 text-base text-left text-slate-900 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/30 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100'
+
+// Safety class badge colours per ASHRAE 34 group
+const SC_BADGE: Record<string, string> = {
+  A2L: 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200',
+  A3: 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-200',
+  B2L: 'bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-200',
+}
 
 export function RefrigerantSelect({
   value,
@@ -141,6 +148,17 @@ export function RefrigerantSelect({
                     className="flex-1 px-3 py-3 text-left text-base font-medium text-slate-900 hover:bg-slate-100 dark:text-slate-100 dark:hover:bg-slate-800"
                   >
                     {t}
+                    {(() => {
+                      const sc = safetyClassFor(t)
+                      return sc && SC_BADGE[sc] ? (
+                        <span
+                          className={`ml-2 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${SC_BADGE[sc]}`}
+                          title={`ASHRAE 34 safety class ${sc}`}
+                        >
+                          {sc}
+                        </span>
+                      ) : null
+                    })()}
                     {selected && (
                       <span className="ml-2 text-xs font-normal text-brand-600 dark:text-brand-400">
                         selected

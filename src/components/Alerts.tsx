@@ -310,7 +310,7 @@ function useHydroAlert(): ReactNode {
     <Card className="!border-red-300 !bg-red-50 dark:!border-red-900/50 dark:!bg-red-900/20">
       <div className="flex items-center justify-between gap-2">
         <div className="text-sm font-semibold text-red-900 dark:text-red-200">
-          Cylinder hydrostatic test (AS 2030)
+          Cylinder periodic pressure test (AS 2030)
         </div>
         <Link
           to="/bottles"

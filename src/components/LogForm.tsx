@@ -14,8 +14,11 @@ import {
   type Transaction,
   type TransactionKind,
   type TransactionReason,
+  type LeakTestMethod,
+  LEAK_TEST_METHOD_LABELS,
   REASON_LABELS,
   REFRIGERANT_TYPES,
+  isFlammable,
   isOutOfFleet,
   netWeight,
   overfillKg,
@@ -80,6 +83,7 @@ export type LogFormData = {
   equipment?: string
   reason?: TransactionReason
   leakTestPerformed?: boolean
+  leakTestMethod?: LeakTestMethod
   notes?: string
   returnDestination?: string
   docketNumber?: string
@@ -211,6 +215,8 @@ export function LogForm({
   // Leak test performed during this job. null = not answered yet (forces
   // a deliberate Yes/No on charge/recover work); true/false once picked.
   const [leakTest, setLeakTest] = useState<boolean | null>(null)
+  // Detection method used when leakTest === true
+  const [leakTestMethod, setLeakTestMethod] = useState<LeakTestMethod | ''>('')
   // Required when in correction mode — why the original was wrong.
   const [correctionReason, setCorrectionReason] = useState('')
   const [returnDestination, setReturnDestination] = useState('')
@@ -363,9 +369,13 @@ export function LogForm({
     const initLeakTest = restating
       ? (correcting.leakTestPerformed ?? null)
       : null
+    const initLeakTestMethod = restating
+      ? (correcting.leakTestMethod ?? '')
+      : ''
     setEquipment(initEquipment)
     setReason(initReason)
     setLeakTest(initLeakTest)
+    setLeakTestMethod(initLeakTestMethod)
     setReturnDestination('')
     setDocketNumber('')
     setNotes('')
@@ -596,6 +606,10 @@ export function LogForm({
         showCompliance && !unitId ? equipment.trim() || undefined : undefined,
       reason: showCompliance && reason ? reason : undefined,
       leakTestPerformed: showCompliance && leakTest !== null ? leakTest : undefined,
+      leakTestMethod:
+        showCompliance && leakTest === true && leakTestMethod
+          ? leakTestMethod
+          : undefined,
       returnDestination:
         (kind === 'return' || kind === 'sell') && returnDestination.trim()
           ? returnDestination.trim()
@@ -1183,7 +1197,10 @@ export function LogForm({
                   <button
                     key={label}
                     type="button"
-                    onClick={() => setLeakTest(val)}
+                    onClick={() => {
+                      setLeakTest(val)
+                      if (!val) setLeakTestMethod('')
+                    }}
                     className={`rounded-xl px-3 py-3 text-sm font-medium transition ${
                       leakTest === val
                         ? 'bg-brand-600 text-white'
@@ -1195,6 +1212,26 @@ export function LogForm({
                 ))}
               </div>
             </Field>
+            {leakTest === true && (
+              <Field label="Detection method" hint="Optional — AIRAH DA19 audit evidence.">
+                <Picker
+                  title="Detection method"
+                  value={leakTestMethod}
+                  onChange={(v) => setLeakTestMethod(v as LeakTestMethod | '')}
+                  placeholder="— pick method —"
+                  options={(
+                    Object.keys(LEAK_TEST_METHOD_LABELS) as LeakTestMethod[]
+                  ).map((m) => ({ value: m, label: LEAK_TEST_METHOD_LABELS[m] }))}
+                />
+              </Field>
+            )}
+            {isFlammable(bottle?.refrigerantType) && (
+              <div className="rounded-xl bg-amber-50 p-3 text-xs text-amber-900 dark:bg-amber-900/20 dark:text-amber-100">
+                ⚠ <strong>{bottle?.refrigerantType}</strong> is a flammable
+                refrigerant — ensure all ignition sources are eliminated before
+                commencing work (AS/NZS 5149, AIRAH DA19).
+              </div>
+            )}
           </>
         )}
 
