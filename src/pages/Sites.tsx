@@ -18,6 +18,7 @@ import {
   NON_REFRIGERANT_UNIT_KINDS,
   REASON_LABELS,
   UNIT_KIND_LABELS,
+  exceedsGwpBan,
   gwpFor,
   isRestatement,
   leakStatusFor,
@@ -1564,6 +1565,17 @@ export function UnitForm({
             />
           </Field>
         </div>
+
+        {exceedsGwpBan(refrigerantType) && (
+          <div className="rounded-xl bg-amber-50 p-3 text-xs text-amber-900 dark:bg-amber-900/20 dark:text-amber-100">
+            ⚠ <strong>{refrigerantType}</strong> has a GWP above 750. Under
+            Australian regulations (effective 1 July 2025), this refrigerant
+            may not be used in newly manufactured or imported refrigerating or
+            air-conditioning equipment. It remains legal in existing
+            installations — record this unit only if it is pre-existing
+            equipment.
+          </div>
+        )}
 
         <div className="grid grid-cols-2 gap-3">
           <Field label="Manufacturer">

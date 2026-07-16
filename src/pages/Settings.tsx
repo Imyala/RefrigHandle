@@ -24,12 +24,14 @@ import {
   expiryStatus,
   REFRIGERANT_TYPES,
   type AppState,
+  type ArcLicenceClass,
   type ClockFormat,
   type LocationSettings,
   type Technician,
   type TechnicianRole,
   type Theme,
   type WeightUnit,
+  ARC_LICENCE_CLASS_LABELS,
   TECHNICIAN_ROLES,
   DEFAULT_TECHNICIAN_ROLE,
   TECHNICIAN_PURGE_DAYS,
@@ -1397,6 +1399,7 @@ export default function Settings() {
               name: data.name,
               role: data.role,
               arcLicenceNumber: data.arcLicenceNumber,
+              arcLicenceClass: data.arcLicenceClass,
               licenceExpiry: data.licenceExpiry,
               ...passwordHashPatch,
             })
@@ -1410,6 +1413,7 @@ export default function Settings() {
               name: data.name,
               role: data.role,
               arcLicenceNumber: data.arcLicenceNumber,
+              arcLicenceClass: data.arcLicenceClass,
               licenceExpiry: data.licenceExpiry,
               // The modal requires the licence self-declaration before
               // onSave fires, so stamp when it was made.
@@ -1528,6 +1532,7 @@ type TechSavePayload = {
   name: string // composed from the parts above
   role: TechnicianRole
   arcLicenceNumber: string
+  arcLicenceClass?: ArcLicenceClass
   licenceExpiry: string // required on every account
   // 'set' = replace the hash; undefined = leave the existing password
   // unchanged. There is deliberately no "remove": a password can never be
@@ -1570,6 +1575,7 @@ function TechnicianModal({
   const [lastName, setLastName] = useState('')
   const [role, setRole] = useState<TechnicianRole>(DEFAULT_TECHNICIAN_ROLE)
   const [rhl, setRhl] = useState('')
+  const [licenceClass, setLicenceClass] = useState<ArcLicenceClass | ''>('')
   const [licenceExpiry, setLicenceExpiry] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPw, setConfirmPw] = useState('')
@@ -1598,6 +1604,7 @@ function TechnicianModal({
     setLastName(seed.lastName)
     setRole(editing?.role ?? DEFAULT_TECHNICIAN_ROLE)
     setRhl(editing?.arcLicenceNumber ?? '')
+    setLicenceClass(editing?.arcLicenceClass ?? '')
     setLicenceExpiry(editing?.licenceExpiry ?? '')
     setPassword('')
     setConfirmPw('')
@@ -1688,6 +1695,7 @@ function TechnicianModal({
       name: composeName(parts),
       role: safeRole,
       arcLicenceNumber: rhl.trim(),
+      arcLicenceClass: licenceClass || undefined,
       licenceExpiry,
       passwordChange,
     })
@@ -1753,6 +1761,20 @@ function TechnicianModal({
             value={rhl}
             onChange={(e) => setRhl(e.target.value)}
             placeholder="e.g. L000000"
+          />
+        </Field>
+        <Field
+          label="Licence class"
+          hint="Optional — records the scope of work this RHL authorises."
+        >
+          <Picker
+            title="Licence class"
+            value={licenceClass}
+            onChange={(v) => setLicenceClass(v as ArcLicenceClass | '')}
+            placeholder="— select class (optional) —"
+            options={(
+              Object.keys(ARC_LICENCE_CLASS_LABELS) as ArcLicenceClass[]
+            ).map((c) => ({ value: c, label: ARC_LICENCE_CLASS_LABELS[c] }))}
           />
         </Field>
         <Field

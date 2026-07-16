@@ -29,11 +29,14 @@ export const REFRIGERANT_TYPES = [
   'R452A',
   'R452B',
   'R454B',
+  'R454C',
   'R455A',
   'R466A',
   'R502',
   'R507A',
   'R508B',
+  'R513A',
+  'R515B',
   'R600',
   'R600A',
   'R717',
@@ -90,7 +93,7 @@ export interface Bottle {
   lastHydroTestDate?: string
   nextHydroTestDate?: string
   // Set (to an ISO timestamp) when the cylinder has been sent away for
-  // its periodic hydrostatic retest. While set, the bottle shows
+  // its periodic pressure retest (AS 2030). While set, the bottle shows
   // "Awaiting retest" in place of the overdue alarm. Cleared when new
   // test dates are saved (the retest is done) or the tech cancels it.
   sentForRetestAt?: string
@@ -352,6 +355,10 @@ export interface Transaction {
   // records / movement rows. Surfaced on the log and in the audit CSV
   // so an auditor can see leak-test coverage at a glance.
   leakTestPerformed?: boolean
+  // The detection method used when leakTestPerformed is true. Provides
+  // richer audit evidence — e.g. confirming an electronic detector was
+  // used as required on large A2L/A3 charge systems per AIRAH DA19.
+  leakTestMethod?: LeakTestMethod
   notes?: string
   // Where the bottle was returned (store / supplier) — only for 'return' kind
   returnDestination?: string
@@ -920,6 +927,9 @@ export interface Technician {
   // (a leaver with a purge countdown); a suspension never purges.
   suspendedAt?: string
   arcLicenceNumber: string // ARC RHL — personal licence, per tech
+  // ARC RHL licence class — determines the scope of work the licence
+  // authorises. Optional: profiles created before this field lack it.
+  arcLicenceClass?: ArcLicenceClass
   // RHL expiry date (YYYY-MM-DD). RHLs run for two years; logging work
   // against a lapsed licence is itself a breach, so the app alerts as
   // expiry approaches (see expiryStatus).
@@ -1269,58 +1279,72 @@ export function presetLabel(p: BottlePreset, unit: WeightUnit): string {
   return p.label
 }
 
-// Filling ratios per refrigerant (kg of refrigerant per L of water capacity).
-// These are CONSERVATIVE REFERENCE values, cross-checked against US DOT/CFR
-// 49 173.304a Table 4 and broadly consistent with AS 2030.5 (the Australian
-// standard governing cylinder filling). They drive the app's safe-fill
-// GUIDE only — the authoritative limit for any given cylinder is the filling
-// density / maximum fill stamped on that cylinder by its manufacturer, which
-// the tech must always defer to. The app surfaces this caveat where safe
-// fill is shown (see the bottle form / SAFE_FILL_NOTE).
+// Filling ratios per refrigerant: FR = 0.80 × saturated liquid density
+// at 25 °C (kg/L), derived from the ANZ Refrigerant Handling Code of
+// Practice 2025 and AS 2030.5 principle (max safe fill = WC × 0.80 × ρ).
+// These are CONSERVATIVE REFERENCE values for the app's safe-fill GUIDE
+// only — the authoritative limit for any given cylinder is the filling
+// density / maximum fill stamped on that cylinder by its manufacturer.
+// The app surfaces this caveat where safe fill is shown (SAFE_FILL_NOTE).
+//
+// Liquid density source: REFPROP / ASHRAE Fundamentals 2021 Table 2,
+// saturated liquid at 25 °C.  Where components are at or above their
+// critical temperature at 25 °C (R23: Tc = 26.1 °C; R508B components:
+// Tc R116 = 19.9 °C, Tc R23 = 26.1 °C) the formula is not applicable;
+// those refrigerants use specialist high-pressure cylinders and the
+// conservative 0.80 fallback is used here.
 //
 // max safe fill (kg) = water capacity (L) × FR
 export const REFRIGERANT_FR: Record<string, number> = {
   // Common HVAC HFC
-  R32: 0.78,
-  R134A: 1.04,
-  R404A: 0.82,
-  R407A: 0.94,
-  R407C: 0.94,
-  R407F: 0.95,
-  R410A: 0.94,
-  // R404A / R134a replacements (lower-GWP HFC blends)
-  R448A: 0.94,
-  R449A: 0.94,
-  R450A: 1.04,
-  R452A: 0.86,
-  R452B: 0.91,
-  R454B: 0.86,
-  R455A: 0.78,
-  R466A: 0.94,
+  R32: 0.78,     // ρ₂₅ ≈ 0.97 kg/L
+  R134A: 0.97,   // ρ₂₅ ≈ 1.21 kg/L (corrected from 1.04)
+  R404A: 0.82,   // ρ₂₅ ≈ 1.05 kg/L (conservative — formula gives 0.84)
+  R407A: 0.92,   // ρ₂₅ ≈ 1.15 kg/L
+  R407C: 0.92,   // ρ₂₅ ≈ 1.14 kg/L
+  R407F: 0.92,   // ρ₂₅ ≈ 1.16 kg/L
+  R410A: 0.94,   // ρ₂₅ ≈ 1.17 kg/L
+  // R404A / R134A replacements (lower-GWP HFC blends)
+  R448A: 0.92,   // ρ₂₅ ≈ 1.15 kg/L
+  R449A: 0.92,   // ρ₂₅ ≈ 1.15 kg/L
+  R450A: 0.82,   // ρ₂₅ ≈ 1.03 kg/L (corrected from 1.04)
+  R452A: 0.86,   // ρ₂₅ ≈ 1.08 kg/L
+  R452B: 0.91,   // ρ₂₅ ≈ 1.15 kg/L (conservative — formula gives 0.92)
+  R454B: 0.86,   // ρ₂₅ ≈ 1.07 kg/L
+  R454C: 0.84,   // ρ₂₅ ≈ 1.05 kg/L (new A2L blend)
+  R455A: 0.78,   // ρ₂₅ ≈ 0.97 kg/L
+  R466A: 0.94,   // ρ₂₅ ≈ 1.17 kg/L
   // Refrigeration / low-temp
-  R507A: 0.86,
-  R508B: 1.04,
+  R507A: 0.86,   // ρ₂₅ ≈ 1.07 kg/L
+  // R508B: both components (R23 + R116) are above their critical temperatures
+  // at 25 °C — the WC×0.8×ρ formula is not applicable. Requires specialist
+  // high-pressure cylinders; use the conservative fallback.
+  R508B: 0.80,
   // Legacy CFC / HCFC
-  R12: 1.10,
-  R22: 1.04,
-  R23: 1.06,
-  R401A: 1.06,
-  R402A: 0.95,
-  R408A: 0.96,
-  R409A: 1.05,
-  R502: 1.04,
-  // Hydrocarbons (flammable — much lower fill density)
-  R290: 0.43,
-  R600: 0.42,
-  R600A: 0.42,
-  R1270: 0.43,
+  R12: 1.05,     // ρ₂₅ ≈ 1.31 kg/L (corrected from 1.10)
+  R22: 0.95,     // ρ₂₅ ≈ 1.19 kg/L (corrected from 1.04)
+  // R23: near-critical at 25 °C (Tc = 26.1 °C); use high-pressure cylinders.
+  R23: 0.46,     // ρ₂₅ ≈ 0.58 kg/L (corrected from 1.06)
+  R401A: 0.90,   // ρ₂₅ ≈ 1.12 kg/L (corrected from 1.06)
+  R402A: 0.87,   // ρ₂₅ ≈ 1.09 kg/L (corrected from 0.95)
+  R408A: 0.96,   // ρ₂₅ ≈ 1.19 kg/L
+  R409A: 0.93,   // ρ₂₅ ≈ 1.16 kg/L (corrected from 1.05)
+  R502: 0.96,    // ρ₂₅ ≈ 1.20 kg/L (corrected from 1.04)
+  // Hydrocarbons (flammable A3 — much lower fill density)
+  R290: 0.43,    // ρ₂₅ ≈ 0.52 kg/L
+  R600: 0.42,    // ρ₂₅ ≈ 0.58 kg/L (conservative)
+  R600A: 0.42,   // ρ₂₅ ≈ 0.56 kg/L (conservative)
+  R1270: 0.43,   // ρ₂₅ ≈ 0.52 kg/L
   // HFO
-  R1234YF: 1.04,
-  R1234ZE: 1.04,
-  R1233ZD: 1.20,
+  R1234YF: 0.87, // ρ₂₅ ≈ 1.09 kg/L (corrected from 1.04)
+  R1234ZE: 0.92, // ρ₂₅ ≈ 1.15 kg/L (corrected from 1.04)
+  R1233ZD: 1.00, // ρ₂₅ ≈ 1.25 kg/L (corrected from 1.20)
+  // Drop-in R134A alternatives (new in Australian market)
+  R513A: 0.92,   // ρ₂₅ ≈ 1.15 kg/L; A1 blend (R1234YF/R134A 56/44)
+  R515B: 0.92,   // ρ₂₅ ≈ 1.15 kg/L; A1 blend (R1234ZE/R227EA 91.1/8.9)
   // Naturals
-  R744: 0.68, // CO2 (high-pressure)
-  R717: 0.53, // ammonia
+  R744: 0.57,    // CO2 — ρ₂₅ ≈ 0.72 kg/L at saturation (corrected from 0.68)
+  R717: 0.48,    // ammonia — ρ₂₅ ≈ 0.60 kg/L (corrected from 0.53)
 }
 
 // Conservative fallback when a refrigerant has no FR entry (custom blend,
@@ -1331,9 +1355,10 @@ export const FALLBACK_FR = 0.8
 // Shown wherever the app computes a safe fill, so a tech never treats the
 // app's figure as authoritative over the cylinder's own stamp.
 export const SAFE_FILL_NOTE =
-  'Safe fill is a guide (water capacity × a reference filling ratio aligned ' +
-  'with AS 2030.5). Always defer to the filling density / maximum fill ' +
-  'stamped on the cylinder.'
+  'Safe fill is a guide: water capacity (L) × 0.80 × refrigerant liquid ' +
+  'density at 25 °C (kg/L), aligned with the ANZ Refrigerant Handling Code ' +
+  'of Practice 2025 / AS 2030.5. Always defer to the filling density / ' +
+  'maximum fill stamped on the cylinder — that stamp is the authoritative limit.'
 
 export function fillingRatio(refrigerant?: string): number {
   if (!refrigerant) return FALLBACK_FR
@@ -1518,11 +1543,15 @@ export const REFRIGERANT_GWP: Record<string, number> = {
   R452A: 2141,
   R452B: 698,
   R454B: 466,
+  R454C: 148,
   R455A: 148,
   R466A: 733,
   // Refrigeration / low-temp
   R507A: 3985,
   R508B: 13396,
+  // Drop-in R134A alternatives
+  R513A: 573,
+  R515B: 299,
   // Hydrocarbons (very low GWP, flammable A3)
   R290: 3,
   R600: 4,
@@ -1555,6 +1584,138 @@ export function tonnesCO2eFor(
   const gwp = gwpFor(refrigerant)
   if (gwp == null) return undefined
   return (kg * gwp) / 1000
+}
+
+// --- ASHRAE 34 safety classification ----------------------------------
+//
+// The safety group assigned by ASHRAE Standard 34 to each refrigerant,
+// combining toxicity (A = lower, B = higher) and flammability
+// (1 = no flame, 2L = mildly flammable, 2 = flammable, 3 = highly flammable).
+// A2L refrigerants (mildly flammable, LFL ≥ 0.10 kg/m³) include R32,
+// R454B, R1234YF and other low-GWP alternatives entering the market.
+// A3 refrigerants (highly flammable, LFL < 0.10 kg/m³) are the
+// hydrocarbons. B2L is ammonia (toxic and mildly flammable).
+// Displayed as badges in the refrigerant picker and on the log form to
+// remind techs of ignition-source exclusion zone requirements per
+// AIRAH DA19, AS/NZS 5149, and the ARC CoP 2025.
+export type SafetyClass = 'A1' | 'A2L' | 'A3' | 'B2L'
+
+export const REFRIGERANT_SAFETY_CLASS: Record<string, SafetyClass> = {
+  R12: 'A1',
+  R1233ZD: 'A1',
+  R1234YF: 'A2L',
+  R1234ZE: 'A2L',
+  R1270: 'A3',
+  R134A: 'A1',
+  R22: 'A1',
+  R23: 'A1',
+  R290: 'A3',
+  R32: 'A2L',
+  R401A: 'A1',
+  R402A: 'A1',
+  R404A: 'A1',
+  R407A: 'A1',
+  R407C: 'A1',
+  R407F: 'A1',
+  R408A: 'A1',
+  R409A: 'A1',
+  R410A: 'A1',
+  R448A: 'A1',
+  R449A: 'A1',
+  R450A: 'A1',
+  R452A: 'A1',
+  R452B: 'A2L',
+  R454B: 'A2L',
+  R454C: 'A2L',
+  R455A: 'A2L',
+  R466A: 'A1',
+  R502: 'A1',
+  R507A: 'A1',
+  R508B: 'A1',
+  R513A: 'A1',
+  R515B: 'A1',
+  R600: 'A3',
+  R600A: 'A3',
+  R717: 'B2L',
+  R744: 'A1',
+}
+
+// Returns the ASHRAE 34 safety class for a refrigerant, or undefined for
+// custom blends and unclassified refrigerants.
+export function safetyClassFor(refrigerant?: string): SafetyClass | undefined {
+  if (!refrigerant) return undefined
+  return REFRIGERANT_SAFETY_CLASS[refrigerant.toUpperCase()]
+}
+
+// True for refrigerants with any flammability rating (A2L, A2, A3, B1L, B2L).
+// Used to surface ignition-source exclusion zone warnings in the log form.
+export function isFlammable(refrigerant?: string): boolean {
+  const sc = safetyClassFor(refrigerant)
+  return sc === 'A2L' || sc === 'A3' || sc === 'B2L'
+}
+
+// --- GWP equipment limits (DCCEEW, Australia) -------------------------
+//
+// From 1 July 2024: refrigerants with GWP > 750 are prohibited in
+// newly manufactured or imported small air conditioners (split systems,
+// multi-heads, window units ≤ 18 kW) under the Ozone Protection and
+// Synthetic Greenhouse Gas Management Regulations.
+// From 1 July 2025: the limit extends to ALL refrigerating and
+// air-conditioning equipment. As of July 2026, all new equipment
+// installations (including refrigeration) must use a refrigerant
+// with GWP ≤ 750. Existing equipment is exempt; the ban targets
+// new manufacture and importation.
+// Source: DCCEEW, Australian Refrigeration Council, AS/NZS 5149:2013.
+export const GWP_EQUIPMENT_BAN_LIMIT = 750
+// Date from which the GWP ban applies to ALL refrigerating/AC equipment.
+export const GWP_EQUIPMENT_BAN_DATE = '2025-07-01'
+
+// Returns true if the refrigerant exceeds the GWP equipment ban limit.
+// Ignores unknown refrigerants (returns false when GWP is not tabulated).
+export function exceedsGwpBan(refrigerant?: string): boolean {
+  const gwp = gwpFor(refrigerant)
+  return gwp != null && gwp > GWP_EQUIPMENT_BAN_LIMIT
+}
+
+// --- Leak test method --------------------------------------------------
+//
+// AIRAH DA19 and the ANZ Refrigerant Handling Code of Practice 2025
+// distinguish between leak detection methods. Recording the method
+// alongside the binary yes/no result provides richer evidence for an
+// ARC audit (e.g. confirming an electronic detector was used as
+// required on large A2L/A3 charge systems).
+export type LeakTestMethod =
+  | 'electronic'
+  | 'bubble'
+  | 'pressure'
+  | 'uv'
+  | 'ultrasonic'
+
+export const LEAK_TEST_METHOD_LABELS: Record<LeakTestMethod, string> = {
+  electronic: 'Electronic detector',
+  bubble: 'Bubble / soap solution',
+  pressure: 'Pressure test (nitrogen)',
+  uv: 'UV dye tracer',
+  ultrasonic: 'Ultrasonic detector',
+}
+
+// --- ARC RHL licence class --------------------------------------------
+//
+// ARC issues several refrigerant handling licence (RHL) classes under
+// the refrigerant trading scheme. Recording the class alongside the
+// RHL number makes the audit pack show the scope of work the licence
+// authorises, helping confirm the tech was qualified for the job type.
+export type ArcLicenceClass =
+  | 'full'
+  | 'restricted_split'
+  | 'restricted_small'
+  | 'trainee'
+
+export const ARC_LICENCE_CLASS_LABELS: Record<ArcLicenceClass, string> = {
+  full: 'Full',
+  restricted_split: 'Restricted — split systems (≤ 18 kW)',
+  restricted_small: 'Restricted — small systems (≤ 2.5 kg charge)',
+  trainee: 'Trainee (1-year, supervisor required)',
 }
 
 // --- Charge plausibility ----------------------------------------------
