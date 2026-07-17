@@ -31,7 +31,7 @@ single codebase on:
   Returned, or Empty
 * Safe-fill awareness — net is checked against the cylinder's water
   capacity × the refrigerant's filling ratio, with an overfill warning
-* **AS 2030 hydrostatic test tracking** — last-tested / next-due dates,
+* **AS 2030 periodic test tracking** — last-tested / next-due dates,
   "due soon" and "overdue" alerts, and a "sent for retest" state
 * Supplier and invoice/docket captured on intake for the paper trail
 * Barcode scanning to find or enter a cylinder by its number

@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { buildAuditPackZip, buildLogCsv, buildPurchasesCsv } from '../backup'
-import { makeBottle, makeState, makeTx } from './fixtures'
+import {
+  buildAuditLogCsv,
+  buildAuditPackZip,
+  buildLogCsv,
+  buildPurchasesCsv,
+} from '../backup'
+import { makeAudit, makeBottle, makeState, makeTx } from './fixtures'
 
 describe('buildLogCsv', () => {
   const state = makeState({
@@ -105,5 +110,38 @@ describe('buildAuditPackZip', () => {
     expect(text).toContain('Period:          Q2 2026')
     expect(text).toContain('COMPLIANCE RULESET')
     expect(text).toContain('Acme')
+  })
+})
+
+describe('buildAuditLogCsv', () => {
+  it('exports labelled change-log rows with flattened field changes', () => {
+    const state = makeState({
+      location: { country: 'Australia', region: 'QLD', city: 'Brisbane', timezone: 'Australia/Brisbane' },
+      auditLog: [
+        makeAudit({
+          id: 'a1',
+          at: '2026-07-17T01:15:00.000Z',
+          action: 'update',
+          entity: 'bottle',
+          target: 'CYL-9',
+          summary: 'Edited bottle CYL-9',
+          by: 'Pat',
+          byLicence: '12345',
+          changes: [{ field: 'Status', from: 'In stock', to: 'On site' }],
+          chainId: 'device-1',
+          seq: 9,
+          prevHash: 'prev',
+          hash: 'hash',
+        }),
+      ],
+    })
+    const csv = buildAuditLogCsv(state)
+    expect(csv).toContain('CHANGE LOG')
+    expect(csv).toContain('action_label')
+    expect(csv).toContain('Edited')
+    expect(csv).toContain('Bottle')
+    expect(csv).toContain('Status: In stock → On site')
+    expect(csv).toContain('17/07/2026')
+    expect(csv).toContain('Yes')
   })
 })

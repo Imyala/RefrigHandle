@@ -1,10 +1,11 @@
-import type { AppState } from './types'
+import type { AppState, AuditEntry } from './types'
 import { transactionLoss } from './types'
 import { exportAttachments } from './attachments'
 import { formatDateTime, localDateTimeInput } from './datetime'
 import { createZip, type ZipEntry } from './zip'
 import { getRecordedHead, verifyAuditChains } from './auditChain'
 import { COMPLIANCE_DATASET, complianceVerifiedLabel } from './compliance'
+import { AUDIT_ACTION_LABELS, AUDIT_ENTITY_LABELS } from './audit'
 
 // Backup freshness tracking. Until records live on a server (team
 // accounts), every byte of compliance history exists only in this
@@ -453,6 +454,10 @@ export function buildLogCsv(
       ])
     }
   }
+  return csvRowsToString(rows)
+}
+
+function csvRowsToString(rows: (string[] | string)[]): string {
   return rows
     .map((r) =>
       (Array.isArray(r) ? r : [r])
@@ -496,6 +501,83 @@ export async function shareLogCsv(
     new Blob([CSV_BOM + csv], { type: 'text/csv' }),
     csvFilename(from, to),
     'Refrigister refrigerant log',
+  )
+}
+
+export function buildAuditLogCsv(
+  state: AppState,
+  entries: AuditEntry[] = state.auditLog,
+): string {
+  const header = [
+    'id',
+    'timestamp_utc',
+    'local_date',
+    'local_datetime',
+    'business_timezone',
+    'entry_timezone',
+    'action',
+    'action_label',
+    'entity',
+    'entity_label',
+    'target',
+    'summary',
+    'changes',
+    'by',
+    'byLicence',
+    'entityId',
+    'sealed',
+    'chainId',
+    'seq',
+    'prevHash',
+    'hash',
+  ]
+  const rows: (string[] | string)[] = [['CHANGE LOG'], header]
+  for (const e of entries) {
+    const localDay = localDateTimeInput(new Date(e.at), state.location.timezone).slice(0, 10)
+    rows.push([
+      e.id,
+      e.at,
+      localDay.split('-').reverse().join('/'),
+      formatDateTime(e.at, state.location.timezone, state.clock, true),
+      state.location.timezone,
+      e.tz ?? '',
+      e.action,
+      AUDIT_ACTION_LABELS[e.action],
+      e.entity,
+      AUDIT_ENTITY_LABELS[e.entity],
+      e.target,
+      e.summary.replace(/[\r\n]+/g, ' '),
+      (e.changes ?? [])
+        .map((c) => `${c.field}: ${c.from ?? '—'} → ${c.to ?? '—'}`)
+        .join(' | ')
+        .replace(/[\r\n]+/g, ' '),
+      e.by ?? '',
+      e.byLicence ?? '',
+      e.entityId ?? '',
+      e.hash ? 'Yes' : 'No',
+      e.chainId ?? '',
+      e.seq != null ? String(e.seq) : '',
+      e.prevHash ?? '',
+      e.hash ?? '',
+    ])
+  }
+  return csvRowsToString(rows)
+}
+
+function auditLogCsvFilename(filtered: boolean): string {
+  return `refrigister-change-log${filtered ? '-filtered' : ''}-${new Date().toISOString().slice(0, 10)}.csv`
+}
+
+export async function shareAuditLogCsv(
+  state: AppState,
+  entries?: AuditEntry[],
+): Promise<ShareOutcome> {
+  const rows = entries ?? state.auditLog
+  const csv = buildAuditLogCsv(state, rows)
+  return shareOrDownload(
+    new Blob([CSV_BOM + csv], { type: 'text/csv' }),
+    auditLogCsvFilename(rows.length !== state.auditLog.length),
+    'Refrigister change log',
   )
 }
 

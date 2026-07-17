@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Button, Card, EmptyState, Field, Pill, TextInput } from '../components/ui'
 import { DateInput } from '../components/DateInput'
+import { shareAuditLogCsv } from '../lib/backup'
 import { useStore } from '../lib/store'
 import { formatStampedTime, localDateTimeInput } from '../lib/datetime'
 import {
@@ -91,6 +92,7 @@ export default function AuditLog() {
   const [showDateRange, setShowDateRange] = useState(false)
   const [fromDate, setFromDate] = useState('')
   const [toDate, setToDate] = useState('')
+  const [exportBusy, setExportBusy] = useState(false)
 
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -127,6 +129,8 @@ export default function AuditLog() {
           .includes(q)
       })
   }, [auditLog, filter, query, fromDate, toDate, tz])
+  const hasFilter =
+    filter !== 'all' || query.trim() !== '' || !!fromDate || !!toDate
 
   // Render a window, not the whole history — a busy crew accumulates
   // tens of thousands of entries over the 5-year retention period and
@@ -144,15 +148,48 @@ export default function AuditLog() {
 
   return (
     <div className="space-y-3">
-      <div>
-        <h2 className="text-xl font-semibold text-slate-900 dark:text-slate-100">
-          Change log
-        </h2>
-        <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">
-          A time-stamped record of every change — what changed, who changed it,
-          and when. Covers bottles, sites, equipment, technicians and settings;
-          refrigerant movements live on the Movements tab. Read-only.
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div>
+          <h2 className="text-xl font-semibold text-slate-900 dark:text-slate-100">
+            Change log
+          </h2>
+          <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">
+            A time-stamped record of every change — what changed, who changed it,
+            and when. Covers bottles, sites, equipment, technicians and settings;
+            refrigerant movements live on the Movements tab. Read-only.
+          </p>
+        </div>
+        {auditLog.length > 0 && (
+          <Button
+            variant="secondary"
+            disabled={exportBusy}
+            onClick={() => {
+              setExportBusy(true)
+              void shareAuditLogCsv(state, rows)
+                .then((out) => {
+                  if (out === 'shared') {
+                    toast.show(
+                      hasFilter ? 'Filtered change log CSV shared' : 'Change log CSV shared',
+                      'success',
+                    )
+                  } else if (out === 'downloaded') {
+                    toast.show(
+                      hasFilter
+                        ? 'Filtered change log CSV downloaded'
+                        : 'Change log CSV downloaded',
+                      'success',
+                    )
+                  }
+                })
+                .catch(() => {
+                  toast.show('Could not build the change log CSV.', 'error')
+                })
+                .finally(() => setExportBusy(false))
+            }}
+          >
+            {exportBusy ? 'Preparing…' : hasFilter ? 'Share filtered CSV…' : 'Share CSV…'}
+          </Button>
+        )}
       </div>
 
       {state.recycleBin.length > 0 && (
@@ -278,6 +315,27 @@ export default function AuditLog() {
               )}
             </div>
           )}
+        </div>
+      )}
+
+      {auditLog.length > 0 && hasFilter && (
+        <div className="flex items-center justify-between gap-2 px-1 text-xs text-slate-500 dark:text-slate-400">
+          <span>
+            Showing {rows.length} of {auditLog.length}{' '}
+            {auditLog.length === 1 ? 'change' : 'changes'}
+          </span>
+          <button
+            type="button"
+            onClick={() => {
+              setQuery('')
+              setFilter('all')
+              setFromDate('')
+              setToDate('')
+            }}
+            className="inline-flex min-h-11 shrink-0 items-center font-medium text-brand-600 hover:underline dark:text-brand-400"
+          >
+            Clear filters
+          </button>
         </div>
       )}
 
