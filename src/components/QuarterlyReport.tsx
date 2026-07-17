@@ -30,10 +30,10 @@ export function QuarterlyReportCard() {
         ARC quarterly records
       </div>
       <p className="mb-3 text-xs text-slate-500">
-        Refrigerant bought, used, recovered and returned per quarter — the
-        record an ARC permit condition check asks for (they request the last
-        two quarters; records must be kept for the period required by
-        applicable regulations).
+        Refrigerant acquired, charged, recovered, sold and otherwise disposed
+        of per quarter — the record an ARC permit condition check asks for
+        (they request the last two quarters; records must be kept for the
+        period required by applicable regulations).
       </p>
       <Button variant="secondary" onClick={() => setOpen(true)}>
         Quarterly report

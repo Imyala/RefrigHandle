@@ -119,10 +119,10 @@ export const RISK_PLAN_ITEMS: readonly RiskPlanItemDef[] = [
 // changed, so "verified recently" stays an honest claim.
 export const COMPLIANCE_DATASET = {
   version: '2026.07',
-  verifiedAsOf: '2026-07-07',
+  verifiedAsOf: '2026-07-17',
   summary:
     'GWP per IPCC AR4 (100-year) as used by the OPSGGM legislation · ' +
-    'ANZ Refrigerant Handling Code of Practice 2025 · AS/NZS 5149:2016 · ' +
+    'ANZ Refrigerant Handling Code of Practice 2025 · AS/NZS 5149:2016 (+A1/A2 2018) · ' +
     'AS 2030 (10-year cylinder test stamp) · ARC RTA quarterly record',
   sources: [
     'DCCEEW — ozone/SGG legislation, GWP values, HFC phase-down',

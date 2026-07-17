@@ -512,7 +512,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         entity: 'bottle',
         entityId: b.id,
         target: b.bottleNumber,
-        summary: `Cylinder ${b.bottleNumber} hydrostatic test (AS 2030) became overdue on ${b.nextHydroTestDate}`,
+        summary: `Cylinder ${b.bottleNumber} periodic test (AS 2030) became overdue on ${b.nextHydroTestDate}`,
       })
     }
     if (

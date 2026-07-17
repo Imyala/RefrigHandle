@@ -28,6 +28,7 @@ describe('compliance dataset stamp', () => {
   it('names the AR4 GWP basis and the 2025 Code of Practice', () => {
     expect(COMPLIANCE_DATASET.summary).toContain('AR4')
     expect(COMPLIANCE_DATASET.summary).toContain('Code of Practice 2025')
+    expect(COMPLIANCE_DATASET.summary).toContain('+A1/A2 2018')
     expect(complianceVerifiedLabel()).toMatch(/\d{4}/)
   })
 })

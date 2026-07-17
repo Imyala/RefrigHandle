@@ -1665,7 +1665,8 @@ export function isFlammable(refrigerant?: string): boolean {
 // installations (including refrigeration) must use a refrigerant
 // with GWP ≤ 750. Existing equipment is exempt; the ban targets
 // new manufacture and importation.
-// Source: DCCEEW, Australian Refrigeration Council, AS/NZS 5149:2013.
+// Source: DCCEEW ozone/SGG equipment rules and the OPSGGM Regulations
+// (as amended for the 1 July 2024 / 1 July 2025 GWP-750 phase-in).
 export const GWP_EQUIPMENT_BAN_LIMIT = 750
 // Date from which the GWP ban applies to ALL refrigerating/AC equipment.
 export const GWP_EQUIPMENT_BAN_DATE = '2025-07-01'
@@ -2194,7 +2195,7 @@ export function quarterLabel(qt: Quarter): string {
   return `Q${qt.q} ${qt.year} (${QUARTER_MONTHS[qt.q]})`
 }
 
-// --- Cylinder hydrostatic test ----------------------------------------
+// --- Cylinder periodic test -------------------------------------------
 //
 // AS 2030 requires recovery cylinders to be periodically pressure-
 // tested. We don't enforce a specific interval — the bottle stamp is
@@ -2210,7 +2211,7 @@ export interface HydroState {
   monthsUntilDue?: number
 }
 
-// Hydro test dates are stored as YYYY-MM (the stamp on the cylinder is
+// Periodic-test dates are stored as YYYY-MM (the stamp on the cylinder is
 // month/year only). Legacy YYYY-MM-DD values are also accepted and
 // truncated to YYYY-MM here.
 export function hydroStatusFor(
