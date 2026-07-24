@@ -279,3 +279,41 @@ thousands of businesses and to AIRAH / ARC specifically:
    deals. Don't launch the stage tour before at least the transactional
    email + expiry reminders exist; they're the cheapest "it's a service,
    not an app" signal.
+
+---
+
+## 8. Addendum — follow-up review pass, 24 July 2026
+
+**Status of §6.6's "still open" list, verified in code this pass:**
+all five are done on `main` — Jobs has a bottom-tab entry, the licence
+class picker exists (Settings technician form), the change-log CSV
+export exists, user-facing "hydrostatic" wording is now "periodic test
+(AS 2030)" everywhere (only code comments retain the old word), and
+the Moves page's alert block already collapses to the single most
+urgent card with a "show N more" toggle. The audit-pack period control
+truncation nit is also resolved by the switch to the `Picker` sheet
+(its trigger truncates gracefully at any width).
+
+**Compliance re-check (24 Jul 2026):** searched DCCEEW/ARC updates —
+only 1 Jan 2026 permit *fee* increases (~3.4%, WPI-linked) and the new
+ARC "Report a Breach" form; neither affects any fact the app encodes.
+The `COMPLIANCE_DATASET` stamp remains current; no bump needed.
+
+**Changed this pass:**
+- **Desktop left nav rail (`lg:`)** — §4's top nit. At `lg+` the phone
+  bottom-tab bar hides and a sticky left rail (icon + full label,
+  active brand tint) takes over; the content column stays ~`max-w-3xl`
+  (container widens to `5xl` minus the 14rem rail). Phone layout is
+  untouched. Only one `nav[aria-label="Primary"]` is ever visible.
+  (`Layout.tsx`)
+- **Bottle group headers no longer uppercase** — "NOT ON SITE" read as
+  shouting; now sentence case, same weight/colour. (`Bottles.tsx`)
+
+**Still open (unchanged ranking):** Settings page split (~2,100 lines,
+cosmetic/maintainability only — its three collapsible sections keep it
+usable); mixed-timezone timestamp presentation nit; everything in §7.
+
+*Note: this pass's sandbox had no npm-registry access, so lint/tests/
+build were not re-run here — run `npm ci && npm run lint && npm test &&
+npm run build` before merging. Changes are markup/class-only in two
+files; no test touches `Layout`.*

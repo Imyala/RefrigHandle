@@ -56,6 +56,39 @@ function TabLink({
   )
 }
 
+// Desktop nav-rail row: icon + full label, generous hit area, active row
+// carries a brand tint. Only rendered at lg+ (the aside is hidden below).
+function RailLink({
+  to,
+  end,
+  label,
+  icon,
+}: {
+  to: string
+  end?: boolean
+  label: string
+  icon: ReactNode
+}) {
+  return (
+    <NavLink
+      to={to}
+      end={end}
+      className={({ isActive }) =>
+        `mb-1 flex min-h-11 items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium transition ${
+          isActive
+            ? 'bg-brand-50 text-brand-700 dark:bg-brand-900/30 dark:text-brand-300'
+            : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-900 dark:hover:text-slate-100'
+        }`
+      }
+    >
+      <span aria-hidden className="flex h-6 w-6 items-center justify-center">
+        {icon}
+      </span>
+      {label}
+    </NavLink>
+  )
+}
+
 export function Layout() {
   // Subscribe so the whole app (rendered through <Outlet/>) re-renders when
   // a display pref like "Show times in UTC" is toggled — the time formatters
@@ -80,16 +113,41 @@ export function Layout() {
       <DemoBanner />
       <TestAccountBanner />
 
-      <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-4 pb-10">
-        <Outlet />
-      </main>
+      {/* Desktop (lg+) swaps the phone tab bar for a left nav rail so the
+          app reads as a desktop product on a projector, instead of a
+          stretched phone layout. The content column stays ~max-w-3xl in
+          both modes: 5xl (64rem) minus the 14rem rail ≈ 3xl. */}
+      <div className="mx-auto flex w-full max-w-3xl flex-1 items-start lg:max-w-5xl">
+        {/* Only one "Primary" nav is ever visible: this rail is display:none
+            below lg, the bottom tab bar is display:none at lg+. */}
+        <nav
+          aria-label="Primary"
+          className="sticky top-[4.75rem] hidden w-56 shrink-0 self-start py-5 pl-4 pr-2 lg:block"
+        >
+          <RailLink to="/" end label="Home" icon={<HomeIcon />} />
+          <RailLink to="/sites" label="Sites" icon={<SitesIcon />} />
+          <RailLink to="/bottles" label="Bottles" icon={<BottleIcon />} />
+          <RailLink to="/jobs" label="Jobs" icon={<JobsIcon />} />
+          <RailLink
+            to="/transactions"
+            label="Movements"
+            icon={<LogIcon />}
+          />
+          <RailLink to="/settings" label="Settings" icon={<SettingsIcon />} />
+        </nav>
+
+        <main className="w-full min-w-0 flex-1 px-4 py-4 pb-10">
+          <Outlet />
+        </main>
+      </div>
 
       {/* Sticky (not fixed) so the bar occupies real layout space: the page
           can always scroll its last control clear of the bar, instead of
-          relying on a guessed padding that a taller bar silently eats. */}
+          relying on a guessed padding that a taller bar silently eats.
+          Hidden at lg+ where the left rail takes over. */}
       <nav
         aria-label="Primary"
-        className="sticky bottom-0 z-30 border-t border-slate-200 bg-white/95 backdrop-blur dark:border-slate-800 dark:bg-slate-950/95"
+        className="sticky bottom-0 z-30 border-t border-slate-200 bg-white/95 backdrop-blur lg:hidden dark:border-slate-800 dark:bg-slate-950/95"
       >
         <div
           className="relative mx-auto grid max-w-3xl grid-cols-6"

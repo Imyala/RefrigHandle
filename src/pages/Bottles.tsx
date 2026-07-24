@@ -910,7 +910,9 @@ function BottleGroupHeader({
       >
         <path d="M6 9l6 6 6-6" />
       </svg>
-      <span className="min-w-0 flex-1 truncate text-sm font-semibold uppercase tracking-wider">
+      {/* Sentence case, not uppercase — "NOT ON SITE" read as shouting in
+          the UX review; these are wayfinding headers, not warnings. */}
+      <span className="min-w-0 flex-1 truncate text-sm font-semibold">
         {label}
       </span>
       <span className="shrink-0 text-xs font-medium">({count})</span>
